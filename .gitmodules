@@ -1,0 +1,15 @@
+[submodule "muffin-agent"]
+	path = muffin-agent
+	url = git@github.com:gururafiki/muffin-agent.git
+[submodule "muffin-deployment"]
+	path = muffin-deployment
+	url = git@github.com:gururafiki/muffin-deployment.git
+[submodule "openbb-mcp-docker"]
+	path = openbb-mcp-docker
+	url = git@github.com:gururafiki/openbb-mcp-docker.git
+[submodule "agent-chat-ui-docker"]
+	path = agent-chat-ui-docker
+	url = git@github.com:gururafiki/agent-chat-ui-docker.git
+[submodule "nuq-postgres-docker"]
+	path = nuq-postgres-docker
+	url = git@github.com:gururafiki/nuq-postgres-docker.git
