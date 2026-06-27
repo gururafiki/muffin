@@ -28,6 +28,8 @@ export interface AgentDef {
   buildInput: (values: Record<string, string>) => Record<string, unknown>;
   /** State key holding the final structured output, for headline rendering. */
   resultKey?: string;
+  /** Optional tailored renderer for the result (else generic StructuredOutput). */
+  resultRenderer?: 'research';
   custom?: CustomScreen;
 }
 
@@ -50,6 +52,7 @@ export const AGENTS: AgentDef[] = [
     ],
     buildInput: (v) => ({ query: v.query }),
     resultKey: 'output',
+    resultRenderer: 'research',
   },
   {
     id: 'council',
@@ -67,7 +70,14 @@ export const AGENTS: AgentDef[] = [
     emoji: '📊',
     tagline: 'Sector-aware, criteria-driven scoring and synthesis.',
     inputs: [ticker, { key: 'query', label: 'Focus (optional)', placeholder: 'Buy at current price?' }],
-    buildInput: (v) => ({ ticker: v.ticker?.toUpperCase(), ...(v.query ? { query: v.query } : {}) }),
+    // `sector`/`market` may arrive via initialValues from a sector/country
+    // context to pre-classify the run (CriteriaAnalysisState accepts them).
+    buildInput: (v) => ({
+      ticker: v.ticker?.toUpperCase(),
+      ...(v.query ? { query: v.query } : {}),
+      ...(v.sector ? { sector: v.sector } : {}),
+      ...(v.market ? { market: v.market } : {}),
+    }),
     resultKey: 'synthesis',
   },
   {
