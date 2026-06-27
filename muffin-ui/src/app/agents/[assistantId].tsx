@@ -5,9 +5,17 @@ import { Card, Screen, Text } from '@/components/ui';
 import { CouncilScreen } from '@/features/council/council-screen';
 import { getAgent } from '@/lib/agent/registry';
 
+const FIELD_KEYS = ['query', 'ticker', 'prompt', 'sector', 'market'];
+
 export default function AgentRunnerRoute() {
-  const { assistantId } = useLocalSearchParams<{ assistantId: string }>();
+  const params = useLocalSearchParams<Record<string, string>>();
+  const assistantId = params.assistantId;
   const agent = getAgent(assistantId);
+
+  // Seed the runner from any field-shaped params (e.g. an "Analyse" deep link).
+  const initialValues: Record<string, string> = {};
+  for (const k of FIELD_KEYS) if (params[k]) initialValues[k] = params[k];
+  const autoStart = params.autostart === '1';
 
   if (!agent) {
     return (
@@ -26,7 +34,11 @@ export default function AgentRunnerRoute() {
       {agent.custom === 'council' ? (
         <CouncilScreen agent={agent} />
       ) : (
-        <AgentRunner agent={agent} />
+        <AgentRunner
+          agent={agent}
+          initialValues={Object.keys(initialValues).length ? initialValues : undefined}
+          autoStart={autoStart}
+        />
       )}
     </Screen>
   );

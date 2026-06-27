@@ -48,9 +48,15 @@ Trading-decision dashboard, criteria-analysis score breakdown, a chart-building
 subagent, data-collected/-failed surfaces, hierarchical sub-graph execution view,
 token-level message streaming.
 
-## M5 — Globe & Pie navigation
-Interactive world map → region → country → sector → sub-sector → stock drill-down;
-macro and relative-performance analysis entry points.
+## M5 — Globe navigation ✅
+Stylized tappable SVG world map → region → country → sector → sub-sector → stock
+drill-down, with breadcrumbs, animated best/worst "movers" panels (seeded sample
+data, clearly badged) and an "Analyse" action at every level that launches the
+real `research` agent (templated, auto-started query) with a tailored result
+renderer. Stock pages carry sector/country/market context into the agents.
+`src/features/markets/`.
+- Follow-ups: live market data (needs a backend screening/discovery graph), the
+  sector **Pie** drill-down (M6), full markdown styling, richer sub-sector pages.
 
 ## M6 — Asset & ticker model
 Ticker metadata (sector, sub-sector, country dev/emerging, addressable markets,
