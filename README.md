@@ -16,23 +16,29 @@ This is the **umbrella repo**: it pins all the pieces together as git submodules
 | [`muffin-agent`](https://github.com/gururafiki/muffin-agent) | The LangGraph agent (4 graphs: `stock_evaluation`, `criteria_analysis`, `research`, `council`) | `ghcr.io/gururafiki/muffin-agent` |
 | [`muffin-deployment`](https://github.com/gururafiki/muffin-deployment) | Terraform + Ansible + Swarm stack + service configs + deploy CI | — |
 | [`openbb-mcp-docker`](https://github.com/gururafiki/openbb-mcp-docker) | OpenBB MCP server (market data) | `ghcr.io/gururafiki/openbb-mcp-docker` |
-| [`agent-chat-ui-docker`](https://github.com/gururafiki/agent-chat-ui-docker) | Chat UI (Next.js, same-origin `/api` proxy) | `ghcr.io/gururafiki/agent-chat-ui-docker` |
+| [`agent-chat-ui-docker`](https://github.com/gururafiki/agent-chat-ui-docker) | Legacy chat UI (Next.js, same-origin `/api` proxy) — `muffin-chat.<domain>` | `ghcr.io/gururafiki/agent-chat-ui-docker` |
+| `muffin-ui` | New app: Expo/React Native (Web·iOS·Android), static web + nginx `/api` proxy — `muffin.<domain>` | `ghcr.io/gururafiki/muffin-ui` |
 | [`nuq-postgres-docker`](https://github.com/gururafiki/nuq-postgres-docker) | arm64 Firecrawl `nuq-postgres` | `ghcr.io/gururafiki/nuq-postgres-docker` |
 
 Each image repo builds its own arm64 image in CI (GHCR); `muffin-deployment` references them.
 
+> **`muffin-ui`** currently lives as a top-level directory in this umbrella repo (not yet a
+> submodule). It will be extracted into its own `gururafiki/muffin-ui` repo and re-added as a
+> submodule; its image-build workflow (`muffin-ui/.github/workflows/build.yml`) activates then.
+
 ## Architecture
 
 ```
-                Cloudflare (DNS + Access)
-                   │ muffin.rafiki.guru          │ muffin-api.rafiki.guru
-                   ▼                              ▼
+                       Cloudflare (DNS + Access)
+        │ muffin.<domain>   │ muffin-chat.<domain>   │ api.<domain>
+        ▼                   ▼                        ▼
         ┌──────────────────────── Traefik (LE / CF DNS-01) ───────────────────────┐
-        │            agent-chat-ui  ──/api──►  langgraph-api (muffin-agent)        │
+        │   muffin-ui ──/api─┐                                                      │
+        │   agent-chat-ui ──/api─┴─►  langgraph-api (muffin-agent)                  │
         └───────────────────────────────────────────┬─────────────────────────────┘
    private overlay network (nothing else exposed)    │
    openbb-mcp · firecrawl(api/mcp/playwright/redis/rabbitmq/postgres=nuq) · searxng ·
-   opensandbox · langgraph-postgres · langgraph-redis                 (14 services total)
+   opensandbox · langgraph-postgres · langgraph-redis                 (15 services total)
 ```
 
 ## Quickstart
