@@ -3,16 +3,23 @@ import { Pressable, View } from 'react-native';
 
 import { Badge, Card, Screen, Text } from '@/components/ui';
 import { AGENTS } from '@/lib/agent/registry';
-import { getSector } from '@/features/markets/taxonomy';
+import { assetTypeMeta, getSector, type AssetType } from '@/features/markets/taxonomy';
 
 /** Stocks reachable from here: ticker-driven agents + the deep evaluation. */
 const STOCK_AGENT_IDS = ['council', 'criteria_analysis', 'stock_evaluation'];
 
 export default function StockScreen() {
-  const params = useLocalSearchParams<{ ticker: string; sector?: string; market?: string; country?: string }>();
+  const params = useLocalSearchParams<{
+    ticker: string;
+    sector?: string;
+    market?: string;
+    country?: string;
+    assetType?: string;
+  }>();
   const router = useRouter();
   const symbol = (params.ticker ?? '').toUpperCase();
   const sector = params.sector ? getSector(params.sector) : undefined;
+  const asset = params.assetType ? assetTypeMeta(params.assetType as AssetType) : undefined;
 
   const stockAgents = AGENTS.filter((a) => STOCK_AGENT_IDS.includes(a.id));
 
@@ -37,8 +44,9 @@ export default function StockScreen() {
         {symbol}
       </Text>
 
-      {sector || params.country || params.market ? (
+      {sector || params.country || params.market || asset ? (
         <View className="mt-1 flex-row flex-wrap gap-2">
+          {asset ? <Badge label={`${asset.emoji} ${asset.name}`} tone="info" /> : null}
           {sector ? <Badge label={`${sector.emoji} ${sector.name}`} tone="info" /> : null}
           {params.country ? <Badge label={params.country} tone="info" /> : null}
           {params.market ? (
