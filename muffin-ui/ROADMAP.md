@@ -34,10 +34,14 @@ share the research. Purple flat-design bakery aesthetic, muffin mascot.
 Per-agent MCP servers, per-agent tool sets, role model chains, a custom
 deep-agent builder UI. Register `trading_decision` in `muffin-agent/langgraph.json`.
 
-## M3 — Council showcase
-Emotional avatar/debate visualization (Reanimated): live persona fan-out, a
-per-persona popup of what each is doing, judge synthesis. Render the graph as a
-conversation / N people debating.
+## M3 — Council showcase ✅
+Emotional avatar/debate visualization (Reanimated): 13 investor avatars with
+personality (emoji + style), live per-persona stages streamed via
+`streamSubgraphs` (collecting → scoring → deciding → done), tap-to-expand
+reasoning, an animated bull/hold/bear vote tally, and the judge's deliberation +
+synthesised verdict. `src/features/council/`.
+- Follow-ups: richer debate transcript (persona-vs-persona), arena circle layout
+  + connection lines, token-level streaming of reasoning.
 
 ## M4 — Custom agent UIs + rich renderers
 Trading-decision dashboard, criteria-analysis score breakdown, a chart-building
