@@ -32,6 +32,10 @@ export default function TabsLayout() {
         options={{ title: 'Markets', tabBarIcon: ({ color }) => <TabIcon emoji="🥧" color={color} /> }}
       />
       <Tabs.Screen
+        name="portfolio"
+        options={{ title: 'Portfolio', tabBarIcon: ({ color }) => <TabIcon emoji="💰" color={color} /> }}
+      />
+      <Tabs.Screen
         name="agents"
         options={{ title: 'Agents', tabBarIcon: ({ color }) => <TabIcon emoji="🧁" color={color} /> }}
       />
