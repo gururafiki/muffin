@@ -68,9 +68,14 @@ context flows into the stock page. `src/features/markets/{sector-pie,taxonomy}.t
 - Follow-ups: futures/options/MMF instruments, addressable-market tags, real
   holdings/weights, filtering by style/country across the universe.
 
-## M7 — Wealth management
-SIPP / ISA / Mortgage / other wrappers, budgeting & holdings across tools, goals
-(retirement, house deposit).
+## M7 — Wealth management ✅
+Portfolio tab: net-worth card (assets − liabilities), animated allocation (by
+asset type / by account), account wrappers (SIPP/ISA/GIA/Cash/Property/Mortgage)
+with holdings, and goals (retirement, house deposit) with animated progress.
+Seeded demo portfolio that's locally editable — add holdings, create/edit goals —
+persisted on-device (zustand + MMKV/localStorage). `src/features/wealth/`.
+- Follow-ups: multi-currency/FX, cash-flow budgeting, live prices / broker sync,
+  account creation, contribution-limit logic.
 
 ## M8 — Supabase migration
 Supabase auth (app login) and migrate `muffin-agent` checkpointer/store from
