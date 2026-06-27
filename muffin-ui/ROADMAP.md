@@ -58,11 +58,15 @@ renderer. Stock pages carry sector/country/market context into the agents.
 - Follow-ups: live market data (needs a backend screening/discovery graph), the
   sector **Pie** drill-down (M6), full markdown styling, richer sub-sector pages.
 
-## M6 — Asset & ticker model
-Ticker metadata (sector, sub-sector, country dev/emerging, addressable markets,
-growth/value) for filtering & analysis. Multi-asset support: etf, equity,
-commodities, crypto, derivatives, options, futures, bonds, real estate, cash,
-mutual funds, MMF.
+## M6 — Sector Pie + asset & ticker model ✅
+Interactive SVG donut of sector weights on the Markets tab (tap a slice → drill
+to sub-sectors → sector page). Asset/ticker metadata model: `AssetType`
+(equity/etf/commodity/crypto/bond/real-estate/cash/mutual-fund/derivative),
+ticker properties (sector, sub-sector, country, market dev/emerging, growth/value
+style), a seeded multi-asset universe and an asset-type filter on Markets. Asset
+context flows into the stock page. `src/features/markets/{sector-pie,taxonomy}.ts(x)`.
+- Follow-ups: futures/options/MMF instruments, addressable-market tags, real
+  holdings/weights, filtering by style/country across the universe.
 
 ## M7 — Wealth management
 SIPP / ISA / Mortgage / other wrappers, budgeting & holdings across tools, goals

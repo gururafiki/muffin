@@ -195,3 +195,108 @@ export const analyseCountry = (name: string) =>
   `Macro outlook and equity-market performance for ${name}. What are the best and worst performing sectors over the last 12 months, and the key risks?`;
 export const analyseSector = (sector: string, country?: string) =>
   `Best and worst performing companies in the ${sector} sector${country ? ` in ${country}` : ' globally'} over the last 12 months. What is driving the dispersion?`;
+
+// ── Sector market weights (SAMPLE, ~%) — used by the sector Pie ───────────────
+export const SECTOR_WEIGHTS: Record<string, number> = {
+  'information-technology': 30,
+  financials: 13,
+  'health-care': 11,
+  'consumer-discretionary': 10,
+  'communication-services': 9,
+  industrials: 8,
+  'consumer-staples': 6,
+  energy: 4,
+  materials: 3,
+  utilities: 3,
+  'real-estate': 3,
+};
+
+// ── Asset / ticker metadata model (multi-asset) ──────────────────────────────
+export type AssetType =
+  | 'equity'
+  | 'etf'
+  | 'commodity'
+  | 'crypto'
+  | 'bond'
+  | 'real-estate'
+  | 'cash'
+  | 'mutual-fund'
+  | 'derivative';
+
+export type Style = 'growth' | 'value' | 'blend';
+
+export interface AssetTypeMeta {
+  id: AssetType;
+  name: string;
+  emoji: string;
+}
+
+export const ASSET_TYPES: AssetTypeMeta[] = [
+  { id: 'equity', name: 'Equities', emoji: '📈' },
+  { id: 'etf', name: 'ETFs', emoji: '🧺' },
+  { id: 'commodity', name: 'Commodities', emoji: '🛢️' },
+  { id: 'crypto', name: 'Crypto', emoji: '🪙' },
+  { id: 'bond', name: 'Bonds', emoji: '📜' },
+  { id: 'real-estate', name: 'Real Estate', emoji: '🏢' },
+  { id: 'cash', name: 'Cash', emoji: '💵' },
+  { id: 'mutual-fund', name: 'Mutual Funds', emoji: '🏦' },
+  { id: 'derivative', name: 'Derivatives', emoji: '🎲' },
+];
+
+export interface AssetRef {
+  symbol: string;
+  name: string;
+  assetType: AssetType;
+  changePct: number;
+  sectorId?: string;
+  subSector?: string;
+  country?: string;
+  market?: Market;
+  style?: Style;
+  currency?: string;
+}
+
+/** Non-equity seed universe. Equities are derived from REPRESENTATIVE_TICKERS. */
+const OTHER_ASSETS: AssetRef[] = [
+  { symbol: 'SPY', name: 'S&P 500 ETF', assetType: 'etf', changePct: 11.8, country: 'United States', market: 'developed', style: 'blend' },
+  { symbol: 'QQQ', name: 'Nasdaq 100 ETF', assetType: 'etf', changePct: 17.2, country: 'United States', market: 'developed', style: 'growth' },
+  { symbol: 'EEM', name: 'Emerging Markets ETF', assetType: 'etf', changePct: 4.9, market: 'emerging', style: 'blend' },
+  { symbol: 'GLD', name: 'Gold', assetType: 'commodity', changePct: 21.4, currency: 'USD' },
+  { symbol: 'WTI', name: 'Crude Oil (WTI)', assetType: 'commodity', changePct: -8.3, currency: 'USD' },
+  { symbol: 'BTC', name: 'Bitcoin', assetType: 'crypto', changePct: 34.6, currency: 'USD' },
+  { symbol: 'ETH', name: 'Ethereum', assetType: 'crypto', changePct: 12.1, currency: 'USD' },
+  { symbol: 'US10Y', name: 'US 10Y Treasury', assetType: 'bond', changePct: 1.2, country: 'United States', currency: 'USD' },
+  { symbol: 'TLT', name: '20+ Year Treasury ETF', assetType: 'bond', changePct: -2.7, country: 'United States' },
+  { symbol: 'VNQ', name: 'US REIT ETF', assetType: 'real-estate', changePct: 0.6, sectorId: 'real-estate', country: 'United States' },
+  { symbol: 'USD', name: 'US Dollar (cash)', assetType: 'cash', changePct: 0.0, currency: 'USD' },
+  { symbol: 'VTSAX', name: 'Total Stock Market Fund', assetType: 'mutual-fund', changePct: 11.1, country: 'United States', style: 'blend' },
+];
+
+/** Flatten the equity representative tickers into AssetRefs with metadata. */
+function equityAssets(): AssetRef[] {
+  const out: AssetRef[] = [];
+  for (const [sectorId, list] of Object.entries(REPRESENTATIVE_TICKERS)) {
+    for (const s of list) {
+      const country = COUNTRIES.find((c) => c.name === s.country);
+      out.push({
+        symbol: s.ticker,
+        name: s.name,
+        assetType: 'equity',
+        changePct: s.changePct,
+        sectorId,
+        country: s.country,
+        market: country?.market,
+        style: s.changePct > 15 ? 'growth' : s.changePct < 3 ? 'value' : 'blend',
+      });
+    }
+  }
+  return out;
+}
+
+export const ASSETS: AssetRef[] = [...equityAssets(), ...OTHER_ASSETS];
+
+export const assetsByType = (type: AssetType | 'all'): AssetRef[] =>
+  type === 'all' ? ASSETS : ASSETS.filter((a) => a.assetType === type);
+
+export const assetTypeMeta = (id: AssetType): AssetTypeMeta | undefined =>
+  ASSET_TYPES.find((t) => t.id === id);
