@@ -1,83 +1,120 @@
-import { View } from 'react-native';
+import { useState } from 'react';
+import { Pressable, View } from 'react-native';
+import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 
-import { AgentRunner } from '@/components/agent-runner';
-import { Avatar, Badge, Card, Text, type Signal } from '@/components/ui';
+import { Avatar, Badge, Button, Card, Field, Text } from '@/components/ui';
 import type { AgentDef } from '@/lib/agent/registry';
-import { StructuredOutput } from '@/lib/agent/renderers';
-import type { RunState } from '@/lib/agent/types';
-import { COUNCIL_PERSONAS, prettyPersona } from './personas';
+import { CouncilArena } from './council-arena';
+import { JudgePanel } from './judge-panel';
+import { getPersonaMeta } from './personas';
+import { signalTone, useCouncilRun } from './use-council-run';
+import { VoteBar } from './vote-bar';
 
-type PersonaSignal = { agent_id?: string; signal?: string; confidence?: number; reasoning?: string };
+export function CouncilScreen(_props: { agent: AgentDef }) {
+  const [ticker, setTicker] = useState('');
+  const [query, setQuery] = useState('');
+  const [selected, setSelected] = useState<string | null>(null);
+  const run = useCouncilRun();
 
-function toneFor(signal?: string): Signal {
-  const v = (signal ?? '').toLowerCase();
-  if (/buy|bull/.test(v)) return 'bullish';
-  if (/sell|bear/.test(v)) return 'bearish';
-  return 'neutral';
-}
+  const streaming = run.status === 'streaming';
+  const totalVotes = run.tally.bullish + run.tally.bearish + run.tally.neutral;
+  const selSignal = selected ? run.signals[selected] : undefined;
+  const selMeta = selected ? getPersonaMeta(selected) : undefined;
 
-/**
- * Council custom screen (M1 stub for the M3 showcase). Shows the 13 investor
- * avatars and, as the run streams, surfaces each persona's verdict next to its
- * avatar, then the judge's synthesis. The full animated debate flow is M3.
- */
-export function CouncilScreen({ agent }: { agent: AgentDef }) {
   return (
     <View className="gap-4">
-      <Card tone="muted" className="gap-3">
-        <Text variant="heading">The Council</Text>
-        <Text variant="muted">
-          Thirteen famous investors weigh in, then a judge synthesises a verdict.
-        </Text>
-        <View className="flex-row flex-wrap gap-3 pt-1">
-          {COUNCIL_PERSONAS.map((p) => (
-            <View key={p} className="w-16 items-center gap-1">
-              <Avatar name={prettyPersona(p)} size={44} />
-              <Text variant="muted" className="text-center text-[10px]">
-                {prettyPersona(p)}
-              </Text>
-            </View>
-          ))}
+      <Card className="gap-3">
+        <View className="flex-row items-center gap-2">
+          <Text style={{ fontSize: 28 }}>🧑‍⚖️</Text>
+          <View className="flex-1">
+            <Text variant="heading">Investor Council</Text>
+            <Text variant="muted">13 legends debate, a judge decides.</Text>
+          </View>
         </View>
+        <Field
+          label="Ticker"
+          placeholder="AAPL"
+          autoCapitalize="characters"
+          autoCorrect={false}
+          value={ticker}
+          onChangeText={setTicker}
+        />
+        <Field
+          label="Focus (optional)"
+          placeholder="Is the moat durable?"
+          value={query}
+          onChangeText={setQuery}
+        />
+        <Button
+          title={streaming ? 'In session…' : 'Convene the council'}
+          loading={streaming}
+          disabled={!ticker.trim()}
+          onPress={() => {
+            setSelected(null);
+            run.start({ ticker, query });
+          }}
+        />
+        {streaming ? <Button title="Cancel" variant="ghost" onPress={run.cancel} /> : null}
       </Card>
 
-      <AgentRunner agent={agent} renderResult={renderCouncil} />
-    </View>
-  );
-}
-
-function renderCouncil(run: RunState) {
-  const signals = (run.values?.persona_signals as PersonaSignal[] | undefined) ?? [];
-  const synthesis = run.values?.council_synthesis;
-
-  return (
-    <View className="gap-4">
-      {signals.length > 0 ? (
-        <View className="gap-2">
-          <Text variant="label">Persona verdicts ({signals.length}/13)</Text>
-          {signals.map((s, i) => (
-            <Card key={i} className="flex-row gap-3">
-              <Avatar name={prettyPersona(s.agent_id ?? 'analyst')} size={40} />
-              <View className="flex-1 gap-1">
-                <View className="flex-row items-center gap-2">
-                  <Text variant="heading">{prettyPersona(s.agent_id ?? 'Analyst')}</Text>
-                  {s.signal ? <Badge label={s.signal} tone={toneFor(s.signal)} /> : null}
-                </View>
-                {typeof s.confidence === 'number' ? (
-                  <Text variant="muted">confidence {Math.round(s.confidence * 100)}%</Text>
-                ) : null}
-                {s.reasoning ? <Text variant="body">{s.reasoning}</Text> : null}
-              </View>
-            </Card>
-          ))}
-        </View>
+      {run.status === 'error' ? (
+        <Card tone="outline" className="gap-1">
+          <Badge label="error" tone="bearish" />
+          <Text variant="muted">{run.error}</Text>
+        </Card>
       ) : null}
 
-      {synthesis ? (
-        <Card className="gap-2">
-          <Badge label="judge synthesis" tone="info" />
-          <StructuredOutput value={synthesis} />
+      {run.polled ? (
+        <Card tone="muted">
+          <Text variant="muted">Live streaming was unavailable — showing the final result.</Text>
         </Card>
+      ) : null}
+
+      {streaming || totalVotes > 0 ? (
+        <Card className="gap-2">
+          <VoteBar tally={run.tally} />
+        </Card>
+      ) : null}
+
+      {streaming || totalVotes > 0 ? (
+        <CouncilArena
+          stages={run.stages}
+          signals={run.signals}
+          selected={selected}
+          onSelect={(slug) => setSelected((cur) => (cur === slug ? null : slug))}
+          active={streaming}
+        />
+      ) : null}
+
+      {selMeta ? (
+        <Animated.View entering={FadeIn.duration(200)}>
+          <Pressable onPress={() => setSelected(null)}>
+            <Card className="gap-2">
+              <View className="flex-row items-center gap-3">
+                <Avatar name={selMeta.name} size={44} />
+                <View className="flex-1">
+                  <Text variant="heading">{selMeta.name}</Text>
+                  <Text variant="muted">{selMeta.style}</Text>
+                </View>
+                {selSignal?.signal ? <Badge label={selSignal.signal} tone={signalTone(selSignal.signal)} /> : null}
+              </View>
+              {typeof selSignal?.confidence === 'number' ? (
+                <Text variant="muted">confidence {Math.round(selSignal.confidence * 100)}%</Text>
+              ) : null}
+              {selSignal?.reasoning ? (
+                <Text variant="body">{selSignal.reasoning}</Text>
+              ) : (
+                <Text variant="muted">{selMeta.name} is still deliberating…</Text>
+              )}
+            </Card>
+          </Pressable>
+        </Animated.View>
+      ) : null}
+
+      {run.judging || run.synthesis ? (
+        <Animated.View entering={FadeInDown.duration(300)}>
+          <JudgePanel synthesis={run.synthesis} judging={run.judging} />
+        </Animated.View>
       ) : null}
     </View>
   );
