@@ -6,12 +6,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is the **umbrella repo** for **Muffin** — a multi-agent stock-analysis system built on LangGraph
 (a council of investor personas, criteria-driven analysis, deep research, and a trading-decision
-pipeline). It contains almost no code of its own: its job is to **pin the five component repos
+pipeline). It contains almost no code of its own: its job is to **pin the six component repos
 together as git submodules** and ship the cross-cutting deploy runbook ([README.md](README.md)).
 
 Deployed on **Oracle Cloud Always-Free** (single ARM `A1.Flex` node, single-node Docker Swarm) behind
-**Traefik** (Let's Encrypt via Cloudflare DNS-01) + **Cloudflare Access**. Live: chat UI →
-`muffin.rafiki.guru`, API → `muffin-api.rafiki.guru` (both behind Access).
+**Traefik** (Let's Encrypt via Cloudflare DNS-01) + **Cloudflare Access**. Live: Expo app →
+`muffin.rafiki.guru`, legacy chat UI → `muffin-chat.rafiki.guru`, API → `muffin-api.rafiki.guru`
+(all behind Access).
 
 ## Submodules
 
@@ -23,7 +24,8 @@ docs before working inside a submodule** — do not re-derive that detail here.
 | `muffin-agent` | The LangGraph agent — 4 deployed graphs + persona council, criteria analysis, deep research, trading-decision pipeline | `ghcr.io/gururafiki/muffin-agent` | **[muffin-agent/CLAUDE.md](muffin-agent/CLAUDE.md)** (exhaustive) + `muffin-agent/docs/`, `muffin-agent/.claude/skills/` |
 | `muffin-deployment` | Terraform + Ansible + Swarm stack + service configs + deploy CI + local-dev compose | — | [muffin-deployment/README.md](muffin-deployment/README.md) |
 | `openbb-mcp-docker` | OpenBB MCP server (market data), arm64 build | `ghcr.io/gururafiki/openbb-mcp-docker` | [openbb-mcp-docker/README.md](openbb-mcp-docker/README.md) |
-| `agent-chat-ui-docker` | Chat UI (Next.js, same-origin `/api` proxy), arm64 build | `ghcr.io/gururafiki/agent-chat-ui-docker` | [agent-chat-ui-docker/README.md](agent-chat-ui-docker/README.md) |
+| `muffin-ui` | Expo/React Native client (Web/iOS/Android), Expo-web static SPA + nginx `/api` proxy, arm64 build — served at `muffin.*` | `ghcr.io/gururafiki/muffin-ui` | [muffin-ui/README.md](muffin-ui/README.md), [muffin-ui/ROADMAP.md](muffin-ui/ROADMAP.md) |
+| `agent-chat-ui-docker` | Legacy chat UI (Next.js, same-origin `/api` proxy), arm64 build — served at `muffin-chat.*` | `ghcr.io/gururafiki/agent-chat-ui-docker` | [agent-chat-ui-docker/README.md](agent-chat-ui-docker/README.md) |
 | `nuq-postgres-docker` | arm64 rebuild of Firecrawl's `nuq-postgres` queue DB | `ghcr.io/gururafiki/nuq-postgres-docker` | [nuq-postgres-docker/README.md](nuq-postgres-docker/README.md) |
 
 **The detailed agent architecture (MuffinAgentBuilder, middleware stack, the persona/criteria/research/
@@ -36,8 +38,9 @@ This umbrella file only covers the cross-submodule picture.
   GHCR. `muffin-deployment` references those `ghcr.io/gururafiki/*` tags in its Swarm stack — it builds
   nothing itself. ARM64 is mandatory (the Oracle node is aarch64); upstream amd64-only images can't
   schedule there, which is why `nuq-postgres-docker` exists at all.
-- **Request path:** Cloudflare (DNS + Access) → Traefik → `agent-chat-ui` proxies `/api` → `langgraph-api`
-  (the `muffin-agent` image). Only the chat UI + LangGraph API are exposed.
+- **Request path:** Cloudflare (DNS + Access) → Traefik → a UI that proxies `/api` → `langgraph-api`
+  (the `muffin-agent` image). Two UIs are exposed: the Expo app (`muffin.*`, `muffin-ui`) and the
+  legacy chat UI (`muffin-chat.*`, `agent-chat-ui`); plus the LangGraph API (`muffin-api.*`).
 - **Private overlay (~14 services total, none externally exposed):** `openbb-mcp`, Firecrawl
   (api/mcp/playwright/redis/rabbitmq + `firecrawl-postgres` = `nuq-postgres`), `searxng`, `opensandbox`,
   `langgraph-postgres`, `langgraph-redis`. See `muffin-deployment/stack/docker-compose.yaml` for the
