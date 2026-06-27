@@ -13,3 +13,6 @@
 [submodule "nuq-postgres-docker"]
 	path = nuq-postgres-docker
 	url = git@github.com:gururafiki/nuq-postgres-docker.git
+[submodule "muffin-ui"]
+	path = muffin-ui
+	url = git@github.com:gururafiki/muffin-ui.git
