@@ -40,6 +40,20 @@
 - [ ] setup dependabot, branch protection, codeql, etc for other repos as it's setup for muffin-agent
 
 ## Deployment / infra
+- [ ] **[BLOCKER 2026-07-10/11] Deploys failing: hung `apt-get` holds the apt lock on the Oracle node.**
+  Every `deploy` to muffin-deployment since 2026-07-10 21:02 fails on the Ansible playbook's FIRST
+  task ("Clear the apt package cache" → `apt-get clean`) with
+  `E: Could not get lock /var/lib/apt/lists/lock. It is held by process 4057282 (apt-get)`. The SAME
+  PID (4057282) has held the lock continuously across 22:35, 23:06, and 09:34 (10+ hours) — it's a
+  **hung apt process**, not a transient unattended-upgrade. **Impact:** neither muffin-agent #103
+  (data-source truthing + `criterion_evaluated` events) nor muffin-ui M12 (protocol-v2 run views)
+  has rolled out — both images built + pushed to GHCR fine, but the running Swarm services are still
+  the 2026-07-07 images. **Fix:** SSH to `132.145.64.139`, confirm PID 4057282 is stuck
+  (`ps -o pid,etime,cmd -p 4057282`) and `sudo kill 4057282` (then remove stale
+  `/var/lib/apt/lists/lock` only if the process is gone), then rerun the deploy workflow.
+  **Harden (muffin-deployment patch):** make the apt-cache task non-fatal / add
+  `lock_timeout`/retries so a held lock can't block the whole application deploy — the stack update
+  doesn't depend on apt at all.
 - [ ] **Investigate ~28s checkpoint reads on criteria_analysis threads (Oracle node / Supabase Postgres).**
   Measured 2026-07: `GET /threads/{id}/state`, `POST /threads/{id}/state/checkpoint`, and
   `/history` all take **~28s** on criteria threads while returning only tens of KB, whereas the same
