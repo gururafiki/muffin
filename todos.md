@@ -40,20 +40,26 @@
 - [ ] setup dependabot, branch protection, codeql, etc for other repos as it's setup for muffin-agent
 
 ## Deployment / infra
-- [ ] **[BLOCKER 2026-07-10/11] Deploys failing: hung `apt-get` holds the apt lock on the Oracle node.**
-  Every `deploy` to muffin-deployment since 2026-07-10 21:02 fails on the Ansible playbook's FIRST
-  task ("Clear the apt package cache" → `apt-get clean`) with
-  `E: Could not get lock /var/lib/apt/lists/lock. It is held by process 4057282 (apt-get)`. The SAME
-  PID (4057282) has held the lock continuously across 22:35, 23:06, and 09:34 (10+ hours) — it's a
-  **hung apt process**, not a transient unattended-upgrade. **Impact:** neither muffin-agent #103
-  (data-source truthing + `criterion_evaluated` events) nor muffin-ui M12 (protocol-v2 run views)
-  has rolled out — both images built + pushed to GHCR fine, but the running Swarm services are still
-  the 2026-07-07 images. **Fix:** SSH to `132.145.64.139`, confirm PID 4057282 is stuck
-  (`ps -o pid,etime,cmd -p 4057282`) and `sudo kill 4057282` (then remove stale
-  `/var/lib/apt/lists/lock` only if the process is gone), then rerun the deploy workflow.
-  **Harden (muffin-deployment patch):** make the apt-cache task non-fatal / add
-  `lock_timeout`/retries so a held lock can't block the whole application deploy — the stack update
-  doesn't depend on apt at all.
+- [x] **[RESOLVED 2026-07-11] Deploys failing: hung `apt-get` held the apt lock on the Oracle node.**
+  Every `deploy` since 2026-07-10 21:02 failed on the Ansible playbook's first apt task
+  (`apt-get clean` → `E: Could not get lock /var/lib/apt/lists/lock … held by process 4057282`).
+  Root cause: the systemd `apt.systemd.daily` `apt-get update` (PID 4057282) hung **2 days 8 hours**
+  on an unreachable mirror because **no apt `Acquire` timeout was configured**, holding the lock the
+  whole time. **Fixed:** SSH'd the node, SIGTERM'd the hung apt tree (freed the lock, `apt-get clean`
+  verified), added `/etc/apt/apt.conf.d/99timeout` (`Acquire::http/https::Timeout 30`,
+  `Acquire::Retries 3`) so `apt-get update` can never hang indefinitely again, then reran the deploy
+  → **success**; new digests rolled out (agent `ff2ddcb5`, ui `abb659e4`), both services `1/1`.
+  **Still TODO (muffin-deployment patches, out of push scope):**
+  - Codify the apt timeout in the provisioning Ansible (so a re-provision keeps it) — mirror
+    `/etc/apt/apt.conf.d/99timeout` as a template task.
+  - Make the apt-cache task **non-fatal** / add `lock_timeout` so a held apt lock can never block the
+    whole application deploy (the Swarm stack update doesn't depend on apt at all).
+  - **nginx upstream-resolution race:** during the rolling update the `muffin-ui` container
+    crash-looped a few times with `nginx: [emerg] host not found in upstream "langgraph-api"` because
+    both services restarted simultaneously and nginx resolves its upstream at boot (hard-fail).
+    Swarm auto-retried and it self-healed, but it delays convergence and logs scary errors. Fix in
+    `deploy/nginx.conf`: use a `resolver` (Docker embedded DNS `127.0.0.11`) + a variable `proxy_pass`
+    upstream so nginx resolves lazily at request time instead of failing at startup.
 - [ ] **Investigate ~28s checkpoint reads on criteria_analysis threads (Oracle node / Supabase Postgres).**
   Measured 2026-07: `GET /threads/{id}/state`, `POST /threads/{id}/state/checkpoint`, and
   `/history` all take **~28s** on criteria threads while returning only tens of KB, whereas the same
