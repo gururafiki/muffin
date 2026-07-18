@@ -122,6 +122,26 @@ stack above.
 deployable graph is a `muffin-agent` concern — see its CLAUDE.md (every registered graph requires an
 integration test, enforced by the suite).
 
+## Agent skills (`.agents/skills` + `.claude/skills`)
+
+Skills follow the [Agent Skills](https://agentskills.io/) `SKILL.md` format. In every repo that has
+them, the pattern is identical: real, git-tracked content lives in `.agents/skills/<name>/`, and
+`.claude/skills/<name>` is a relative symlink to it (`../../.agents/skills/<name>`) — Claude Code
+only reads `SKILL.md` files under `.claude/skills/`, so the symlink is what makes a skill discoverable.
+
+- **Canonical home = the submodule the skill concerns.** LangChain/LangGraph/Deep Agents/LangSmith/
+  Langfuse/`financial-prompt-engineering` skills are committed inside `muffin-agent`; React Native /
+  web-design/React-architecture skills (`react-native-skills`, `web-design-guidelines`,
+  `react-best-practices`, `composition-patterns`) are committed inside `muffin-ui`. This keeps each
+  submodule self-sufficient if it's ever opened or cloned on its own.
+- **Mirrored at the umbrella root.** Claude Code resolves `.claude/skills/` relative to the directory
+  you opened, not recursively into nested submodules — and this repo is always opened with
+  `muffin-umbrella` as root. So every skill's real content + symlink is duplicated here too
+  (`muffin-umbrella/.agents/skills/<name>` + `muffin-umbrella/.claude/skills/<name>`), keeping the two
+  copies byte-identical.
+- **Adding a new skill:** commit it into the owning submodule first (`<submodule>/.agents/skills/<name>`
+  + symlink), then copy the same folder + symlink into the umbrella root and commit there too.
+
 ## Conventions
 
 - **License: GNU GPL v3.0** ([LICENSE](LICENSE)). Each submodule is GPLv3; third-party images they wrap
