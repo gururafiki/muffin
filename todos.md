@@ -36,6 +36,14 @@
   - **Custom components** dispatch on the **state channel** a node wrote (data-driven, so unknown channels degrade gracefully instead of mis-rendering).
   - **Tool executions panel is gone** — tool calls live on the step that made them; the dead run-wide roll-up and the Store cache join were deleted.
   - Remaining gap: **per-tool duration** still isn't available (messages carry no timing; it would need a backend change).
+- [x] **[DONE 2026-08-01, muffin-ui M26]** Timeline review follow-ups:
+  - **Loaders/skeletons** — each facet holds a labelled skeleton in its final place while its namespace is fetched, rows show a spinner instead of a chevron while loading, and the initial state says "Reading this run…".
+  - **Input prompts render as markdown** once expanded (clamped plain text while collapsed — `Markdown` returns a Fragment and can't be line-clamped).
+  - **"Package" no longer repeats the criterion** — a leaf writing the same state channel as its parent is a terminal pass-through; the row and its duration stay, the duplicate card becomes one line. Also stopped the transcript auto-expanding the final structured output that the Output facet already shows.
+  - **Criterion cards now use the Overview's `CriterionDetails`** (evidence, data sources, sub-criteria, limitations, "no live data" warning, folded raw reasoning) — the require cycle that justified the lean duplicate no longer exists.
+  - **Stuck plan explained**: on 019faada the ticker-classification agent wrote 4 todos at superstep 5 and **never called `write_todos` again**. The UI now labels a finished node's unrevised plan honestly instead of showing "1 of 4". **Agent-side follow-up below.**
+  - **Motion**: exit fades, staggered lanes, a breathing rail on the running branch, count-up summary — all `useReducedMotion`-gated.
+- [ ] **Deep agents don't maintain their `todos`** (found 2026-08-01). `TodoListMiddleware` gives them `write_todos`, but nothing in the prompts requires marking items complete, so a plan gets written once and abandoned — `ticker_classification` on 019faada wrote 4 todos at superstep 5 and never touched them again through 7 more supersteps. muffin-agent prompt/middleware change; the UI already reports it.
 - [ ] **Explore current Criteria Analysis page. Check how all details for sub-agents and tool executions are read reccursively. Add the same for all other agents**.
 - [ ] Tool failure list can be quite long (in tool execution panel) Let's collapse it by default
 
