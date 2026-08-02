@@ -28,7 +28,10 @@
 - [ ] Check if we still need `lift_classification_node` considering that we have `_StructuredResponseToStateMiddleware`
 
 #### All agents
-- [ ] Add more custom components/cards for stuctured outputs.
+- [x] **[DONE 2026-08-02, muffin-ui M27]** Add more custom components/cards for stuctured outputs. Two layers, after inventorying all ~20 structured outputs across the five graphs:
+  - **Semantic baseline** — reads field *meaning*: 0..1 `confidence` → gauge, `signal`/`rating` → toned pill, `weight` → share bar, `*_pct` → signed delta, `limitations`/`key_risks` → caveat list, `key_findings`/`catalysts` → checklist, prose → markdown. Headline fields rank first; **empty fields are dropped**. Keys on naming conventions, not a model registry, so future graphs are legible for free.
+  - **Hero cards** for the headline payloads: classification, criteria definition, valuation methodology, synthesis, portfolio decision, investment judge, trade plan, resolved outcomes, council verdict (proportional vote bar), specialist strategy grid, research evidence. **18 channels registered, up from 5.**
+  - Remaining: the Overview's own result renderers still have separate layouts — folding them onto these cards would remove the last duplication between the two views.
 - [x] **[DONE 2026-08-01, muffin-ui M25]** **Work further on execution tree. It looks rough now and misses all the traces**. Replaced by the **run Timeline** (`features/agent-shared/run-timeline/`), built entirely from the LangGraph API — no backend change, no per-graph logic, no Store side-reads — so any graph renders with no UI change. Delivered:
   - **Parallel vs sequential** — LangGraph supersteps (`metadata.step`) are the unit, so steps that ran together are bracketed as "N in parallel" and sequential steps sit on a spine. Verified on prod: criteria `0:1 1:1 2:2∥ 3:1 4:10∥ 5:1`, trading's 4 analysts, council's **19-wide** fan, stock_evaluation's 9-wide sub-agent fan.
   - **Input · Plan · Timeline · Output per node, recursively** — a sub-agent/subgraph inside a timeline expands into its own full card. Deep agents get `values.todos` as the Plan and plan updates render as the resulting checklist; pipeline graphs get their child supersteps.
