@@ -83,7 +83,7 @@
 
 
 ## Testing
-- [ ] **Re-document everything in README.md (all the features available in UI). Explore which code is currently redundant. Document which pages currently use mocked data (or data that is hardcoded and not stored on backend). Check if all of features documented in README work**
+- [x] **Re-document everything in README.md (all the features available in UI). Explore which code is currently redundant. Document which pages currently use mocked data (or data that is hardcoded and not stored on backend). Check if all of features documented in README work** — muffin-ui M28. README rewritten and now verifiable by `scripts/verify-readme.mjs` (76 pass / 0 fail against a real build + the live deployment); 7 false claims corrected (chat edit/regenerate/branch are unwired; council is 19 seats not 13; the sign-in gate hides the whole form; ollama/Server default/Tool lessons/Ollama key were missing); `/verify`, the stepped auth flow and the M27 renderer layers documented for the first time; a "Real vs. sample data" table added (Globe/Markets/Portfolio touch no backend); dead code deleted (`tool-cache.tsx` was still polling the store for a context nothing read, plus the Expo template theme files); React #418 root-caused to nginx `try_files` vs Expo's bracket filenames.
 - [x] I now have chart component, but I don't see it rendered anywhere.
 - [x] I don't see data gathered panel anywhere, is it rendered?
 
