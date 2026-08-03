@@ -65,6 +65,89 @@ Then set Cloudflare SSL/TLS → **Full (strict)**. Full runbook: [`muffin-deploy
 **Deploy from CI:** `muffin-deployment` has a `Deploy to Oracle Cloud` workflow (`workflow_dispatch`)
 driven by individual GitHub secrets/variables (needs a remote TF state backend).
 
+## Calling the deployed API
+
+### Use the API hostname for the interactive reference
+
+**API reference → https://muffin-api.\<domain\>/docs** (Scalar, served by langgraph-api).
+
+**Do not use `https://muffin.<domain>/api/docs`** — it renders, but no request it sends can work.
+langgraph-api inlines an OpenAPI document with **no `servers` key**, so the client falls back to the
+page origin and misses the `/api` prefix that exists only because `muffin-ui`'s nginx strips it. It
+fails *silently*: the wrong URL returns `200 text/html` (the SPA shell), so the client reports success
+on a nonsense response. On the API hostname the API really is at the origin root, so everything
+resolves correctly with no workaround. A design to patch the app-host page was written and
+deliberately dropped — see
+[`muffin-ui/docs/superpowers/specs/2026-08-03-api-docs-base-url-design.md`](muffin-ui/docs/superpowers/specs/2026-08-03-api-docs-base-url-design.md).
+
+> Known nit, both pages: with no `servers` the *displayed* curl sample is relative
+> (`curl /assistants`) and isn't pasteable. Execution is unaffected.
+
+### Two auth layers
+
+Both must be satisfied, and they fail differently.
+
+1. **Cloudflare Access** (perimeter, from `muffin-deployment/terraform/cloudflare.tf`) — browsers use
+   the email/SSO login (24h session); scripts send the service token as
+   `CF-Access-Client-Id` + `CF-Access-Client-Secret`.
+2. **LangGraph identity** ([`muffin-agent/auth.py`](muffin-agent/auth.py)) —
+   `Authorization: Bearer <Supabase **user** access token>`. Reads are open to anonymous callers;
+   **creating a thread or starting a run requires sign-in** ("read-shared, write-authenticated").
+
+Verified against `POST /threads`:
+
+| Credential sent | Result |
+|---|---|
+| none (Access only) | **403** `Forbidden` — anonymous is read-only |
+| Supabase user `access_token` | **200**, and `metadata.owner` = your user UUID |
+| `SUPABASE_SERVICE_ROLE_KEY` | **401** `Invalid or missing credentials` |
+| `SUPABASE_ANON_KEY` | **401** |
+| malformed token | **401** |
+
+**403 vs 401 is the diagnostic:** 403 means *no* credential was sent; 401 means one was sent and
+failed verification. `auth.py` fails loud rather than silently downgrading a signed-in client.
+
+### Get a token, then write
+
+```bash
+# 1. GoTrue password grant. The Supabase hostname is deliberately PUBLIC (no Access app —
+#    see cf_public_hostnames in cloudflare.tf), so this call takes NO CF headers.
+TOKEN=$(curl -s -X POST "https://supabase.<domain>/auth/v1/token?grant_type=password" \
+  -H "apikey: $SUPABASE_ANON_KEY" -H "Content-Type: application/json" \
+  -d '{"email":"you@example.com","password":"…"}' \
+  | python3 -c 'import sys,json;print(json.load(sys.stdin)["access_token"])')
+
+# 2. Write, with BOTH layers present.
+curl -X POST "https://muffin-api.<domain>/threads" \
+  -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" \
+  -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" -d '{}'
+
+# 3. Start a run — assistant_id accepts the graph name directly.
+curl -X POST "https://muffin-api.<domain>/threads/$THREAD_ID/runs" \
+  -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" \
+  -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"assistant_id":"trading_decision","input":{…},"config":{"configurable":{…}}}'
+```
+
+**From the `/docs` page:** Access is already satisfied by your SSO cookie. Pass the token via the
+**`Headers`** tab — key `Authorization`, value `Bearer <token>`. The `Select Auth Type` picker comes
+up **empty**, because the document declares no `securitySchemes`.
+
+### Gotchas
+
+- **Never send the anon or service_role key** as the bearer — both 401 on the `aud=authenticated`
+  claim check. Only real user sessions authenticate.
+- **Don't mint a Supabase JWT locally** — `auth.py` verifies `iss` against the server's
+  `SUPABASE_URL` (`<url>/auth/v1`), so a self-signed token 401s. Use the password grant.
+- Access tokens expire (~1h); re-run the grant or use the `refresh_token` it also returns.
+- `MUFFIN_API_TOKEN` — the shared-bearer `api-client` identity that is fully **exempt** from the
+  write rules — is **not configured** in this deployment, so there is no long-lived shared token.
+- `CF_ACCESS_TEAM_DOMAIN` / `CF_ACCESS_AUD` are also unset, so `auth.py`'s Cloudflare-Access-JWT mode
+  is off: Access is purely the perimeter and identity comes only from Supabase.
+
 ## Working with submodules
 
 ```bash

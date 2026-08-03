@@ -122,6 +122,30 @@ stack above.
 deployable graph is a `muffin-agent` concern — see its CLAUDE.md (every registered graph requires an
 integration test, enforced by the suite).
 
+## Calling the deployed API
+
+Full runbook (auth layers, token recipe, gotchas): **[README.md → Calling the deployed API](README.md#calling-the-deployed-api)**.
+The three facts worth not re-deriving:
+
+- **The API reference is `muffin-api.<domain>/docs`, never `muffin.<domain>/api/docs`.** The latter
+  renders but cannot execute anything: langgraph-api inlines a spec with **no `servers` key**, so the
+  client resolves against the page origin and misses the `/api` prefix nginx strips. It fails
+  *silently* — the wrong URL returns `200 text/html` (the SPA shell). Patching it was designed and
+  deliberately dropped (`muffin-ui/docs/superpowers/specs/2026-08-03-api-docs-base-url-design.md`);
+  don't re-propose it without reading that spec.
+- **Two auth layers, distinguishable by status code.** Cloudflare Access is the perimeter (SSO cookie
+  or `CF-Access-Client-Id`/`-Secret`); `muffin-agent/auth.py` is the identity. Reads are open;
+  create-thread / start-run need `Authorization: Bearer <Supabase **user** access token>`.
+  **403 = no credential sent** (anonymous is read-only); **401 = a credential was sent and failed**.
+- **Only real user sessions authenticate.** The anon and service_role keys both 401 (the
+  `aud=authenticated` check), and a locally minted JWT 401s (`iss` is verified against the server's
+  `SUPABASE_URL`) — use the GoTrue password grant against the *public* `supabase.<domain>` host.
+  `MUFFIN_API_TOKEN` and `CF_ACCESS_TEAM_DOMAIN`/`CF_ACCESS_AUD` are all **unset** in this deployment.
+
+Note: `muffin-agent/docs/deployment.md` § Authentication predates the Supabase JWT mode and describes
+only the `MUFFIN_API_TOKEN` / CF-Access-JWT modes — neither of which is enabled. Trust the umbrella
+README over it until that doc is corrected.
+
 ## Agent skills (`.agents/skills` + `.claude/skills`)
 
 Skills follow the [Agent Skills](https://agentskills.io/) `SKILL.md` format. In every repo that has
