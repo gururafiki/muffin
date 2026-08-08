@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is the **umbrella repo** for **Muffin** — a multi-agent stock-analysis system built on LangGraph
 (a council of investor personas, criteria-driven analysis, deep research, and a trading-decision
-pipeline). It contains almost no code of its own: its job is to **pin the six component repos
+pipeline). It contains almost no code of its own: its job is to **pin the seven component repos
 together as git submodules** and ship the cross-cutting deploy runbook ([README.md](README.md)).
 
 Deployed on **Oracle Cloud Always-Free** (single ARM `A1.Flex` node, single-node Docker Swarm) behind
@@ -27,6 +27,7 @@ docs before working inside a submodule** — do not re-derive that detail here.
 | `muffin-ui` | Expo/React Native client (Web/iOS/Android), Expo-web static SPA + nginx `/api` proxy, arm64 build — served at `muffin.*` | `ghcr.io/gururafiki/muffin-ui` | [muffin-ui/README.md](muffin-ui/README.md), [muffin-ui/ROADMAP.md](muffin-ui/ROADMAP.md) |
 | `agent-chat-ui-docker` | Legacy chat UI (Next.js, same-origin `/api` proxy), arm64 build — served at `muffin-chat.*` | `ghcr.io/gururafiki/agent-chat-ui-docker` | [agent-chat-ui-docker/README.md](agent-chat-ui-docker/README.md) |
 | `nuq-postgres-docker` | arm64 rebuild of Firecrawl's `nuq-postgres` queue DB | `ghcr.io/gururafiki/nuq-postgres-docker` | [nuq-postgres-docker/README.md](nuq-postgres-docker/README.md) |
+| `langchain-opensandbox` | OpenSandbox backend for LangChain deep agents (MIT) — extracted from `muffin-agent` 2026-08-08 and shared with the community. **A library, not a service**: no image, no deployment, nothing in the Swarm stack. `muffin-agent` depends on it. | — (PyPI) | [langchain-opensandbox/README.md](langchain-opensandbox/README.md) |
 
 **The detailed agent architecture (MuffinAgentBuilder, middleware stack, the persona/criteria/research/
 trading-decision graphs, memory routes, testing rules) lives in [muffin-agent/CLAUDE.md](muffin-agent/CLAUDE.md).**
@@ -168,14 +169,15 @@ only reads `SKILL.md` files under `.claude/skills/`, so the symlink is what make
 
 ## Repo hardening baseline (every repo, set 2026-08-08)
 
-All seven repos are public and carry Dependabot (version + security updates), secret scanning +
+All eight repos are public and carry Dependabot (version + security updates), secret scanning +
 push protection, CodeQL, and a branch ruleset. Protection is **tiered on purpose** — full parity
 everywhere would turn every one-line Dockerfile bump and every umbrella submodule re-pin into a PR:
 
 - **Tier 1 — `muffin-agent`, `muffin-ui`, `muffin-deployment`:** PR required (0 approvals) + Copilot
   review on push + code-quality + CodeQL gate + **a required status check** from the repo's own
   `quality.yml`. No deletion, no force-push.
-- **Tier 2 — `openbb-mcp-docker`, `agent-chat-ui-docker`, `nuq-postgres-docker`, `muffin` (umbrella):**
+- **Tier 2 — `openbb-mcp-docker`, `agent-chat-ui-docker`, `nuq-postgres-docker`,
+  `langchain-opensandbox`, `muffin` (umbrella):**
   no deletion, no force-push, CodeQL gate. **Direct push preserved.**
 
 The umbrella repo cannot have CodeQL — GitHub reports `languages: []` for it, so default setup is
@@ -206,10 +208,35 @@ Things that are easy to get wrong here:
 Full rationale, the per-repo ecosystem table, and the #145 post-mortem:
 [docs/superpowers/specs/2026-08-08-repo-hardening-and-typing-design.md](docs/superpowers/specs/2026-08-08-repo-hardening-and-typing-design.md).
 
+## Extracting a piece of muffin as a LangChain integration
+
+`langchain-opensandbox` is the first of these; the conventions cost nothing to follow and a lot to
+retrofit.
+
+- **Independent PyPI package, `langchain-<provider>`.** LangChain's
+  [integrations guide](https://docs.langchain.com/oss/python/contributing/integrations-langchain) is
+  explicit that new integrations are **not** merged into langchain-ai repos — they are published
+  independently and then listed. Listing is a row in `integration_external_docs.yaml`; a hosted MDX
+  page is reserved for 50k+ monthly downloads.
+- **Class name follows `<Provider>Sandbox`** (`E2BSandbox`, `ModalSandbox`, `DaytonaSandbox`), even
+  when it reads worse than the internal name did. Reviewer familiarity is worth more than the stutter.
+- **License MIT, not GPLv3.** The muffin components are GPLv3; a library meant for other people's
+  agents cannot be.
+- **Open an alignment issue before a PR** that adds a dependency or touches more than one package —
+  that is what [deepagents#1739](https://github.com/langchain-ai/deepagents/issues/1739) did for E2B.
+- **A live run finds what mocks cannot.** The extraction surfaced a bug that had been in muffin since
+  the sandbox was written: OpenSandbox emits one message per output line with the newline stripped,
+  the backend joined them on `""`, and `ls` therefore returned zero entries — `error=None`, so it
+  read as an empty directory — for any directory with 2+ files. Every test passed, because the
+  fixtures embedded newlines the real protocol never sends. Stand the real dependency up
+  (`pip install opensandbox-server` runs it locally; the `ghcr.io/alibaba/...` image in the muffin-agent
+  README is **not pullable**) and drive the actual wire before trusting a port.
+
 ## Conventions
 
-- **License: GNU GPL v3.0** ([LICENSE](LICENSE)). Each submodule is GPLv3; third-party images they wrap
-  keep their upstream licenses.
+- **License: GNU GPL v3.0** ([LICENSE](LICENSE)). Each submodule is GPLv3 — **except
+  `langchain-opensandbox`, which is MIT** because it is a library published for other people's agents;
+  third-party images the submodules wrap keep their upstream licenses.
 - **All published images are arm64** (Oracle A1 / aarch64). Anything new that runs on the node must
   have an arm64 build.
 - Coding conventions, collaboration preferences, and "memorize lessons in CLAUDE.md" rules are

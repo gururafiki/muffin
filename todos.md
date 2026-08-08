@@ -160,7 +160,7 @@
 
 
 ## Clean-up of muffin-agent
-- [ ] Move OpenSandbox backend to separeate package: `langchain_opensandbox`. Share it with langchain community.
+- [x] Move OpenSandbox backend to separeate package: `langchain_opensandbox`. Share it with langchain community. — shipped 2026-08-08 as [gururafiki/langchain-opensandbox](https://github.com/gururafiki/langchain-opensandbox) (MIT, 8th submodule); muffin-agent consumes it via [PR #157](https://github.com/gururafiki/muffin-agent/pull/157). Remaining: publish `0.1.0` to PyPI, flip muffin's commit pin to a version bound, and submit the `integration_external_docs.yaml` listing to LangChain.
 - [ ] Move `multi_agent` conversaion to separate package `langchain_llm_debate` (think on naming)
 - [ ] Move skill suggestion middleware to separate package
 - [ ] Double check purpose of `SubagentRefinementMiddleware`

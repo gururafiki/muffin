@@ -19,6 +19,7 @@ This is the **umbrella repo**: it pins all the pieces together as git submodules
 | [`agent-chat-ui-docker`](https://github.com/gururafiki/agent-chat-ui-docker) | Legacy chat UI (Next.js, same-origin `/api` proxy) — `muffin-chat.<domain>` | `ghcr.io/gururafiki/agent-chat-ui-docker` |
 | `muffin-ui` | New app: Expo/React Native (Web·iOS·Android), static web + nginx `/api` proxy — `muffin.<domain>` | `ghcr.io/gururafiki/muffin-ui` |
 | [`nuq-postgres-docker`](https://github.com/gururafiki/nuq-postgres-docker) | arm64 Firecrawl `nuq-postgres` | `ghcr.io/gururafiki/nuq-postgres-docker` |
+| [`langchain-opensandbox`](https://github.com/gururafiki/langchain-opensandbox) | OpenSandbox backend for LangChain deep agents (MIT) — a library, not a service; extracted from `muffin-agent` and shared with the LangChain community | — (PyPI) |
 
 Each image repo builds its own arm64 image in CI (GHCR); `muffin-deployment` references them.
 

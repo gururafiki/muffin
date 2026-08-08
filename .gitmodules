@@ -16,3 +16,6 @@
 [submodule "muffin-ui"]
 	path = muffin-ui
 	url = git@github.com:gururafiki/muffin-ui.git
+[submodule "langchain-opensandbox"]
+	path = langchain-opensandbox
+	url = git@github.com:gururafiki/langchain-opensandbox.git
