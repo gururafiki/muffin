@@ -1,0 +1,21 @@
+# Dependabot configuration for the umbrella repo.
+# https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+#
+# `gitsubmodule` opens a PR when a submodule's `main` moves ahead of the commit
+# pinned here, which is the only dependency this repo actually has — it contains
+# almost no code of its own.
+#
+# This does NOT drive deployment. Deploys are triggered by each build repo
+# dispatching `deploy` to muffin-deployment on push, so a stale pin here never
+# blocks a release; it only makes `git clone --recurse-submodules` reproduce an
+# older tree than production is running. Keeping the pins fresh is bookkeeping,
+# so: monthly, not weekly.
+version: 2
+updates:
+  - package-ecosystem: "gitsubmodule"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    groups:
+      submodules:
+        patterns: ["*"]

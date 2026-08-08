@@ -166,6 +166,41 @@ only reads `SKILL.md` files under `.claude/skills/`, so the symlink is what make
 - **Adding a new skill:** commit it into the owning submodule first (`<submodule>/.agents/skills/<name>`
   + symlink), then copy the same folder + symlink into the umbrella root and commit there too.
 
+## Repo hardening baseline (every repo, set 2026-08-08)
+
+All seven repos are public and carry Dependabot (version + security updates), secret scanning +
+push protection, CodeQL, and a branch ruleset. Protection is **tiered on purpose** — full parity
+everywhere would turn every one-line Dockerfile bump and every umbrella submodule re-pin into a PR:
+
+- **Tier 1 — `muffin-agent`, `muffin-ui`, `muffin-deployment`:** PR required (0 approvals) + Copilot
+  review on push + code-quality + CodeQL gate + **a required status check** from the repo's own
+  `quality.yml`. No deletion, no force-push.
+- **Tier 2 — `openbb-mcp-docker`, `agent-chat-ui-docker`, `nuq-postgres-docker`, `muffin` (umbrella):**
+  no deletion, no force-push, CodeQL gate. **Direct push preserved.**
+
+The umbrella repo cannot have CodeQL — GitHub reports `languages: []` for it, so default setup is
+unavailable. It gets guardrails only. Don't keep re-trying it.
+
+Things that are easy to get wrong here:
+
+- **Never add a `paths` / `paths-ignore` filter to a workflow that is a required status check.** A
+  filtered workflow simply never reports on a PR that misses the filter, and the PR is then blocked
+  forever on a check that will never arrive.
+- **Enable `PUT /repos/{o}/{r}/vulnerability-alerts` before `automated-security-fixes`** — the latter
+  returns 204 and silently does nothing without it. A `PATCH` of `security_and_analysis` also returns
+  200 while changing nothing.
+- **Land a quality workflow on `main` before making it a required check**, or every PR blocks.
+- **A Dependabot version bound can be a safety guard, and Dependabot does not know that.** It widened
+  muffin-agent's deliberate `mcp<2` to `<3` in #145 and it merged unverified, reopening a
+  known outage class. Deliberate caps get an `ignore` entry plus a comment saying why, in both
+  `pyproject.toml` and `dependabot.yml`. Same reasoning excludes the Expo SDK family in `muffin-ui`
+  (those versions are chosen as a set by `expo install`) and both git-URL fork pins in `muffin-agent`.
+- **Don't cancel `main` builds.** `cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}`, not
+  `true` — two merges seconds apart used to kill the first one's verification run.
+
+Full rationale, the per-repo ecosystem table, and the #145 post-mortem:
+[docs/superpowers/specs/2026-08-08-repo-hardening-and-typing-design.md](docs/superpowers/specs/2026-08-08-repo-hardening-and-typing-design.md).
+
 ## Conventions
 
 - **License: GNU GPL v3.0** ([LICENSE](LICENSE)). Each submodule is GPLv3; third-party images they wrap
