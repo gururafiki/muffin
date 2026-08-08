@@ -178,7 +178,20 @@ everywhere would turn every one-line Dockerfile bump and every umbrella submodul
   `quality.yml`. No deletion, no force-push.
 - **Tier 2 — `openbb-mcp-docker`, `agent-chat-ui-docker`, `nuq-postgres-docker`,
   `langchain-opensandbox`, `muffin` (umbrella):**
-  no deletion, no force-push, CodeQL gate. **Direct push preserved.**
+  no deletion, no force-push, CodeQL gate.
+
+  **"Direct push preserved" is not actually true, and that was measured on 2026-08-08.** The
+  `code_scanning` rule in the ruleset blocks a direct push to `main` with
+  `Code scanning is waiting for results from CodeQL for the commit <sha>` — results can only exist
+  for a commit already on the remote, so a push of a new commit can never satisfy it. Tier 2 is
+  therefore PR-only in practice, exactly like Tier 1 minus the required status check. Either accept
+  that (open a PR, CodeQL runs on it, merge) or drop the `code_scanning` rule from the Tier 2
+  ruleset. Do not keep asserting direct push works.
+
+  Second gotcha, same session: **`gh pr merge` fails on any PR touching `.github/workflows/`** with
+  `refusing to allow an OAuth App to create or update workflow ... without 'workflow' scope`. Merging
+  such a PR needs a token carrying `workflow`, or a human clicking merge. SSH pushes are not a way
+  around it — they hit the `code_scanning` rule above instead.
 
 The umbrella repo cannot have CodeQL — GitHub reports `languages: []` for it, so default setup is
 unavailable. It gets guardrails only. Don't keep re-trying it.
