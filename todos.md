@@ -133,7 +133,13 @@
 - [x] How can i have in langfuse traces grouped by thread_id?
 - [ ] **When i trigger run and then open it from calls page it's initially shown as completed and then after some time it's back to running state.**
 - [ ] **Figure out why and in what cases runs go to interrupted state and how to continue them.**
-- [ ] Build the app for Android
+
+## Mobile App
+- [x] Build the app for Android
+- [x] Enable building Android app via pipelines.
+- [x] [BUG] I've opened Trading Decision (past call), then clicked on "Risk Debate" sub agent to expand and app has crashed. Why is it happening?
+- [ ] additional small feedback for the next steps - when I'm not authenticated in app (cloudflare) - calls screen shows not meaningful error. Can we have a better error for such cases and for cases when auth is expired while user browses app/web
+- [ ] On Android Countries SVG is not clickable.
 - [ ] Build the app for iOS
 
 ## Other P1
@@ -143,8 +149,8 @@
 - [ ] Add currency to settings
 - [ ] Double check authorization rules to make sure users can't delete/amend something that they haven't created (e.g. store). And can't read memories that are not their. 
 - [x] Currently when i open existing runs - page loading time is quite high. I guess it can be that way because we are loading everything at once from state. Our agents has subagents/subgraphs/etc. Can we maybe load firstly only parent graph information and then load remainin details when user interacts with page? E.g. On council page - we can postpone loading details from each individual persona until the user clicks on persona. For tool calls - maybe we can load firstly overall stats and load details only when user clicks on specific tool/execution. For criteria analysis - i guess we can load criterion information via separate call as well when user clicks on criterion (lack we do for subagents panel). For individual steps of trading decision maybe we can do the same?
-- [ ] Handle 401 when after idle browser tab and broken connection
-- [ ] **https://muffin.rafiki.guru/api/docs doesn't allow to do calls since when i click "Test request" it assumes that site is hosted at root uri (https://muffin.rafiki.guru/), not https://muffin.rafiki.guru/api/ . How can we approach it?**
+- [x] Handle 401 when after idle browser tab and broken connection
+- [x] **https://muffin.rafiki.guru/api/docs doesn't allow to do calls since when i click "Test request" it assumes that site is hosted at root uri (https://muffin.rafiki.guru/), not https://muffin.rafiki.guru/api/ . How can we approach it?**
 
 ## Other P2
 - [ ] Add new tab to donate to Ukraine with links to different funds
