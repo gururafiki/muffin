@@ -191,10 +191,15 @@ Things that are easy to get wrong here:
   200 while changing nothing.
 - **Land a quality workflow on `main` before making it a required check**, or every PR blocks.
 - **A Dependabot version bound can be a safety guard, and Dependabot does not know that.** It widened
-  muffin-agent's deliberate `mcp<2` to `<3` in #145 and it merged unverified, reopening a
-  known outage class. Deliberate caps get an `ignore` entry plus a comment saying why, in both
-  `pyproject.toml` and `dependabot.yml`. Same reasoning excludes the Expo SDK family in `muffin-ui`
-  (those versions are chosen as a set by `expo install`) and both git-URL fork pins in `muffin-agent`.
+  muffin-agent's deliberate `mcp<2` to `<3` in #145 and it merged unverified. Deliberate caps get an
+  `ignore` entry plus a comment saying why — that is why the Expo SDK family is excluded in
+  `muffin-ui` (`expo install` picks those as a set) and both git-URL fork pins in `muffin-agent`.
+- **…but first check the bound does anything at all.** The `mcp` cap turned out to be a no-op:
+  `langchain-mcp-adapters` already declares `mcp<2.0.0`, which is strictly stronger, and `mcp<3`
+  *permitted* mcp 2.0.0 — the exact version that caused the outage. It was deleted rather than
+  guarded. **A bound that cannot block the thing it names is worse than no bound**, because reviewers
+  read it as protection. When a cap is inherited transitively, pin the *floor of the package that
+  carries it* and say so; don't restate the cap locally where it can drift or mislead.
 - **Don't cancel `main` builds.** `cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}`, not
   `true` — two merges seconds apart used to kill the first one's verification run.
 

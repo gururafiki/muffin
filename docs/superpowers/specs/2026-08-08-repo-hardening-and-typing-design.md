@@ -72,11 +72,18 @@ Three independent failures had to line up:
 
 1. **The cap was reachable.** `mcp<3` permits mcp 2.x. The only thing excluding it
    was `langchain-mcp-adapters` 0.3.2 declaring `mcp>=1.24.0,<2.0.0` itself — but
-   the floor was `>=0.3.1`, which has no such cap, and the runtime installs with
-   `-c /api/constraints.txt`. → Floor raised to `>=0.3.2`, making the upstream cap
-   guaranteed rather than incidental.
-2. **Dependabot did not know the bound was a guard.** → `ignore` entry for `mcp`,
-   with the reason recorded in both `pyproject.toml` and `dependabot.yml`.
+   the floor was `>=0.3.1`, which has no such cap. → Floor raised to `>=0.3.2`,
+   making the capped version a guarantee rather than resolver luck.
+
+   > **Correction.** The first version of this section justified the floor by
+   > saying the runtime installs with `-c /api/constraints.txt` and could
+   > therefore land on 0.3.1. That file constrains neither `mcp` nor
+   > `langchain-mcp-adapters` — checked in the base image, 36 lines, neither
+   > present. The floor is still right; that reason was not.
+
+2. **Dependabot did not know the bound was a guard** → an `ignore` entry for
+   `mcp`. **Superseded — see below.** The bound itself turned out to be the
+   problem.
 3. **The guard that existed ran too late.** The resolve+import smoke test lived
    only in `build-image.yml` on push-to-main, and `cancel-in-progress` killed
    #145's run when the next merge landed 12 seconds later. The only PR check was
@@ -84,9 +91,33 @@ Three independent failures had to line up:
    also runs on `pull_request`, and `build-image.yml` no longer cancels `main`
    builds.
 
-Real mcp-2 support is tracked upstream in langchain-mcp-adapters#578. When it
-ships, adapters drops its cap and `mcp<3` opens up — so that has to be a
-deliberate, smoke-tested migration, which is what the `ignore` protects.
+### Follow-up: the bound was deleted, not guarded
+
+Reviewing the result raised the right question — does `mcp<3` do anything? It does
+not. The only binding constraint on mcp is adapters' own `mcp>=1.24.0,<2.0.0`
+(strictly stronger); the sole other declaration in the tree is `anthropic`'s,
+under an extra we do not install.
+
+And it could not block what its comment claimed: the outage was **mcp 2.0.0**, and
+`<3` *permits* 2.x. The moment it became the binding constraint it would have
+allowed exactly the version that took the API to 0/1. It excluded only mcp 3.x,
+which does not exist. **A bound that cannot block the thing it names is worse than
+no bound, because reviewers read it as protection** — the old comment even
+conceded "does NOT by itself exclude mcp 2.x", which was the tell.
+
+So the direct bound is gone and the cap lives in one place, upstream. Verified by
+resolving in the runtime base image exactly as prod does, with the bound removed:
+**mcp 1.29.0, adapters 0.3.2, langgraph 1.2.10**, and `criteria_analysis.graph` /
+`personas_council.council_graph` / `auth` all import. The Dependabot `ignore` for
+`mcp` went too — dead config once no direct bound is declared.
+
+**Accepted trade-off, deliberately.** Real mcp-2 support is tracked upstream in
+langchain-mcp-adapters#578. When it ships, adapters relaxes its cap and mcp 2.x
+arrives through a routine Dependabot bump of adapters — nothing here stops it. The
+resolve+import smoke test gates the import-time break that caused the original
+outage, but it imports four modules and does **not** exercise MCP tool calling,
+which is where a subtler mcp-2 regression would surface. `roadmap.md` records the
+action: exercise a real OpenBB/Firecrawl tool path by hand on that PR.
 
 ## Ask 2 — typing and linting
 
