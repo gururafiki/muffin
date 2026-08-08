@@ -160,9 +160,39 @@ have caught that. `files` is a `DeltaChannel` on our pinned deepagents 0.6.12 to
 `tests/test_fork_pins.py` now asserts a second delta channel hydrates in the
 nested namespace.
 
-This was **not** verified against production — no Cloudflare Access credentials
-are available in this environment. It is verified locally against the pinned
-libraries, which is what the guard tests.
+**Verified against production afterwards (credentials supplied mid-session): the
+symptom does not reproduce, and cannot today.** Across a `stock_evaluation` thread
+(13 `tools:<uuid>` subagent namespaces) and a `criteria_analysis` thread (15
+namespaces), **no namespace anywhere has a non-empty `files` channel**. The
+suggestive case — `ticker_classification`, which reads **63 messages alongside
+`files == {}`**, exactly eliornl's shape — turns out to be legitimately empty: its
+only tool calls are `task`, `write_todos`, and the structured-output schema tool,
+with **zero filesystem tool calls and zero "tool result too large" offload
+markers**. So nothing wrote to `files` for the read to lose.
+
+Our agents route durable state through `/scratch/` (`StateBackend`) and
+`/memories/` (`StoreBackend`) via `CompositeBackend`, not the plain `files`
+channel, and no tool result crossed `FilesystemMiddleware`'s 20k-token offload
+threshold in these runs. We become exposed the moment one does — which is what the
+new guard covers at the mechanism level.
+
+Two API gotchas found while doing this, both worth not re-deriving:
+
+- **Cloudflare returns `403` with body `error code: 1010` for `Python-urllib`'s
+  default User-Agent.** That is a bot-signature block, *not* an auth failure —
+  identical requests via `curl` succeed. Send a browser-like `User-Agent`.
+- `/threads/search` answers with CF Access headers alone, but `/threads/{id}/history`
+  additionally needs the Supabase user Bearer token (GoTrue password grant).
+
+### Separately observed, not investigated
+
+In the `stock_evaluation` thread, **12 of 13 `tools:<uuid>` namespaces return zero
+snapshots** — they resolve (no `Subgraph tools not found`, so the deepagents pin is
+deployed and working) but yield empty history. Only the data-validation subagent
+returned anything. The root state reads `channels: []`, consistent with the
+already-documented "a deep agent's `values.messages` is empty — read transcripts
+from `tasks[].result`" correction. Whether the 12 empty namespaces are the same
+known behaviour or something else was **not established**; do not assume.
 
 ## Follow-ups recorded
 
