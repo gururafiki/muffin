@@ -188,10 +188,21 @@ everywhere would turn every one-line Dockerfile bump and every umbrella submodul
   that (open a PR, CodeQL runs on it, merge) or drop the `code_scanning` rule from the Tier 2
   ruleset. Do not keep asserting direct push works.
 
+  A fast-forward IS accepted where a merge commit is not: pushing the PR branch's own head advances
+  `main` to a commit CodeQL has already reported on. `git merge --ff-only origin/<branch> && git push`
+  lands a green PR without the API, and GitHub marks the PR merged. It only works while `main` has not
+  moved since the branch was cut.
+
   Second gotcha, same session: **`gh pr merge` fails on any PR touching `.github/workflows/`** with
   `refusing to allow an OAuth App to create or update workflow ... without 'workflow' scope`. Merging
-  such a PR needs a token carrying `workflow`, or a human clicking merge. SSH pushes are not a way
-  around it — they hit the `code_scanning` rule above instead.
+  such a PR needs a token carrying `workflow`, or a human clicking merge.
+
+  **Those two combine into a genuine dead end.** A workflow-only PR (e.g. a Dependabot action bump)
+  cannot be merged by the API for lack of scope, and cannot be fast-forwarded either, because CodeQL
+  reports `skipping` on a change with nothing analyzable in it — so `code_scanning` waits forever for
+  results that will never exist. GitHub's own merge button treats `skipping` as satisfied; nothing
+  else does. Such a PR needs a human click or a `workflow`-scoped token. `langchain-opensandbox#2` sat
+  in exactly this state.
 
 The umbrella repo cannot have CodeQL — GitHub reports `languages: []` for it, so default setup is
 unavailable. It gets guardrails only. Don't keep re-trying it.
