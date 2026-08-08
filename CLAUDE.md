@@ -228,9 +228,25 @@ retrofit.
   the sandbox was written: OpenSandbox emits one message per output line with the newline stripped,
   the backend joined them on `""`, and `ls` therefore returned zero entries — `error=None`, so it
   read as an empty directory — for any directory with 2+ files. Every test passed, because the
-  fixtures embedded newlines the real protocol never sends. Stand the real dependency up
-  (`pip install opensandbox-server` runs it locally; the `ghcr.io/alibaba/...` image in the muffin-agent
-  README is **not pullable**) and drive the actual wire before trusting a port.
+  fixtures embedded newlines the real protocol never sends. Stand the real dependency up and drive the
+  actual wire before trusting a port — see below for how to get an OpenSandbox server.
+
+## Running an OpenSandbox server locally
+
+- **`docker run -d -p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock opensandbox/server:latest`.**
+  Docker Hub, tags through `v0.2.2`. This is the same image `muffin-deployment/stack/docker-compose.yaml`
+  deploys.
+- **`ghcr.io/alibaba/opensandbox/server:latest` does not exist** — it returns `denied: denied`. That path
+  is in [muffin-agent/README.md](muffin-agent/README.md) § "Start OpenSandbox" and is wrong; the Swarm
+  stack has always used the Docker Hub one.
+- Alternative with no image at all: `pip install opensandbox-server`, then
+  `opensandbox-server init-config ~/.sandbox.toml --example docker` and `opensandbox-server`. It still
+  spawns sandbox containers through `docker.sock`. On macOS this needs
+  `OPENSANDBOX_USE_SERVER_PROXY=false` on the *client*, because a host-native server cannot reach a
+  container's bridge IP through Docker Desktop's VM — the sandbox is only reachable on its published
+  port. In the Swarm deployment the server is itself a container, so proxy mode (the default) is correct.
+- **`docker manifest inspect` is not a valid availability check.** It fails with "unsupported manifest
+  media type" on any OCI-format image, which reads as "missing" and is not. Use `docker pull`.
 
 ## Conventions
 
