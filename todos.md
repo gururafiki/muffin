@@ -93,9 +93,10 @@
   public). Bypasses the TTL and error backoff, never the in-flight lock.
 - [x] **`skeleton-check.mjs` path traversal** — fixed 2026-08-09 by extracting the shared
   `scripts/lib/serve-dist.mjs`; both smoke scripts now serve from an allowlist.
-- [ ] **Nothing refreshes market data on a schedule.** It is stale-while-revalidate only, so the
-  first visitor after a TTL expiry triggers the fetch and sees the previous values until it
-  lands. Fine at this traffic, but a pg_cron warm-up would make the first load of the day fresh.
+- [x] **Scheduled warm-up** — done 2026-08-09 as `market-warmup.yml` (02/08/14/20 UTC), verified
+  by a real dispatch: 5/5 resources, exit 0. GitHub Actions rather than pg_cron — no DB change, no
+  new infra, and the run is visible/disable-able in CI. Every 6h rather than per-TTL because
+  yfinance rate-limits.
 - [x] **Market data Phase 4** — asset universe + stock page DONE 2026-08-09. Every market
   surface is now server-backed or explicitly badged; the unbadged-invented-numbers gap is closed.
   - [ ] **Sector donut weights stay SAMPLE — blocked, not deferred.** `etf/sectors` is FMP-only
@@ -196,6 +197,9 @@
 - [x] Currently when i open existing runs - page loading time is quite high. I guess it can be that way because we are loading everything at once from state. Our agents has subagents/subgraphs/etc. Can we maybe load firstly only parent graph information and then load remainin details when user interacts with page? E.g. On council page - we can postpone loading details from each individual persona until the user clicks on persona. For tool calls - maybe we can load firstly overall stats and load details only when user clicks on specific tool/execution. For criteria analysis - i guess we can load criterion information via separate call as well when user clicks on criterion (lack we do for subagents panel). For individual steps of trading decision maybe we can do the same?
 - [x] Handle 401 when after idle browser tab and broken connection
 - [x] **https://muffin.rafiki.guru/api/docs doesn't allow to do calls since when i click "Test request" it assumes that site is hosted at root uri (https://muffin.rafiki.guru/), not https://muffin.rafiki.guru/api/ . How can we approach it?**
+- [ ] **Check how much data and under which logic gets pulled on market-refresh**. Check how data is strucutred in db. Consider having always option load more for data that is loaded in batches (e.g. history prices). Histroical data doesn't need refresh, we only need to pull latest data, make sure it's handled by data refreshers.
+- [ ] Check why not all tickets are pulled.
+- [ ] **I see tables with data are now unrestricted** and there are couple security treats.
 
 ## Other P2
 - [ ] Add new tab to donate to Ukraine with links to different funds
