@@ -42,10 +42,82 @@ This umbrella file only covers the cross-submodule picture.
 - **Request path:** Cloudflare (DNS + Access) → Traefik → a UI that proxies `/api` → `langgraph-api`
   (the `muffin-agent` image). Two UIs are exposed: the Expo app (`muffin.*`, `muffin-ui`) and the
   legacy chat UI (`muffin-chat.*`, `agent-chat-ui`); plus the LangGraph API (`muffin-api.*`).
-- **Private overlay (~14 services total, none externally exposed):** `openbb-mcp`, Firecrawl
+- **Private overlay (~14 services total, none externally exposed):** `openbb-mcp`, `openbb-api`, Firecrawl
   (api/mcp/playwright/redis/rabbitmq + `firecrawl-postgres` = `nuq-postgres`), `searxng`, `opensandbox`,
-  `langgraph-postgres`, `langgraph-redis`. See `muffin-deployment/stack/docker-compose.yaml` for the
+  `langgraph-redis`. See `muffin-deployment/stack/docker-compose.yaml` for the
   full stack + per-service memory budget.
+- **`langgraph-postgres` is no longer rendered post-cutover.** It is wrapped in
+  `{% if not use_supabase_db %}` (the stack template's only Jinja control block); with
+  `USE_SUPABASE_DB=true` it simply isn't in the stack, freeing 1 GB. Its `langgraph-data` volume is
+  still declared on purpose, so flipping the flag back is a real rollback.
+
+## The market-data path (UI ← Supabase ← OpenBB)
+
+Added 2026-08-09. muffin-ui's Globe/Markets numbers were authored constants in the JS bundle;
+sector performance is now real. The chain, and why each hop exists:
+
+```
+muffin-ui  ──supabase.schema('market').select()──►  PostgREST (supabase-rest)  ──►  market.performance
+           ──supabase.functions.invoke()────────►  edge fn market-refresh  ──fetch──►  openbb-api:6900
+```
+
+- **Reads have no API server in the path.** `market.*` is a Postgres schema exposed through PostgREST
+  — the same component `user_backups` already used. Adding an endpoint is adding a table, not code.
+  **PostgREST *is* `supabase-rest`**; it is not a separate thing to install.
+- **`openbb-api` is a second service from the `openbb-mcp-docker` image**, not a new repo:
+  `openbb-core` hard-depends on fastapi/uvicorn, so the REST app is already installed. This is why
+  no Deno MCP client was needed. Route convention `obb.x.y.z` → `/api/v1/x/y/z` is **not perfectly
+  regular** (`/equity/price/performance` vs `/etf/price_performance`) — check `/openapi.json`.
+- **finviz + yfinance are keyless**, which is what makes this free. `equity/compare/groups`
+  (sectors) is finviz-only and **US-listed only** — do not relabel it as global.
+- **Per-symbol performance has no ready-made endpoint here.** finviz's `price_performance` is
+  **broken upstream** (mangles the symbol: `AAPL` → `'AAAPL' is not in list`, 422) and fmp's
+  `etf/price_performance` is a **premium** endpoint that 402s on this deployment's free key. So
+  country returns are computed from `etf/historical` (yfinance, keyless) — ~5.2y of daily closes
+  for all 19 country ETFs in ONE batched call (~4 MB, ~5 s; the provider adds a `symbol` column
+  only when several are requested). That is also why countries offer 3Y/5Y and sectors do not.
+  They are **price** returns — dividends excluded.
+- **Classification data is server-owned and editable.** Memberships upsert `do nothing` so a
+  redeploy cannot revert a Studio correction; schemes/groups/countries upsert `do update`.
+  `WorldMap` takes a resolved `Scheme`, not an id.
+- **Hong Kong has no SVG path in `world-geo.ts`** despite being modelled and drillable, so
+  anything iterating `WORLD_GEO` alone silently drops it — the seed generator unions the map ISOs
+  with `COUNTRIES`.
+- **`with_fileglob` does NOT sort.** The first deploy of this ran the migrations `04, 01, 05,
+  02, 03` and failed (`schema "market" does not exist`) — Ansible returns filesystem order, so
+  the numeric prefixes meant nothing until the glob was piped through `| sort`.
+- **An instrument's provider symbol is not always its ticker.** `market.instruments.price_symbol`
+  carries the difference (NESN → `NESN.SW` on yfinance; the bare ticker returns an **empty 200**,
+  which makes `res.json()` throw a `SyntaxError` naming neither call nor symbol). Every other
+  seeded name has a US listing or ADR, which is why exactly one row failed.
+- **There is no force-refresh.** `begin_refresh` correctly skips while data is inside its TTL,
+  so after fixing bad data you must `DELETE FROM market.refresh_log WHERE resource = …` with the
+  service-role key before re-triggering. Worth a `force` flag one day.
+- **Sub-sectors come from `equity/profile.industry_category`, NOT `.industry`** — the latter is
+  present on the yfinance response and always null. `equity/screener` cannot do this job at all:
+  yfinance's returns no sector/industry/country columns and orders by day change, and index
+  constituents are gated on both providers (fmp premium/402, cboe has no `^GSPC`).
+- **`market.instruments.sector_id` is a CURATED placement, kept next to the fetched
+  `provider_sector`** rather than overwritten — yfinance says "Financial Services" where muffin
+  says "financials". Same reason memberships upsert `do nothing`: editorial choices live in the
+  DB and a redeploy must not revert them.
+- **OpenBB returns performance as a FRACTION** (`-0.0366` = −3.66%) while the UI wants percent.
+  Guarded by `functions/market-refresh/check.ts`, which drives the real provider.
+- **A quoted `numeric` would drop every row.** PostgREST v14.12 sends `numeric` as a JSON number
+  (measured, including at high precision), so `z.coerce` in the client schema is a guard, not a
+  fix for a live bug — but without it a driver that quoted the value would make `parseArray` drop
+  every row and the UI would silently show authored data. `smoke-market.mjs` feeds quoted values
+  to keep the guard honest.
+- **Anything not live stays badged SAMPLE**, and live values show age + source. A list never mixes
+  the two — a sector with no server row shows no number rather than an authored one.
+
+**Supabase's default grants exposed LangGraph's tables to the public anon key** (measured
+2026-08-09: `GET /rest/v1/thread` and `/checkpoint_blobs` returned real rows). LangGraph keeps its
+tables in `public` deliberately — a dedicated schema was tried and abandoned because langgraph-api
+recreates them there. `03-security.sql` revokes `public` from `anon`/`authenticated`, re-grants only
+the app's own tables, and revokes the **default privileges** so tables created later don't
+re-acquire it; being re-applied every deploy is what makes it self-healing. New app tables therefore
+go in their own schema (like `market`) with explicit grants, never in `public`.
 
 ## Working with submodules (the umbrella's core workflow)
 

@@ -79,7 +79,30 @@
 - [x] I don't see langgraph's db in my supabase. What should we do to have it accessible from studio?
 - [x] **Connect Ollama cloud as alternative provider for open router. Use Ollama Cloud as main model and openrouter as fallback. For Ollama Cloud we should have separate `llm_requests_per_second`, it should be provider specific and `llm_requests_per_second=0.3` is only for open router.**
 - [ ] Setup Supabase realtime to send notfications when workflow is finished to user.
-- [ ] Setup edge functions (with Deno) as endpoints for UI data (e.g. user wealth CRUD, country list, etc)
+- [~] **Setup edge functions (with Deno) as endpoints for UI data** — *partly done 2026-08-09.*
+  The first edge function (`market-refresh`) and the `market` schema shipped, plus a new internal
+  `openbb-api` service (same image as `openbb-mcp` — `openbb-core` already ships the FastAPI app).
+  **Reads deliberately do NOT go through an edge function**: `market.*` is exposed over PostgREST,
+  so the UI reads tables directly with supabase-js and the function is only the writer.
+  Remaining: user wealth CRUD, and the country/classification tables (Phase 2).
+- [x] **Market data Phases 1–3** (see `muffin-ui/ROADMAP.md` M5): sector performance +
+  timeframe, classifications/countries/growth, and sector constituents + real sub-sectors are
+  all server-backed. **DEPLOYED + verified live 2026-08-09** — 77 sector / 171 country / 315
+  instrument rows; the country, group and sector screens render server data with provenance.
+- [ ] **Add a `force` flag to market-refresh.** `begin_refresh` correctly skips inside the TTL,
+  so correcting bad data currently means deleting the `market.refresh_log` row with the
+  service-role key before re-triggering. Fine, but undocumented-in-UI and easy to get wrong.
+- [ ] **`skeleton-check.mjs` still has the unguarded `join(DIST, req.url)`** that CodeQL flagged
+  in `smoke-market.mjs` (js/path-injection). Same fix: serve from an allowlist.
+- [ ] **Market data Phase 4**: the Markets asset universe (`OTHER_ASSETS` — still the one place
+  invented numbers render unbadged), the sector donut weights (`etf/sectors?symbol=IVV`, needs
+  FMP), and the stock page (P0 below).
+- [x] **Anon key could read every user's LangGraph run content** (found + fixed 2026-08-09).
+  Supabase's default `public` grants applied to LangGraph's tables, so `GET /rest/v1/thread` and
+  `/rest/v1/checkpoint_blobs` returned real rows to anyone with the public anon key. Fixed in
+  `03-security.sql`. **Not yet deployed** — verify after the next deploy that `/rest/v1/thread`
+  returns a permission error while `user_backups` still works. (Related: the "Double check
+  authorization rules" item under Other P1.)
 
 
 ## Testing
@@ -133,6 +156,8 @@
 - [x] How can i have in langfuse traces grouped by thread_id?
 - [ ] **When i trigger run and then open it from calls page it's initially shown as completed and then after some time it's back to running state.**
 - [ ] **Figure out why and in what cases runs go to interrupted state and how to continue them.**
+- [ ] **Develop Stock page** displaying main information (country, sector, sub-sector, market type, etc). Some financials, charts, agent runs, conclusions, etc.
+- [ ] Add new UI style: `terminal` for bloomberg users.
 
 ## Mobile App
 - [x] Build the app for Android
