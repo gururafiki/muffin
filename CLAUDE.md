@@ -89,6 +89,12 @@ workflow (`workflow_dispatch`). Full runbook + remote-state env vars: [muffin-de
 ### Local development — agent + infra
 
 ```bash
+# One-time: compose reads env_file at PARSE time, so a missing .env breaks every
+# command — including the three services below, which need no secrets.
+cd muffin-deployment
+cp compose/.env.example compose/.env
+cp config/firecrawl/.env.example config/firecrawl/.env
+
 # Infra services the agent depends on (run from muffin-deployment/compose):
 docker compose up -d openbb-mcp firecrawl-mcp searxng
 
