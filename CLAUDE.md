@@ -90,9 +90,26 @@ muffin-ui  ──supabase.schema('market').select()──►  PostgREST (supabas
   carries the difference (NESN → `NESN.SW` on yfinance; the bare ticker returns an **empty 200**,
   which makes `res.json()` throw a `SyntaxError` naming neither call nor symbol). Every other
   seeded name has a US listing or ADR, which is why exactly one row failed.
-- **There is no force-refresh.** `begin_refresh` correctly skips while data is inside its TTL,
-  so after fixing bad data you must `DELETE FROM market.refresh_log WHERE resource = …` with the
-  service-role key before re-triggering. Worth a `force` flag one day.
+- **`force: true` bypasses the TTL — SERVICE-ROLE ONLY.** `begin_refresh` correctly skips inside
+  the TTL, which gets in the way when data is fresh and *wrong*. `force` also clears the error
+  backoff but NOT the in-flight lock, so concurrent forced refreshes still collapse into one
+  upstream fetch. The role check is load-bearing: the anon key is public, and a public
+  cache-buster is a free way to hammer the provider.
+- **The price refresh is BATCHED (12 symbols at a time) and that is load-bearing.** Doing the
+  whole universe at once returned Kong's *bare* 502 — the worker died rather than answering, so
+  the function's try/catch reported nothing. Ruled out by measurement: the fetch (a LARGER one
+  succeeds), the write (real rows upsert in ~0.1s), and the code (identical run returns 200 on the
+  same edge-runtime image locally). Never reproduced off the node. Batching bounds peak memory to
+  one batch and makes any recurrence name the batch. **A bare 502 from an edge function means the
+  worker died — look at memory, not at your error handling.**
+- **`market.prices` is deliberately a ~400-day window**, daily for the recent 90 days and weekly
+  before that (~107 bars/symbol). It exists because the
+  performance refresh already downloads full daily history and discards it. The chart offers
+  1M/3M/6M/1Y only — it never offers a range it cannot draw, while the 3Y/5Y *numbers* still come
+  from `market.performance`.
+- **Chart windows anchor on the LAST BAR, not `Date.now()`.** Wall-clock in render is impure and
+  React Compiler rejects it; anchoring on the data also means a stale series draws a full month
+  instead of shrinking toward empty.
 - **Sub-sectors come from `equity/profile.industry_category`, NOT `.industry`** — the latter is
   present on the yfinance response and always null. `equity/screener` cannot do this job at all:
   yfinance's returns no sector/industry/country columns and orders by day change, and index

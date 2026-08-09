@@ -89,9 +89,8 @@
   timeframe, classifications/countries/growth, and sector constituents + real sub-sectors are
   all server-backed. **DEPLOYED + verified live 2026-08-09** — 77 sector / 171 country / 315
   instrument rows; the country, group and sector screens render server data with provenance.
-- [ ] **Add a `force` flag to market-refresh.** `begin_refresh` correctly skips inside the TTL,
-  so correcting bad data currently means deleting the `market.refresh_log` row with the
-  service-role key first (recipe now in muffin-deployment/README.md). Works, easy to get wrong.
+- [x] **`force` flag on market-refresh** — done 2026-08-09, service-role only (the anon key is
+  public). Bypasses the TTL and error backoff, never the in-flight lock.
 - [x] **`skeleton-check.mjs` path traversal** — fixed 2026-08-09 by extracting the shared
   `scripts/lib/serve-dist.mjs`; both smoke scripts now serve from an allowlist.
 - [ ] **Nothing refreshes market data on a schedule.** It is stale-while-revalidate only, so the
@@ -163,9 +162,10 @@
 - [ ] **When i trigger run and then open it from calls page it's initially shown as completed and then after some time it's back to running state.**
 - [ ] **Figure out why and in what cases runs go to interrupted state and how to continue them.**
 - [~] **Develop Stock page** — *partly done 2026-08-09.* It now shows name, sector, the
-  provider's real industry (sub-sector), country, market cap and a performance strip across every
-  period, from `market.instruments` + `market.performance`. Still missing: **charts**, financials,
-  and the run/conclusion history for that ticker.
+  provider's real industry (sub-sector), country, market cap, a performance strip across every
+  period and a **price chart** (1M/3M/6M/1Y from `market.prices`). Still missing: **financials**
+  (revenue/margins/valuation) and the **run/conclusion history** for that ticker — the latter is
+  a LangGraph `threads.search` join, not a market-data problem.
 - [ ] Add new UI style: `terminal` for bloomberg users.
 
 ## Mobile App
