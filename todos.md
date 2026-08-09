@@ -198,7 +198,21 @@
 - [x] Handle 401 when after idle browser tab and broken connection
 - [x] **https://muffin.rafiki.guru/api/docs doesn't allow to do calls since when i click "Test request" it assumes that site is hosted at root uri (https://muffin.rafiki.guru/), not https://muffin.rafiki.guru/api/ . How can we approach it?**
 - [ ] **Check how much data and under which logic gets pulled on market-refresh**. Check how data is strucutred in db. Consider having always option load more for data that is loaded in batches (e.g. history prices). Histroical data doesn't need refresh, we only need to pull latest data, make sure it's handled by data refreshers.
-- [ ] Check why not all tickets are pulled.
+- [x] **Check why not all tickers are pulled** — answered 2026-08-09. The universe IS only the
+  ~35 authored tickers (2-5 per sector); nothing is being dropped. The sector list is now paged
+  (20/page, largest first, Load more) and the country filter is fixed, but a BIGGER universe is
+  blocked on the providers:
+  - **finviz screener** has the right columns (name/country/sector/industry/market cap in one
+    call) but returns **MANGLED SYMBOLS** — `EEXFY` for Expensify (EXFY), `TTEAM`, `CCRSR` — the
+    same first-character duplication as its broken `price_performance`, and its `country` filter
+    is ignored. Unusable as an identifier source.
+  - **yfinance screener** returns correct symbols + names but no country/sector/industry, and
+    orders by day change rather than size.
+  - **Scaling:** multi-period returns come from batched daily history (45 symbols ~9s); a few
+    hundred will not fit the edge worker's 60s. Either performance covers a top-N subset (the UI
+    already renders "no number" honestly) or it needs another source.
+  - Likely shape: yfinance screener for symbols + batched `equity/profile` for country/industry,
+    performance limited to the top N by market cap.
 - [ ] **I see tables with data are now unrestricted** and there are couple security treats.
 
 ## Other P2
