@@ -163,7 +163,7 @@
 - [x] Move OpenSandbox backend to separeate package: `langchain_opensandbox`. Share it with langchain community. — shipped 2026-08-08 as [gururafiki/langchain-opensandbox](https://github.com/gururafiki/langchain-opensandbox) (MIT, 8th submodule); muffin-agent consumes it via [PR #157](https://github.com/gururafiki/muffin-agent/pull/157). Remaining: publish `0.1.0` to PyPI, flip muffin's commit pin to a version bound, and submit the `integration_external_docs.yaml` listing to LangChain.
 - [ ] Move `multi_agent` conversaion to separate package `langchain_llm_debate` (think on naming)
 - [ ] Move skill suggestion middleware to separate package
-- [ ] Double check purpose of `SubagentRefinementMiddleware`
+- [x] Double check purpose of `SubagentRefinementMiddleware` — **removed 2026-08-09** ([muffin-agent#161](https://github.com/gururafiki/muffin-agent/pull/161)). It was never wired: `with_subagent_refinement()` appeared in exactly one file across its whole git history (the builder test). Built 2026-05-03 as Wave 4 of `improvements-v2.md`; the follow-up that would have wired it never happened, and the codebase then moved from deepagents `task` subagents (the only pattern it hooks) to compiled-agent-as-node. Its function is covered by `DataCollectionGuardMiddleware` (gaps/fabrication, all 21 collectors) + `ToolKnowledgeMiddleware` (provider-unavailable/upstream-error).
 - [ ] Move middlewares from @muffin-agent/src/muffin_agent/utils/ to match the structure of other middlewares.
 - [ ] Consolidate todos across 3 places:
   - [ ] Go over @muffin-agent/roadmap.md and check what still makes sense and what is outdated based on our latest development
