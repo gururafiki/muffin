@@ -183,16 +183,25 @@ everywhere would turn every one-line Dockerfile bump and every umbrella submodul
   review on push + code-quality + CodeQL gate + **a required status check** from the repo's own
   `quality.yml`. No deletion, no force-push.
 - **Tier 2 — `openbb-mcp-docker`, `agent-chat-ui-docker`, `nuq-postgres-docker`,
-  `langchain-opensandbox`, `muffin` (umbrella):**
-  no deletion, no force-push, CodeQL gate.
+  `langchain-opensandbox`:** no deletion, no force-push, CodeQL gate.
 
-  **"Direct push preserved" is not actually true, and that was measured on 2026-08-08.** The
-  `code_scanning` rule in the ruleset blocks a direct push to `main` with
+  **"Direct push preserved" is not actually true for these four, and that was measured on
+  2026-08-08.** The `code_scanning` rule in the ruleset blocks a direct push to `main` with
   `Code scanning is waiting for results from CodeQL for the commit <sha>` — results can only exist
-  for a commit already on the remote, so a push of a new commit can never satisfy it. Tier 2 is
+  for a commit already on the remote, so a push of a new commit can never satisfy it. They are
   therefore PR-only in practice, exactly like Tier 1 minus the required status check. Either accept
   that (open a PR, CodeQL runs on it, merge) or drop the `code_scanning` rule from the Tier 2
   ruleset. Do not keep asserting direct push works.
+
+- **Tier 3 — `muffin` (umbrella): direct push to `main` DOES work.** Measured 2026-08-09 by pushing
+  the muffin-agent re-pin straight to `main`. Its ruleset ("Main branch guardrails", id 20584837)
+  carries only `deletion` + `non_fast_forward` — **no `code_scanning` rule**, because the umbrella
+  cannot have CodeQL at all (GitHub reports `languages: []` for it). No CodeQL rule means nothing to
+  wait on, so the block that catches the other four never applies here. This file previously listed
+  the umbrella inside Tier 2 and declared all of Tier 2 PR-only; that was wrong for the umbrella
+  specifically. Verify with
+  `gh api repos/gururafiki/<repo>/rulesets/<id> --jq '.rules[].type'` before assuming either way —
+  a submodule re-pin does not need a PR.
 
   A fast-forward IS accepted where a merge commit is not: pushing the PR branch's own head advances
   `main` to a commit CodeQL has already reported on. `git merge --ff-only origin/<branch> && git push`
