@@ -130,6 +130,12 @@ muffin-ui  ──supabase.schema('market').select()──►  PostgREST (supabas
 - **`priced = false` is not the same as "no data".** Cash and bond yields have no meaningful price
   return, so they are excluded from the refresh and render with no number. Showing a 10Y yield
   move as "+4.1%" would read as a gain.
+- **FMP's free tier is per-SYMBOL, not just per-endpoint.** Measured 2026-08-09 on
+  `equity/fundamental/metrics`: AAPL/MSFT/NVDA/JPM/XOM/PFE/KO/NKE/TSLA return 200 while NEE, PLD,
+  BHP and SAP return **402** — including every non-US name tested. So "the endpoint works" proved
+  nothing; a 3-symbol probe that all happened to be covered led me to build a fundamentals feature
+  that could never serve the universe, and it was reverted. **Probe an endpoint with symbols you
+  expect to FAIL, not just the obvious mega-caps.**
 - **The sector donut weights are BLOCKED, not deferred**: `etf/sectors` is FMP-premium (402) and
   `index/sectors` is TMX-only. Deriving weights from muffin's own 35 curated tickers would be a
   different number wearing the index's name — the SAMPLE badge stays until there is a real source.

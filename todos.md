@@ -163,9 +163,18 @@
 - [ ] **Figure out why and in what cases runs go to interrupted state and how to continue them.**
 - [~] **Develop Stock page** — *partly done 2026-08-09.* It now shows name, sector, the
   provider's real industry (sub-sector), country, market cap, a performance strip across every
-  period and a **price chart** (1M/3M/6M/1Y from `market.prices`). Still missing: **financials**
-  (revenue/margins/valuation) and the **run/conclusion history** for that ticker — the latter is
-  a LangGraph `threads.search` join, not a market-data problem.
+  period and a **price chart** (1M/3M/6M/1Y from `market.prices`).
+  - [ ] **Financials are BLOCKED on the FMP tier — investigated and reverted 2026-08-09.**
+    `equity/fundamental/metrics` looked promising (it returns EV/EBITDA, ROE, ROIC, FCF yield,
+    net debt/EBITDA) and an early 3-symbol test batched fine. **That test did not generalise.**
+    Measured per symbol on our key: AAPL/MSFT/NVDA/JPM/XOM/PFE/KO/NKE/TSLA return 200, while
+    **NEE, PLD, BHP and SAP return 402** — FMP's free tier covers a SUBSET of symbols, and every
+    non-US name tested is outside it. A metrics card that appears for Apple and silently vanishes
+    for BHP is the kind of half-truth this whole workstream removed, so the code was reverted
+    rather than shipped. Needs an FMP upgrade or another fundamentals provider.
+  - [ ] **Run/conclusion history for a ticker** — a LangGraph `threads.search` join
+    (`extract: {ticker: 'values.ticker'}` already exists in `features/agent-calls/threads.ts`),
+    not a market-data problem. Not started.
 - [ ] Add new UI style: `terminal` for bloomberg users.
 
 ## Mobile App
