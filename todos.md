@@ -172,9 +172,11 @@
     non-US name tested is outside it. A metrics card that appears for Apple and silently vanishes
     for BHP is the kind of half-truth this whole workstream removed, so the code was reverted
     rather than shipped. Needs an FMP upgrade or another fundamentals provider.
-  - [ ] **Run/conclusion history for a ticker** — a LangGraph `threads.search` join
-    (`extract: {ticker: 'values.ticker'}` already exists in `features/agent-calls/threads.ts`),
-    not a market-data problem. Not started.
+  - [x] **Run/conclusion history for a ticker** — DONE + live 2026-08-09. Reuses the Calls tab's
+    `threads.search` under the same query key; runs sit above the launchers. **Limit:** filters
+    the 50 most recent threads, because `extract` is a display projection and not a queryable
+    index. Making it complete means promoting `ticker` into thread metadata at run start
+    (muffin-agent change).
 - [ ] Add new UI style: `terminal` for bloomberg users.
 
 ## Mobile App
