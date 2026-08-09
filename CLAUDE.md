@@ -110,6 +110,12 @@ muffin-ui  ──supabase.schema('market').select()──►  PostgREST (supabas
   to keep the guard honest.
 - **Anything not live stays badged SAMPLE**, and live values show age + source. A list never mixes
   the two — a sector with no server row shows no number rather than an authored one.
+- **`priced = false` is not the same as "no data".** Cash and bond yields have no meaningful price
+  return, so they are excluded from the refresh and render with no number. Showing a 10Y yield
+  move as "+4.1%" would read as a gain.
+- **The sector donut weights are BLOCKED, not deferred**: `etf/sectors` is FMP-premium (402) and
+  `index/sectors` is TMX-only. Deriving weights from muffin's own 35 curated tickers would be a
+  different number wearing the index's name — the SAMPLE badge stays until there is a real source.
 
 **Supabase's default grants exposed LangGraph's tables to the public anon key** (measured
 2026-08-09: `GET /rest/v1/thread` and `/checkpoint_blobs` returned real rows). LangGraph keeps its

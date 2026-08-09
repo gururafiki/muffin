@@ -91,12 +91,18 @@
   instrument rows; the country, group and sector screens render server data with provenance.
 - [ ] **Add a `force` flag to market-refresh.** `begin_refresh` correctly skips inside the TTL,
   so correcting bad data currently means deleting the `market.refresh_log` row with the
-  service-role key before re-triggering. Fine, but undocumented-in-UI and easy to get wrong.
-- [ ] **`skeleton-check.mjs` still has the unguarded `join(DIST, req.url)`** that CodeQL flagged
-  in `smoke-market.mjs` (js/path-injection). Same fix: serve from an allowlist.
-- [ ] **Market data Phase 4**: the Markets asset universe (`OTHER_ASSETS` — still the one place
-  invented numbers render unbadged), the sector donut weights (`etf/sectors?symbol=IVV`, needs
-  FMP), and the stock page (P0 below).
+  service-role key first (recipe now in muffin-deployment/README.md). Works, easy to get wrong.
+- [x] **`skeleton-check.mjs` path traversal** — fixed 2026-08-09 by extracting the shared
+  `scripts/lib/serve-dist.mjs`; both smoke scripts now serve from an allowlist.
+- [ ] **Nothing refreshes market data on a schedule.** It is stale-while-revalidate only, so the
+  first visitor after a TTL expiry triggers the fetch and sees the previous values until it
+  lands. Fine at this traffic, but a pg_cron warm-up would make the first load of the day fresh.
+- [x] **Market data Phase 4** — asset universe + stock page DONE 2026-08-09. Every market
+  surface is now server-backed or explicitly badged; the unbadged-invented-numbers gap is closed.
+  - [ ] **Sector donut weights stay SAMPLE — blocked, not deferred.** `etf/sectors` is FMP-only
+    and premium (402 on our key); `index/sectors` is TMX (Canada) only. Deriving weights from our
+    own 35 curated tickers would be a different number wearing the index's name. Needs either an
+    FMP upgrade or another provider.
 - [x] **Anon key could read every user's LangGraph run content** (found + fixed 2026-08-09).
   Supabase's default `public` grants applied to LangGraph's tables, so `GET /rest/v1/thread` and
   `/rest/v1/checkpoint_blobs` returned real rows to anyone with the public anon key. Fixed in
@@ -156,7 +162,10 @@
 - [x] How can i have in langfuse traces grouped by thread_id?
 - [ ] **When i trigger run and then open it from calls page it's initially shown as completed and then after some time it's back to running state.**
 - [ ] **Figure out why and in what cases runs go to interrupted state and how to continue them.**
-- [ ] **Develop Stock page** displaying main information (country, sector, sub-sector, market type, etc). Some financials, charts, agent runs, conclusions, etc.
+- [~] **Develop Stock page** — *partly done 2026-08-09.* It now shows name, sector, the
+  provider's real industry (sub-sector), country, market cap and a performance strip across every
+  period, from `market.instruments` + `market.performance`. Still missing: **charts**, financials,
+  and the run/conclusion history for that ticker.
 - [ ] Add new UI style: `terminal` for bloomberg users.
 
 ## Mobile App
