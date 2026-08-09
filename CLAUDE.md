@@ -140,6 +140,21 @@ muffin-ui  ──supabase.schema('market').select()──►  PostgREST (supabas
   `index/sectors` is TMX-only. Deriving weights from muffin's own 35 curated tickers would be a
   different number wearing the index's name — the SAMPLE badge stays until there is a real source.
 
+**Every `market` table has RLS with an explicit policy** (`09-market-rls.sql`), not grants alone:
+public `select` policy on the 9 data tables, and `refresh_log` has RLS with **no policy at all**
+(which denies every role that does not BYPASSRLS). Grants alone were restrictive but left
+`rls_disabled_in_public` on the advisor and were one stray `grant` from being wrong. **Verify RLS
+by BEHAVIOUR, not by the `relrowsecurity` flag** — the flag cannot tell you whether you have
+locked out the edge function. **LangGraph's `public` tables are deliberately left without RLS**:
+they are already unreachable via the grant revoke, and enabling it depends on langgraph-api's role
+having BYPASSRLS, which is unverified — get that wrong and every agent run breaks.
+
+**The self-hosted Supabase MCP server has NO authentication** and Supabase's own docs say it "is
+not intended to be exposed to the Internet". It proxies Studio's admin API. `supabase.<domain>` is
+PUBLIC (no Cloudflare Access), so adding the `/mcp` Kong route there would publish an
+unauthenticated admin endpoint — and if it inherited Kong's `key-auth`, the anon key is in
+`runtime-config.js`. Route it via the Access-protected `supabase-studio.<domain>` or leave it off.
+
 **Supabase's default grants exposed LangGraph's tables to the public anon key** (measured
 2026-08-09: `GET /rest/v1/thread` and `/checkpoint_blobs` returned real rows). LangGraph keeps its
 tables in `public` deliberately — a dedicated schema was tried and abandoned because langgraph-api
