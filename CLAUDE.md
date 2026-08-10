@@ -426,6 +426,22 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   Keep `in.()` chunks ~100; write chunks (POST bodies) can stay at 500.
 - **N-PORT uses `XX` for "country unknown"**, which is not a country and aborts a whole 584-holding
   fund on a foreign-key violation. Validate against `market.countries` and null the rest.
+- **Classification needs no provider.** A sector SPDR's holdings ARE that sector's constituents,
+  so sector/country membership is a join over `fund_holding` with the filing as provenance —
+  not 9,786 per-security lookups returning one vendor's opinion each. Which fund means what is a
+  column (`tracked_fund.represents_code`), so a new sector ETF stays a row.
+- **Nothing in the stack bridges an ISIN to a ticker** — `equity/search` returns ZERO hits for an
+  ISIN and `equity/profile` does not return one either, so it cannot be joined from either side.
+  **OpenFIGI** does it, free and in bulk. Its rate limit (anon 25 req/min x 10) makes the resource
+  incremental, so the ORDER matters: resolve by weight in a sector fund, not arbitrarily.
+- **Bound a rate-limited loop by WALL CLOCK, not request count.** 15 anonymous OpenFIGI requests
+  took ~40 s on a laptop and blew the 60 s worker on the Oracle node
+  (`WorkerRequestCancelled: request has been cancelled by supervisor`). On an incremental
+  resource, stopping early is free; overrunning loses the batch including what was already done.
+- **A TTL'd resource cannot be a hook for anything else.** Classification lived inside the
+  fund-holdings handler, which correctly self-skipped on its 7-day TTL — so production had
+  holdings, no sectors, and no way to ask for them short of waiting a week. Anything an operator
+  might need on demand gets its own resource.
 - **`market-verify.yml` asserts shape, not exceptions**, because every one of the above returned
   HTTP 200. Both guard types were proven by injecting the failure (one all-zero CUSIP → exit 1;
   deleting 6,000 securities → three floors breached). Keep it that way: a guard that cannot fail

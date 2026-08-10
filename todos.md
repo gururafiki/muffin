@@ -259,7 +259,63 @@ the donut weights and index constituents). Both are tracked above under the mark
     already renders "no number" honestly) or it needs another source.
   - Likely shape: yfinance screener for symbols + batched `equity/profile` for country/industry,
     performance limited to the top N by market cap.
-- [ ] **I see tables with data are now unrestricted** and there are couple security treats.
+- [x] **I see tables with data are now unrestricted** and there are couple security treats. — fixed: RLS on every `market` table (public read on reference data, `refresh_log`/`ingest_run` denied to everyone but service_role), `public` locked down from anon/authenticated, and DEFAULT PRIVILEGES revoked so a new table is not exposed by accident. Verified by BEHAVIOUR, not flags: anon reads 200, anon writes 401, `ingest_run` 42501.
+
+## Market reference data — deferred scope (recorded 2026-08-10)
+
+The universe now comes from SEC N-PORT fund holdings: **38 funds → 9,786 securities,
+16,424 holdings, 514 sector constituents**, replacing 35 hand-authored tickers.
+`market.tracked_fund` is the control surface — everything below is a ROW, not a code
+change, unless noted. Free/paid marked where a provider is involved.
+
+**Set this up (free, 2 minutes, big win)**
+- [ ] **`OPENFIGI_API_KEY`** — FREE, instant, no approval: https://www.openfigi.com/api/register.
+      Ticker resolution (ISIN → symbol) is the one thing gating a complete sector page.
+      Anonymous is 25 req/min × 10 ISINs, so it grinds through ~120 securities per run;
+      a key makes it 250 × 100 and clears the whole backlog in a single pass. Plumbed
+      already (`openfigi_api_key` in secrets.yaml → `OPENFIGI_API_KEY`); it just needs a value.
+
+**Classifications not pulled**
+- [ ] **GICS proper** — PAID, needs a licence. yfinance/finviz taxonomies are the proxy, which
+      is why `provider_sector` sits beside the curated `sector_id`.
+- [ ] **Sub-industry depth** — `taxonomy_node.parent_id` already models sector → industry group
+      → industry → sub-industry; only level 1 is populated.
+- [ ] **Style (growth/value/blend)** — still a fake heuristic in `taxonomy.ts`
+      (`changePct > 15 ? 'growth'`). Needs a real factor source.
+- [ ] **Size bands, factor exposures, ESG, credit ratings, per-fund currency exposure.**
+
+**ETFs not tracked** (a row in `market.tracked_fund` each)
+- [ ] Style/size: IWF, IWD, IWM, MDY, RSP · Thematic: SMH, ICLN, cyber-security, AI/data-centre
+      (these are the "Sectors: AI infrastructure, cyber security" item above)
+- [ ] Fixed income: AGG, LQD, HYG, TIP, EMB · Commodity: DBC, USO, SLV
+- [ ] **Non-US UCITS funds — structurally impossible**, they file no N-PORT. Not a backlog item.
+- [x] FM disabled — no NPORT-P since 2024-11-30, the fund was reorganised away.
+
+**Securities not covered**
+- [ ] **Non-US listings.** Ticker resolution asks OpenFIGI for the US line (`exchCode: 'US'`);
+      a Japanese or Swiss local line needs an exchange → provider-suffix map (the thing
+      `security_provider_symbol` exists for, e.g. NESN → NESN.SW). Until then a foreign
+      holding is stored and classified but has no symbol.
+- [ ] **Local lines vs ADRs** (SAP XETRA vs NYSE) — needs the `listing` table the model leaves
+      room for.
+- [ ] Anything **no tracked fund holds** — coverage grows by adding funds, not by scanning.
+- [ ] Mutual/closed-end funds, individual bonds, futures/options/MMF, crypto beyond BTC/ETH, pre-IPO.
+
+**Data not pulled**
+- [ ] **Fundamentals** — investigated and reverted: FMP's free tier gates PER SYMBOL (AAPL 200,
+      BHP/SAP/NEE/PLD 402). PAID upgrade or another provider.
+- [ ] **Market cap** — same gap; the sector page currently ranks by fund weight instead, which is
+      a fact from a filing rather than an estimate.
+- [ ] **Total return / dividends** — everything is price return, which understates high-yield markets.
+- [ ] **Corporate actions** (splits, symbol changes) — the identifier model tolerates a rename,
+      nothing detects one.
+- [ ] **Index membership** (S&P 500 etc.) — FMP premium; partially substitutable by fund holdings.
+
+**Known limits worth not rediscovering**
+- **Fund weights do NOT sum to 100.** EWT's own filing sums to 110.38. `fund_sector_weight` /
+  `fund_country_weight` renormalise; anything else drawing a donut must too.
+- **N-PORT lags ~60 days.** Membership can be up to ~4 months old — fine for reference data, but
+  the UI must show `as_of` and never imply live weights.
 
 ## Other P2
 - [ ] Add new tab to donate to Ukraine with links to different funds
