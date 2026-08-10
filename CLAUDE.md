@@ -140,6 +140,13 @@ muffin-ui  ──supabase.schema('market').select()──►  PostgREST (supabas
   `index/sectors` is TMX-only. Deriving weights from muffin's own 35 curated tickers would be a
   different number wearing the index's name — the SAMPLE badge stays until there is a real source.
 
+**A new table is INVISIBLE over the API until PostgREST rebuilds its schema cache**, and
+`notify pgrst, 'reload schema'` at the end of a migration is NOT reliable — 15 tables 404'd with
+`PGRST205` after two successful deploys. Earlier migrations only ever appeared because their deploy
+also changed `supabase-rest`'s config and restarted it, masking the problem. The deploy now sends
+**SIGUSR1** (PostgREST's documented reload signal) after applying migrations. If a brand-new table
+404s, that is the first thing to check — not your grants.
+
 **Every `market` table has RLS with an explicit policy** (`09-market-rls.sql`), not grants alone:
 public `select` policy on the 9 data tables, and `refresh_log` has RLS with **no policy at all**
 (which denies every role that does not BYPASSRLS). Grants alone were restrictive but left
