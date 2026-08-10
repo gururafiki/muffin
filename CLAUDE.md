@@ -438,6 +438,17 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   took ~40 s on a laptop and blew the 60 s worker on the Oracle node
   (`WorkerRequestCancelled: request has been cancelled by supervisor`). On an incremental
   resource, stopping early is free; overrunning loses the batch including what was already done.
+- **A TTL expresses "the answer is still good" — which is false for an INCREMENTAL resource.**
+  `security-tickers` deliberately does a slice per run, so the 7-day reference TTL meant one run
+  resolved a page and the next week of runs were told the data was fresh; the backlog could never
+  drain. Size a TTL by the resource's own behaviour, not by how often the underlying data changes.
+- **A negative result is a result — cache it.** Ticker resolution asks OpenFIGI for the US line, so
+  ~80% of a Japan or emerging-markets fund can never resolve. Without `security.figi_missing_at`
+  those rows stayed in the backlog and would be re-sent four times a day forever, hammering a free
+  API for a known answer AND starving the securities that could resolve. 30 days, not never — a
+  security can gain a US listing.
+- **A `.limit(n)` above `PGRST_DB_MAX_ROWS` is not an error, just a shorter answer.** The stack sets
+  it to 1000, so a request for 4,000 silently got 1,000. Page explicitly when you need more.
 - **A TTL'd resource cannot be a hook for anything else.** Classification lived inside the
   fund-holdings handler, which correctly self-skipped on its 7-day TTL — so production had
   holdings, no sectors, and no way to ask for them short of waiting a week. Anything an operator
