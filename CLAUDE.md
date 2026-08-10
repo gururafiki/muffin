@@ -393,6 +393,48 @@ retrofit.
   fixtures embedded newlines the real protocol never sends. Stand the real dependency up and drive the
   actual wire before trusting a port — see below for how to get an OpenSandbox server.
 
+## Market reference data (SEC N-PORT → `market` schema)
+
+The stock universe comes from **fund holdings**, not a screener: the tracked ETFs file SEC N-PORT
+quarterly, which is public, keyless, and carries name/LEI/CUSIP/ISIN/country/weight per holding.
+`market.tracked_fund` is the control surface (adding an ETF is a row in Studio, never a migration),
+`market.ingest_run` is the log. **38 of 39 funds → 9,786 securities / 16,424 holdings in ~25 s**,
+against the 35 hand-authored tickers it replaces.
+
+Things here that are easy to get wrong, all measured 2026-08-10:
+
+- **`<cusip>000000000</cusip>` is SEC's placeholder for "no CUSIP", not a value — and 72% of
+  holdings carry it** (EWJ: 176 of 182). Because `security_identifier` is `PRIMARY KEY (kind, value)`,
+  treating it as real collapses every one of them into a SINGLE security — Accenture, Seagate, TE
+  Connectivity and NXP all became one row, with no error anywhere. Reject placeholder and
+  malformed identifiers; the only symptom you get otherwise is a weight total slightly off 100.
+- **An LEI identifies the ISSUER, not the security.** GOOG and GOOGL share one, as do two share
+  classes in one filing, so resolving on it merges distinct securities the same way. Resolution is
+  **ISIN → CUSIP → FIGI/`<other>`**; the LEI populates `market.issuer` (whose `lei` is UNIQUE).
+- **Find a fund's filing with EDGAR full-text search**
+  (`efts.sec.gov/LATEST/search-index?q="<seriesId>"&forms=NPORT-P`), not by walking the trust's
+  submissions. A trust files one N-PORT per series per quarter, so iShares' 1,433-filing CIK buries
+  a given fund deeper than any sane probe budget — a 24-probe walk could not reach MCHI or EWU at all.
+- **SEC throttling looks like absence.** A 39-fund pass reported "no filing found" for EPP and ILF;
+  both ingested perfectly alone. A non-ok response turned into `null` reads as "this fund does not
+  file" — a permanent condition inferred from a transient one. Retry, and never let a fetch failure
+  return the same value as an empty result.
+- **Weights do NOT sum to 100** — EWT's own filing sums to 110.38. Anything drawing a donut must
+  normalise. Every fund's stored total matches its filing exactly; the funds are simply like that.
+- **A PostgREST `in.()` filter is a URL, so its chunk size is a LENGTH budget, not a row budget.**
+  500 ISINs is a ~6.5 KB URL and the proxy answers a **bare 502** with nothing pointing at the cause.
+  Keep `in.()` chunks ~100; write chunks (POST bodies) can stay at 500.
+- **N-PORT uses `XX` for "country unknown"**, which is not a country and aborts a whole 584-holding
+  fund on a foreign-key violation. Validate against `market.countries` and null the rest.
+- **`market-verify.yml` asserts shape, not exceptions**, because every one of the above returned
+  HTTP 200. Both guard types were proven by injecting the failure (one all-zero CUSIP → exit 1;
+  deleting 6,000 securities → three floors breached). Keep it that way: a guard that cannot fail
+  reads as protection without being it.
+
+Note on hardening: **`gh pr merge` merged a workflow-only PR fine** (muffin-deployment#24,
+2026-08-10). The "OAuth App … without `workflow` scope" dead end recorded above did not reproduce —
+try the merge before assuming it needs a human click.
+
 ## Running an OpenSandbox server locally
 
 - **`docker run -d -p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock opensandbox/server:latest`.**
