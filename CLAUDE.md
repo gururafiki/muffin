@@ -453,6 +453,26 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   fund-holdings handler, which correctly self-skipped on its 7-day TTL — so production had
   holdings, no sectors, and no way to ask for them short of waiting a week. Anything an operator
   might need on demand gets its own resource.
+- **A many-to-many-over-SOURCES table needs the SERVING VIEW to pick.** `security_taxonomy` keeps
+  a filing's classification and a provider's side by side on purpose. The views did not choose
+  between them, so the moment yfinance profiles landed every US large cap appeared TWICE on the
+  sector page and was counted twice in the donut. The donut percentages still looked right —
+  renormalising cancels a uniform double count — which is luck, not correctness, and is exactly
+  how this survives review. `distinct on (…) order by ds.priority desc`, before anything is listed
+  or summed.
+- **One dead symbol kills a batched provider call.** `group-performance` returned a bare 502 every
+  time because its five symbols include FM, liquidated in 2025 — while `country-performance` was
+  fine with 45 live ones. Batch, catch per batch, and skip funds already `enabled = false`.
+- **Every backlog resource needs a NEGATIVE cache, and a failure must not look like an empty
+  backlog.** `pending_profile` asked "has a ticker, has no sector", so securities yfinance cannot
+  answer for were re-asked forever: run after run of `classified: 0, unmapped: 0, remaining: 1000`,
+  indistinguishable from a provider outage because the fetch error was swallowed by
+  `.catch(() => [])`. A throw and an empty answer are different facts. (Same defect as
+  `figi_missing_at`, reintroduced two days later in a new resource — check for it whenever adding
+  one.)
+- **Admin is `app_metadata.role`, never `user_metadata`** — a user can write their own
+  `user_metadata` through the ordinary auth API, so a role kept there is self-assignable. Refresh
+  is admin-only, which is why the warm-up cron uses the service-role key rather than anon.
 - **`market-verify.yml` asserts shape, not exceptions**, because every one of the above returned
   HTTP 200. Both guard types were proven by injecting the failure (one all-zero CUSIP → exit 1;
   deleting 6,000 securities → three floors breached). Keep it that way: a guard that cannot fail
