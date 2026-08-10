@@ -116,6 +116,52 @@
 - [x] I now have chart component, but I don't see it rendered anywhere.
 - [x] I don't see data gathered panel anywhere, is it rendered?
 
+## OpenBB providers / API keys
+
+Verified 2026-08-10 against the installed registry (`RegistryLoader.from_extensions()`), not the
+docs. **32 providers installed; 17 need no key at all.** The env var is the provider's declared
+credential name upper-cased — which is NOT always `*_API_KEY`.
+
+**Configured and verified working**
+
+| Provider | Env var | Tier | Verified |
+|---|---|---|---|
+| fred | `FRED_API_KEY` | free | ✅ 318 rows (`economy/fred_series?symbol=GDPC1`) |
+| tiingo | `TIINGO_TOKEN` | free | ✅ 250 rows — **token, not api_key**; the `.env.example` was right |
+| biztoc | `BIZTOC_API_KEY` | via RapidAPI | ✅ 144 rows (`news/world`) |
+| fmp | `FMP_API_KEY` | free | ⚠️ works, but gates **per symbol** on fundamentals (AAPL 200, BHP 402) and ETF/index endpoints are premium |
+| alpha_vantage | `ALPHA_VANTAGE_API_KEY` | free | ⚠️ **key valid but unusable for price history** — OpenBB requests `outputsize=full`, which AV charges for; free is also ~25 req/day |
+
+**No key required (17)** — `cboe deribit ecb famafrench federal_reserve finra finviz government_us
+imf multpl oecd sec seeking_alpha stockgrid tmx wsj yfinance`
+
+- [x] **FINRA needs no credentials** — the installed `finra` provider declares none, so the client
+  id/password issued for FINRA's API portal are **not used by anything here**. They were shared in
+  plaintext, so **rotate that password** regardless.
+
+**Free keys still worth adding** (installed, currently unset)
+- [ ] `BLS_API_KEY` — US Bureau of Labor Statistics (CPI, employment). Free.
+- [ ] `EIA_API_KEY` — US Energy Information Administration (oil/gas/power). Free.
+- [ ] `NASDAQ_API_KEY` — Nasdaq Data Link. Free tier.
+- [ ] `CFTC_APP_TOKEN` — a **Socrata app token**, not an api_key. Free.
+- [ ] `CONGRESS_GOV_API_KEY` — congressional trading/bills. Free.
+- [ ] `ECONDB_API_KEY` — free tier (some endpoints work keyless).
+
+**Paid only** (installed, unset — add only if a feature needs them)
+- [ ] `BENZINGA_API_KEY` — paid. Would fix the council's `fetch_company_news(provider="benzinga")`,
+  which currently fails.
+- [ ] `INTRINIO_API_KEY` — paid. The other provider for fundamentals/ratios besides FMP.
+- [ ] `TRADIER_API_KEY` + `TRADIER_ACCOUNT_TYPE` — free **sandbox**, paid production. Options data.
+- [ ] `TRADINGECONOMICS_API_KEY` — paid.
+
+**Not installed**
+- [ ] `POLYGON_API_KEY` does **nothing** — `openbb[all]` does not ship `openbb-polygon`. Add the
+  package to `openbb-mcp-docker/Dockerfile` first if you want it.
+
+**Which paid key would actually buy the most:** `INTRINIO` (unblocks fundamentals, currently
+reverted because FMP gates per symbol) or an **FMP paid tier** (also unblocks `etf/sectors` for
+the donut weights and index constituents). Both are tracked above under the market-data items.
+
 ## CI/CD
 - [ ] Setup dependabot, branch protection, codeql, etc for other repos as it's setup for muffin-agent
 - [ ] Fix typing issues
