@@ -324,6 +324,67 @@ change, unless noted. Free/paid marked where a provider is involved.
 - [ ] **Market cap** — same gap; the sector page currently ranks by fund weight instead, which is
       a fact from a filing rather than an estimate.
 
+**OPEN (2026-08-11) — symbols are BLOOMBERG-format where the provider wants its own**
+- [ ] `security_identifier.kind_code = 'ticker'` is written from OpenFIGI, whose `ticker` is the
+      Bloomberg spelling. Measured in a 1,000-symbol sample of `pending_industry`: 10 carry `*`
+      (`WALMEX*.MX`, `AC*.MX`, `PINFRA*.MX`), 8 carry `/` (`BRK/B`, and the UK convention `BP/.L`
+      `RR/.L` `AV/.L` `NG/.L`), 1 carries `&` (`PE&OLES*.MX`).
+      muffin-deployment #69 makes the URL well-formed (they were corrupting whole batches), but an
+      ENCODED wrong symbol is still a wrong symbol — yfinance will answer for none of these.
+      **Do not author the translation table from memory.** The plausible rules (`BRK/B`→`BRK-B`,
+      `BP/.L`→`BP.L`, `WALMEX*.MX`→`WALMEX.MX`) are recall, and recall is what dropped Taiwan's 534
+      securities in `exchanges.ts`. Derive it: probe the provider with the candidates and keep what
+      answers, or use OpenFIGI's own per-exchange `ticker` vs `securityDescription` fields.
+      Cheap to bound — roughly 2% of symbols, and they negative-cache themselves via
+      `industry_missing_at` in the meantime, so nothing is stuck.
+
+**OPEN (2026-08-11) — 19 instrument returns at ≥ +1000%, undiagnosed**
+- [ ] The extremes are two Tel Aviv listings at +9453.7% (`AMRM.TA`) and +8946.9% (`ISHO.TA`),
+      then `ARZTF` +2928%, `SNDK` +2692%, `ODINE.IS` +2299%. 31 rows are ≥ +500%.
+      **Not claimed to be wrong.** A micro-cap really can do this, and a denomination change or an
+      unadjusted split would look identical from the outside — TASE quotes in agorot (1/100 ILS),
+      which is exactly the kind of unit change that produces a fake 100x. Distinguishing them needs
+      the actual series, which means reaching `openbb-api` on the private overlay.
+      Note the asymmetry with the -100% cluster, which WAS provably wrong: every period agreed,
+      including `1d`, and no market moves identically over one day and one year. These do not have
+      that signature, so they get investigated rather than deleted.
+
+**OPEN (2026-08-11) — `security-industries` 502s on larger pages, UNDIAGNOSED**
+- [ ] With the backlog unblocked (#67), `security-industries` returns a bare 502 at `limit` 40/100
+      and the default 300, while `limit` 5 and 10 return 200 cleanly (`classified: 10, capped: 10,
+      batchesFailed: 0` in ~1s). Not yet bisected past 10 — 20/40/80 were still running when this
+      was written.
+      Ruled out already: the view read is fast (0.25s, 200, 31 KB for the 300-row page the handler
+      takes); other resources are healthy (`security-fundamentals` 200 in 2s); and it is NOT the
+      in-flight lock — that returns a clean `{"skipped":true,"reason":"fresh or in flight"}` 200,
+      which is what a too-eager drain loop hits and what made the first attempts look worse than
+      they were.
+      A bare 502 means the worker died, so look at time and memory, not error handling. Two
+      candidates, both untested: the market-cap write does ONE sequential `update` per security
+      (up to 300 round trips) and is NOT inside the deadline check; and yfinance answers
+      `equity/profile` far more slowly for foreign listings, which is now most of the backlog.
+      The 2-minute in-flight TTL makes each experiment cost 2 minutes — bisect with waits, and do
+      not read a `skipped` 200 as a success.
+
+**OPEN (2026-08-11) — half the sector list is UNTAPPABLE, because the view only knows `ticker`**
+- [ ] `sector_constituents.symbol` comes from a lateral over `security_identifier` with
+      `kind_code = 'ticker'` only, so a security whose only address is a local provider symbol
+      (`005930.KS`) has no symbol in the view — and `sector/[sectorId].tsx` sets
+      `disabled: !s.symbol`, so the row cannot be opened at all.
+      Measured 2026-08-11: **3,821 of 7,940** constituent rows carry a symbol, while **8,521**
+      securities have a yfinance provider symbol; of a 900-row sample of those, **40% have no
+      `ticker` identifier**. So roughly 3,400 securities are addressable by the price provider,
+      have returns, and are unreachable in the UI.
+      Fix is two halves, and the second is the one that is easy to forget:
+        1. The serving views expose `coalesce(ticker, provider_symbol)` — which is exactly what
+           `pending_industry` already does (`coalesce(ps.symbol, t.value)`).
+        2. `use-fundamentals.ts` / `use-statements.ts` / `use-instrument.ts` resolve a symbol via
+           the ticker identifier **or** the provider symbol. Today they filter
+           `security_identifier.kind_code = 'ticker'` alone, so a page opened on `005930.KS` would
+           render empty — the server already has this fallback in `security-refresh`
+           (`index.ts`, "Fall back to the PROVIDER symbol").
+      Shipping (1) without (2) turns 3,400 dead rows into 3,400 blank pages.
+
 **RESOLVED (2026-08-11) — a backlog that could never be satisfied, freezing market cap at 386**
 - [x] `pending_industry` asked "has a level-1 sector, has no level-2 industry" and wrote the second
       half as a left join plus `where ind_n.node_id is null`. The first join was UNRESTRICTED, so it
