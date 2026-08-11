@@ -323,24 +323,56 @@ change, unless noted. Free/paid marked where a provider is involved.
       extra request.
 - [ ] **Market cap** — same gap; the sector page currently ranks by fund weight instead, which is
       a fact from a filing rather than an estimate.
+
+**RESOLVED (2026-08-11) — a backlog that could never be satisfied, freezing market cap at 386**
+- [x] `pending_industry` asked "has a level-1 sector, has no level-2 industry" and wrote the second
+      half as a left join plus `where ind_n.node_id is null`. The first join was UNRESTRICTED, so it
+      matched every taxonomy row a security had — including the level-1 sector rows the view itself
+      required — and each of those joins the level-2-restricted node table as NULL and survives the
+      filter. **A `where` filters ROWS, not securities**, so one qualifying row cannot suppress
+      another: every security with a sector stayed queued forever, classified or not.
+      Measured: AMZN was written `consumer-discretionary--internet-retail` at 21:41:39 and was still
+      returned by the backlog in the same minute; the count was 7,911 before a run and 7,911 after
+      one reporting `classified: 282, capped: 282`; **345** securities had an industry against 8,412
+      with a sector. The resource takes the top 300 by fund weight per run, so it re-fetched the
+      SAME 300 names on every run since migration 23 and never reached row 301 — and
+      `security.market_cap` was stuck at **386 of 10,060** because the cap rides along on that same
+      `equity/profile` response.
+      **Nothing errored.** It reported success and progress on every run, and the counts were
+      plausible and simply never moved — invisible to every floor-style check.
+      Fixed by muffin-deployment #67 (migration 31, a real `not exists` per security). Every other
+      backlog view null-checks the FIRST left-joined table, which is why they drain; the signature
+      to recognise is a predicate on a SECOND table reached through an unrestricted first join.
+      Guarded twice, each verified to FAIL with the bug reintroduced:
+      `stack/supabase/tests/backlogs-are-satisfiable.sql` (offline, empty DB, run by quality.yml)
+      and `market-verify.yml` check 7b (production data, service-role key since the `pending_*`
+      views are not granted to anon).
 - [ ] **Total return / dividends** — everything is price return, which understates high-yield markets.
 - [ ] **Corporate actions** (splits, symbol changes) — the identifier model tolerates a rename,
       nothing detects one.
 - [ ] **Index membership** (S&P 500 etc.) — FMP premium; partially substitutable by fund holdings.
 
-**OPEN (2026-08-11) — statements render in the WRONG CURRENCY on non-US stocks**
-- [ ] The income-statement card prefixes every figure with `$` (`formatCap` hardcodes it), and the
-      currency header is EMPTY because `security_statement.currency` is null for every row — the
+**RESOLVED (2026-08-11) — statements rendered in the WRONG CURRENCY on non-US stocks**
+- [x] The income-statement card prefixed every figure with `$` (`formatCap` hardcoded it) and the
+      currency header was EMPTY, because `security_statement.currency` is null for every row — the
       income/balance/cash responses carry no currency field at all, so `reported_currency` was a
-      wrong guess when the table was written.
-      Verified live: NVDA renders correctly by luck ($215.94B revenue, real figures), but Samsung's
-      2025 income statement is 97,146,675,000,000 KRW and will read **"$97.15T"** — a US-dollar
-      figure roughly 700x the true one. This is the exact confusion the currency header was added
-      to prevent, reintroduced by the field not existing.
-      Fix: source the currency from `security.currency_code`, or from
-      `security_fundamentals.raw.currency` which the METRICS endpoint does return (measured: 'USD'
-      for ZBH, 'GBP' for SVT.L) — and make `formatCap` take a currency instead of assuming dollars.
-      Until then the statements card is only safe for US securities.
+      wrong guess when migration 29 was written.
+      Alibaba's FY2026 revenue is **CNY 1,023,670,000,000** and rendered as **"$1.02T"**, which
+      would make it the largest company on earth by revenue (it is ~$141B). Samsung's is
+      97,146,675,000,000 KRW → "$97.15T".
+      Fixed in muffin-ui #73: `features/markets/money.ts` takes a currency, and the hooks carry
+      `security.currency_code` (N-PORT `curCd` first, the yfinance metrics response second) read
+      SECOND so a provider that starts sending a real per-statement currency wins. Coverage
+      measured: **3,221 of 3,233** statement rows resolve a currency, 1,077 of 1,081 income rows.
+      Three things that had to be measured, not assumed:
+        * `$` is ambiguous even when right — USD/CAD/AUD/HKD/SGD/MXN/CLP all print as `$` and all
+          are held by tracked funds. Of a 1,000-security sample with a currency, 663 are USD and
+          337 are not.
+        * **The locale must be pinned.** The formatter appends the scale suffix itself, and `de-DE`
+          puts the symbol last — `215,94 $` — so the append yields `215,94 $B`; `fr-FR` yields
+          `215,94 $USB`. Only `en-US`/`ja-JP` happen to compose. My machine's default is `en-US`.
+        * An unknown code makes `Intl` THROW, and a throw during render takes a native build down.
+      With no currency the figure is left unlabelled — defaulting to dollars is how this started.
 
 **RESOLVED (2026-08-11) — the empty-batch regression**
 - [x] `security-fundamentals` and `security-industries` failed every run once the answerable

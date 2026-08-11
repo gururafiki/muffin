@@ -528,6 +528,36 @@ Things here that are easy to get wrong, all measured 2026-08-10:
 - **Admin is `app_metadata.role`, never `user_metadata`** — a user can write their own
   `user_metadata` through the ordinary auth API, so a role kept there is self-assignable. Refresh
   is admin-only, which is why the warm-up cron uses the service-role key rather than anon.
+- **A backlog's exit condition must be an ANTI-JOIN OVER THE ENTITY, not a `where … is null` over
+  rows.** `pending_industry` asked "has a level-1 sector, has no level-2 industry" and expressed the
+  second half as an unrestricted `left join security_taxonomy` plus a level-2-restricted
+  `left join taxonomy_node` and `where ind_n.node_id is null`. The security's own level-1 rows join
+  the second table as NULL and survive the filter, so **a `where` filters rows, not securities** and
+  one qualifying row cannot suppress another. Every security with a sector was queued forever.
+  Measured 2026-08-11: AMZN classified at 21:41:39 and still returned by the backlog in the same
+  minute; 7,911 rows before a run and 7,911 after one reporting `classified: 282`; **345** securities
+  with an industry against 8,412 with a sector — the resource re-fetched the same top-300 by weight
+  on every run since migration 23 and never reached row 301. `security.market_cap` was frozen at
+  **386 of 10,060** because the cap rides along on the same `equity/profile` response. Nothing
+  errored; it reported success and progress forever. The signature to recognise is a predicate on a
+  **SECOND** table reached through an unrestricted first join — every backlog view that drains
+  (`pending_profile`, `pending_fundamentals`, `pending_local_symbol`, `pending_performance`)
+  null-checks the FIRST left-joined table. Guarded offline by
+  `stack/supabase/tests/backlogs-are-satisfiable.sql` (quality.yml) and in production by
+  `market-verify.yml` check 7b.
+- **Money must carry its currency, and the symbol comes from CLDR.** The stock page hardcoded `$`,
+  so Alibaba's CNY 1,023,670,000,000 revenue rendered as **"$1.02T"** — the largest company on earth
+  by revenue, against a true ~$141B. `$` is ambiguous even where it is right: USD/CAD/AUD/HKD/SGD/
+  MXN/CLP all print as `$` and all are held by tracked funds (of 1,000 securities with a currency,
+  337 are non-USD). `muffin-ui/src/features/markets/money.ts` asks `Intl` — which knows KRW is ₩ and
+  that MXN is `MX$` for an en-US reader — rather than an authored table. **Its locale is PINNED and
+  that is load-bearing**: the function appends the scale suffix itself, and `de-DE` puts the symbol
+  last (`215,94 $` → `215,94 $B`), `fr-FR` gives `215,94 $USB`. An unrecognised code makes `Intl`
+  throw, which during render takes a native build down. With no currency the figure is left
+  UNLABELLED — defaulting to dollars is how the bug started. `security_statement.currency` is null
+  for every row (the income/balance/cash endpoints carry no currency field; `reported_currency` was
+  a wrong guess), so the label comes from `security.currency_code` — N-PORT `curCd` first, the
+  yfinance metrics response second.
 - **`market-verify.yml` asserts shape, not exceptions**, because every one of the above returned
   HTTP 200. Both guard types were proven by injecting the failure (one all-zero CUSIP → exit 1;
   deleting 6,000 securities → three floors breached). Keep it that way: a guard that cannot fail
