@@ -328,6 +328,22 @@ change, unless noted. Free/paid marked where a provider is involved.
       nothing detects one.
 - [ ] **Index membership** (S&P 500 etc.) — FMP premium; partially substitutable by fund holdings.
 
+**LIVE REGRESSION (2026-08-11) — two refresh resources crash**
+- [ ] **`security-fundamentals` and `security-industries` return a bare 502**, sub-second, at ANY
+      size. Reproduced cleanly:
+      - fails at `limit=5` in **0.59s** — so not rate-limiting and not volume (I first inferred
+        rate-limiting from the drain tail; the `limit` knob disproved it);
+      - `security-profiles`, `security-performance`, `security-local-symbols`,
+        `security-statements` and `sector-performance` all succeed with the same key and shape —
+        `security-performance` refreshed 632 in the same minute;
+      - their backing views are healthy: `pending_industry` 200 in 0.135s, `pending_fundamentals`
+        200, `pending_profile` 200 in 0.186s.
+      A sub-second 502 is the worker dying at handler entry rather than during work, so suspect a
+      runtime error before or outside the try/catch — not the provider, not the DB. Both handlers
+      were touched last (market-cap capture went into `security-industries`; `security-fundamentals`
+      is the newest). Impact: fundamentals stalled at 1,642 of 10,060 and sub-industries stopped
+      filling; statements and everything else continue.
+
 **Found by using the deployed app (2026-08-10) — these are BUGS, not just gaps**
 - [ ] **A country page shows GLOBAL sector performance, unlabelled.** `/country/south-korea`
       renders `useSectorPerformance`, which is `scope=sector` from **finviz — US-listed only**.
