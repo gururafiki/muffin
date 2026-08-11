@@ -482,6 +482,23 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   only a screen already running `useCountries` has filled. Any page resolving a route param must
   mount the query — and must distinguish PENDING from MISSING, or it calls a real thing
   nonexistent while still loading.
+- **`create or replace view` can only APPEND columns** — it cannot rename, reorder or drop them.
+  Two deploys died on this (`cannot change name of view column`, then `cannot drop columns from
+  view`) because migrations re-run in order every deploy, so an earlier file kept trying to shrink
+  a later file's definition back. Drop the view first; the later file wins.
+- **Migrations are re-applied on EVERY deploy, so "works on an empty database" is half the
+  contract.** `quality.yml`'s `migrations` job applies the whole set against a throwaway Postgres
+  TWICE. All three migration failures that reached production — unsorted `with_fileglob`, a view
+  column rename, a foreign key rejecting an ISO code — would have been caught by it.
+- **A missing upstream timeout is a DEAD WORKER, not a slow response.** `openbbFetcher` had none,
+  so `security-profiles` ran past the 60s limit the moment its symbols became foreign listings and
+  returned a bare 502 — a resource that catches provider errors per batch never got the chance.
+  Bound every upstream call; a timeout turns a hang into a skipped batch.
+- **OpenFIGI `/v3/filter` enumerates a whole exchange** (London 4,346, Tokyo 3,948, KOSPI 2,803
+  common stocks), which is how the universe stops being "whatever the tracked funds hold". Its join
+  key is **FIGI, not ISIN** — the endpoint returns no ISIN at all — so the composite FIGI is
+  captured while resolving local symbols. `securityType2: 'Common Stock'` is mandatory: unfiltered,
+  "Samsung Electronics" returns 8,725 hits that are nearly all options.
 - **Admin is `app_metadata.role`, never `user_metadata`** — a user can write their own
   `user_metadata` through the ordinary auth API, so a role kept there is self-assignable. Refresh
   is admin-only, which is why the warm-up cron uses the service-role key rather than anon.
