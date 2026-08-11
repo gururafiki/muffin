@@ -509,6 +509,13 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   can never have X**, and they crowd out the ones that would resolve. Four columns exist for this
   (`figi_missing_at`, `profile_missing_at`, `local_symbol_missing_at`, `performance_missing_at`)
   because it was rediscovered four times. Every new backlog resource needs one.
+- **An EMPTY answer counted as a FAILURE will kill a backlog the moment its answerable work is
+  done.** `security-fundamentals` and `security-industries` both died this way: an empty batch
+  incremented `batchesFailed` instead of negative-caching, so those securities came back every run
+  until the guard failed the resource on them. It looks exactly like the provider breaking at the
+  moment the good work finished. Fourth instance of throw-vs-empty in this file — and it cost five
+  wrong theories, because `catch (_e)` gave one message to a timeout, a refused connection, a bad
+  URL and an empty answer alike. Every backlog catch needs `lastError`.
 - **OpenBB answers 204 NO CONTENT when the provider has nothing** — a legitimate answer, not a
   fault. Treating it as an error failed whole batches (22 of 24) over a few listings yfinance does
   not carry, losing the symbols alongside them. Strictness belongs at the caller that requires

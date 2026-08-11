@@ -328,29 +328,21 @@ change, unless noted. Free/paid marked where a provider is involved.
       nothing detects one.
 - [ ] **Index membership** (S&P 500 etc.) — FMP premium; partially substitutable by fund holdings.
 
-**LIVE REGRESSION (2026-08-11) — two refresh resources crash**
-- [ ] **`security-fundamentals` and `security-industries` fail every run.** Narrowed with SSH to
-      the node (2026-08-11); three of my own inferences on this were wrong, so here is only what is
-      MEASURED:
-      - The edge-function log shows my own guard throwing:
-        `fundamentals provider returned nothing for all 30 batches`. So the worker is NOT crashing
-        at entry — an earlier conclusion from the sub-second 502 — it runs and finds nothing.
-      - **openbb-api is healthy.** From inside the overlay: `equity/profile` 200 in 0.37s,
-        `equity/fundamental/metrics` 200 in 0.09s, `equity/price/historical` 200 in 0.11s.
-      - **The provider returns real data for the exact symbols still in the backlog.** Called
-        `metrics?symbol=NAS.OL,ZBH,SVT.L,SGE.L,ROP,CMCLF` from the node: ZBH came back with
-        `pe_ratio 23.748787`, `market_cap 18662729728`.
-      So the fault is between the handler and openbb, not the provider and not rate limiting.
-      Prime suspect, untested: the batch URL is built with
-      `batch.map(b => b.symbol).join(',')` and **no `encodeURIComponent`**, while these symbols
-      carry dots and the universe now includes local tickers — a symbol containing a URL-special
-      character would corrupt the whole request.
-      Second suspect: the per-call timeout `Math.min(20_000, remaining)` when `remaining` is small.
-      Also worth fixing regardless: a batch that legitimately returns nothing increments
-      `batchesFailed` and `continue`s WITHOUT negative-caching those securities, so they are
-      re-asked forever — and the guard then fails the whole run rather than moving past them.
-      Impact: fundamentals stalled at 1,642 of 10,060, sub-industries stopped filling. Statements,
-      performance, profiles and local symbols are unaffected.
+**RESOLVED (2026-08-11) — the empty-batch regression**
+- [x] `security-fundamentals` and `security-industries` failed every run once the answerable
+      securities were done. Cause: an EMPTY provider answer was counted as a failure, so those
+      securities were never negative-cached, returned in the next run, and the guard
+      (`throw if batchesFailed > 0 && written === 0`) then failed the whole resource. The backlog
+      had become entirely the rows it refused to record — which is why it looked like the provider
+      breaking at exactly the moment the good work finished.
+      The provider was healthy throughout: `metrics` 200 in 0.09s from inside the overlay, with
+      real data for the exact queued symbols.
+      Fixed: empty marks `*_missing_at` and moves on; neither resource throws when a run writes
+      nothing; both now report `lastError`. Verified — 241 and 276 written, zero failures.
+      **It took five attempts** (rate limiting, a crash at entry, "no data in the tail", a
+      malformed URL, then this) because `catch (_e) { batchesFailed++ }` gave one message to a
+      timeout, a refused connection, a bad URL and an empty answer alike. Every wrong theory was
+      consistent with what the code was willing to say.
 
 **Found by using the deployed app (2026-08-10) — these are BUGS, not just gaps**
 - [ ] **A country page shows GLOBAL sector performance, unlabelled.** `/country/south-korea`
