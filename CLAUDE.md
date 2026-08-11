@@ -499,6 +499,19 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   key is **FIGI, not ISIN** — the endpoint returns no ISIN at all — so the composite FIGI is
   captured while resolving local symbols. `securityType2: 'Common Stock'` is mandatory: unfiltered,
   "Samsung Electronics" returns 8,725 hits that are nearly all options.
+- **A backlog view defined as "wants X and does not have X" re-asks FOREVER for the things that
+  can never have X**, and they crowd out the ones that would resolve. Four columns exist for this
+  (`figi_missing_at`, `profile_missing_at`, `local_symbol_missing_at`, `performance_missing_at`)
+  because it was rediscovered four times. Every new backlog resource needs one.
+- **OpenBB answers 204 NO CONTENT when the provider has nothing** — a legitimate answer, not a
+  fault. Treating it as an error failed whole batches (22 of 24) over a few listings yfinance does
+  not carry, losing the symbols alongside them. Strictness belongs at the caller that requires
+  rows, not in the fetcher.
+- **The 60s/150MB worker limits are OURS**, hardcoded in `functions/main/index.ts` — not a platform
+  ceiling. Now 90s/256MB. The real ceiling is Cloudflare, which cuts a proxied request at ~100s, so
+  going higher only moves where the failure happens. A per-call timeout must be bounded by the
+  REMAINING budget, not a fixed value: a deadline that only gates whether to START a call lets one
+  begin at 34.9s of a 35s budget and run 20s past it.
 - **Admin is `app_metadata.role`, never `user_metadata`** — a user can write their own
   `user_metadata` through the ordinary auth API, so a role kept there is self-assignable. Refresh
   is admin-only, which is why the warm-up cron uses the service-role key rather than anon.
