@@ -179,6 +179,21 @@ Updated 2026-08-11. Numbers are measured against production, not estimated.
   for some venues and labelled for others.
 - **Studio's Functions page** and the **stock-page skeleton** — the two items missed from the list.
 
+## Statements (2026-08-11)
+
+Pulled. Income, balance and cash from keyless yfinance, **one jsonb per period** rather than a
+column per line item — AAPL and Samsung differ by 19 income and 19 balance fields, so a relational
+shape would be the union of every line item any filer reports, or a migration each time a provider
+adds one. First run wrote 120 rows across 12 securities, 52 line items apiece.
+
+Fetched **one security at a time**, unlike the other backlogs: each endpoint returns a row per
+*period*, so a multi-symbol response interleaves periods from different companies with only a
+`symbol` to separate them.
+
+The accepted cost, so it is not a surprise later: cross-security aggregation means
+`data->>'total_revenue'` with no type safety. Right trade while the app's job is to *show* a
+statement rather than compute over 50 line items across 10,000 companies.
+
 ## What is left for a *complete* universe
 
 **1. Finish the exchange directory — 24 of 38 venues, ~20k listings.** One venue per run; it is in
