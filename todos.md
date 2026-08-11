@@ -328,6 +328,20 @@ change, unless noted. Free/paid marked where a provider is involved.
       nothing detects one.
 - [ ] **Index membership** (S&P 500 etc.) — FMP premium; partially substitutable by fund holdings.
 
+**OPEN (2026-08-11) — statements render in the WRONG CURRENCY on non-US stocks**
+- [ ] The income-statement card prefixes every figure with `$` (`formatCap` hardcodes it), and the
+      currency header is EMPTY because `security_statement.currency` is null for every row — the
+      income/balance/cash responses carry no currency field at all, so `reported_currency` was a
+      wrong guess when the table was written.
+      Verified live: NVDA renders correctly by luck ($215.94B revenue, real figures), but Samsung's
+      2025 income statement is 97,146,675,000,000 KRW and will read **"$97.15T"** — a US-dollar
+      figure roughly 700x the true one. This is the exact confusion the currency header was added
+      to prevent, reintroduced by the field not existing.
+      Fix: source the currency from `security.currency_code`, or from
+      `security_fundamentals.raw.currency` which the METRICS endpoint does return (measured: 'USD'
+      for ZBH, 'GBP' for SVT.L) — and make `formatCap` take a currency instead of assuming dollars.
+      Until then the statements card is only safe for US securities.
+
 **RESOLVED (2026-08-11) — the empty-batch regression**
 - [x] `security-fundamentals` and `security-industries` failed every run once the answerable
       securities were done. Cause: an EMPTY provider answer was counted as a failure, so those
