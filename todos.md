@@ -302,14 +302,55 @@ change, unless noted. Free/paid marked where a provider is involved.
 - [ ] Mutual/closed-end funds, individual bonds, futures/options/MMF, crypto beyond BTC/ETH, pre-IPO.
 
 **Data not pulled**
-- [ ] **Fundamentals** — investigated and reverted: FMP's free tier gates PER SYMBOL (AAPL 200,
-      BHP/SAP/NEE/PLD 402). PAID upgrade or another provider.
+- [ ] **Fundamentals (P/E, revenue, margins)** — every provider we hold a key for was measured
+      2026-08-11 and none can serve this universe:
+      FMP free gates PER SYMBOL (BHP/SAP/NEE 402); Tiingo free is **limited to the DOW 30**
+      ("Free and Power plans are limited to the DOW 30"); Alpha Vantage has NO per-symbol gating
+      (SAP, BHP, NEE all return P/E, revenue and margin) but covers **US listings only** — every
+      local symbol tested came back empty — and caps at **25 calls/day**, which is ~160 days for
+      the US names alone. Needs a paid tier, or a small curated US set refreshed slowly.
+- [x] **Market cap** — NOT blocked after all. yfinance returns it in the `equity/profile` response
+      `security-profiles` already reads; the resource was discarding it. Shipped 2026-08-11 at no
+      extra request.
 - [ ] **Market cap** — same gap; the sector page currently ranks by fund weight instead, which is
       a fact from a filing rather than an estimate.
 - [ ] **Total return / dividends** — everything is price return, which understates high-yield markets.
 - [ ] **Corporate actions** (splits, symbol changes) — the identifier model tolerates a rename,
       nothing detects one.
 - [ ] **Index membership** (S&P 500 etc.) — FMP premium; partially substitutable by fund holdings.
+
+**Found by using the deployed app (2026-08-10) — these are BUGS, not just gaps**
+- [ ] **A country page shows GLOBAL sector performance, unlabelled.** `/country/south-korea`
+      renders `useSectorPerformance`, which is `scope=sector` from **finviz — US-listed only**.
+      So a Korea page displays US sector returns under a "Sectors" heading. This is why "no sector
+      shows the +121.9%": that number is EWY's real 1-year return (`KR 1y = 121.93`, correct), and
+      the sector rows beside it are a different market entirely. Either label them as US, or drop
+      them from country pages until per-country sector returns exist.
+- [ ] **A sector inside a non-US country is always empty.** `/sector/information-technology?countryId=south-korea`
+      filters `sector_constituents` on `country_iso2=KR` and gets nothing, because sector
+      classification is derived from the **11 US sector SPDRs**, which hold no Korean securities.
+      Needs either global sector ETFs or per-security provider classification.
+- [ ] **Most constituents show no % change.** `market.performance` scope=`instrument` still covers
+      only the 35 curated symbols, so 500+ real constituents render with no number. Needs an
+      incremental, wall-clock-bounded per-security performance resource (same shape as
+      `security-tickers`), because 500 symbols will not fit one 60 s worker.
+- [ ] **"Also in this group" lists countries with no page.** MSCI Emerging has **24** members;
+      only **12** of them are modelled with an ETF, so 14 (PL, ID, TH, TR, MY, PH, PE, GR, EG, CZ,
+      HU, CO, KW, QA) appear as names with no drill-down. Not intentional — the original scope was
+      19 countries. **Single-country ETFs exist for most of them** (EPOL Poland, EIDO Indonesia,
+      THD Thailand, TUR Turkey, EWM Malaysia, EPHE Philippines, EPU Peru, GREK Greece). Adding one
+      is a row in `market.countries.etf_symbol` + a row in `market.tracked_fund` — no deploy.
+
+**Asked for, not yet built (2026-08-10)**
+- [ ] **A "refresh" button on every data page**, triggering that page's resources.
+- [ ] **Restrict refresh (button AND the edge function) to ADMIN users.** Today any valid JWT can
+      trigger a refresh; only `force` is service-role gated. Needs an admin claim/role check in
+      `market-refresh` plus UI gating.
+- [ ] **Infinite scroll instead of "Load more"** on the sector constituents list.
+- [ ] **Market data TTLs (revisit at launch).** Current values are deliberately LONG because
+      nobody is watching yet and every refresh spends free-tier quota. Intended production values:
+      sector/country/group performance 30-60 min, instrument performance 60 min, prices 24 h,
+      profile 24 h, holdings 7 days, tickers 10 min.
 
 **Known limits worth not rediscovering**
 - **Fund weights do NOT sum to 100.** EWT's own filing sums to 110.38. `fund_sector_weight` /
