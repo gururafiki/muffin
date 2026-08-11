@@ -201,20 +201,16 @@ grows only by adding US-registered ones.
 Everything from the original brief now has data behind it. What remains is gated on money, not
 engineering:
 
-- **Deep fundamentals (P/E, revenue, margins)** — measured against every provider we hold a key
-  for, 2026-08-11. Market cap itself is SOLVED (yfinance, shipped).
+- ~~Deep fundamentals~~ **SOLVED, and my earlier conclusion was wrong.** I probed the providers we
+  hold KEYS for and reported none could serve this universe. Each finding was true — FMP gates per
+  symbol (402 on BHP/SAP/NEE), Tiingo free is "limited to the DOW 30", Alpha Vantage is US-only at
+  25 calls/day — and all of it beside the point: **keyless yfinance** serves
+  `equity/fundamental/metrics`, including the non-US local listings (`005930.KS`, `7203.T`,
+  `KGH.WA`) that Alpha Vantage returns empty for. 30-35 fields, no key, no cap.
 
-  | provider | per-symbol gating | non-US listings | limit | verdict |
-  |---|---|---|---|---|
-  | yfinance (keyless) | none | **yes** | generous | **market cap: shipped** |
-  | Alpha Vantage | **none** — SAP, BHP, NEE all return data where FMP 402s | **none** — `005930.KS`, `7203.T`, `SAP.DE`, `KGH.WA` all empty | **25 calls/day** (measured: capped at ~26) | a tiny curated US set only |
-  | Tiingo (free) | — | no | **"Free and Power plans are limited to the DOW 30"** | unusable |
-  | FMP (free) | **yes** — 402 on BHP/SAP/NEE | some | — | unusable |
-
-  So deep fundamentals are genuinely unavailable free FOR THIS UNIVERSE, which is now mostly
-  non-US local listings. Alpha Vantage at 25/day would take ~160 days to cover the US names alone.
-  The realistic options are a paid tier, or accepting fundamentals for a small curated set of US
-  mega-caps refreshed slowly.
+  The mistake: I searched among the things I had keys for rather than among the things that could
+  answer. Twice in two days the answer was in a response we were already fetching — market cap was
+  the first.
 - **A "track this" action** for an untracked listing — `promote-listing` exists and is admin-only;
   no button calls it yet.
 - **Dividends / total return** — every number shown is a price return.
