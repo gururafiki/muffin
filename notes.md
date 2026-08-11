@@ -162,42 +162,49 @@ Updated 2026-08-11. Numbers are measured against production, not estimated.
 | 10 | Stock page skeleton | **Done today** — it rendered a bare symbol over blank space |
 | 11 | Extend edge-function timeouts | Done — 60s/150MB → **90s/256MB**; they were ours, not the platform's |
 
+## Done since this file was last written (2026-08-11)
+
+- **Sub-industries** — taxonomy level 2, 91 real industries; the sector page's chips are back with
+  data behind them. This was the last unfulfilled part of the original brief.
+- **Per-country sector returns** — a country page shows its OWN sectors, not finviz's US ones.
+  Korea: Information Technology +309% carrying 61% of the fund, which is what makes its +121.9%
+  country return legible.
+- **Company search** — 10,060 securities were reachable only by drilling Globe → country → sector.
+- **The exchange directory is readable** — `untracked_listing` plus a `promote-listing` resource
+  that pulls a listed company into the universe; the existing backlogs then classify and price it
+  with no new code.
+- **Weights say which fund they belong to.** "61% of fund" never named the fund, so the number was
+  unattributable.
+- **Taiwan recovered** — 534 securities silently dropped because OpenFIGI returns `exchCode` bare
+  for some venues and labelled for others.
+- **Studio's Functions page** and the **stock-page skeleton** — the two items missed from the list.
+
 ## What is left for a *complete* universe
 
-**1. Finish the exchange directory — 4 of 38 venues.**
-One venue per run at ~15 min intervals; the remaining 34 are roughly a day of scheduled
-warm-ups, or an afternoon if driven manually. This is what turns the universe from "what the
-tracked funds hold" into "every listed company on the venues we can price".
+**1. Finish the exchange directory — 24 of 38 venues, ~20k listings.** One venue per run; it is in
+the warm-up rotation, so the rest arrive on their own. The US alone is 20,112 listings.
 
-**2. Sector coverage: 6,687 of 10,060.** The rest are securities yfinance has no profile for.
-Grows as the directory fills and as more funds are tracked.
+**2. Sector coverage: 7,838 of 10,060.** The rest are securities yfinance has no profile for.
 
-**3. Per-country sector returns.** A country page still shows *US* sector performance — now
-honestly labelled, but it is the last mislabelled data on screen. Now finally buildable: Japan has
-1,039 classified securities, Korea 248.
-
-**4. Sub-industries.** `taxonomy_node.parent_id` models sector → industry group → industry →
-sub-industry; only level 1 is populated. This is why the sector page shows no sub-sector chips —
-the authored slugs (`software-saas`) had nothing behind them. yfinance's `industry_category` could
-populate level 2 from the profile calls we already make.
-
-**5. Market cap and fundamentals.** Blocked, not deferred: FMP's free tier gates **per symbol**
+**3. Market cap and fundamentals.** Blocked, not deferred: FMP's free tier gates **per symbol**
 (AAPL 200, BHP/SAP/NEE/PLD 402). This is why the sector page ranks by fund weight — a fact from a
 filing rather than an estimate.
 
-**6. Total return, corporate actions, index membership, GICS proper.** All need a paid or licensed
+**4. Total return, corporate actions, index membership, GICS proper.** All need a paid or licensed
 source. Everything today is *price* return, which understates high-yield markets.
 
-**7. Non-US UCITS funds are structurally impossible** — they file no N-PORT. Coverage of *funds*
+**5. Non-US UCITS funds are structurally impossible** — they file no N-PORT. Coverage of *funds*
 grows only by adding US-registered ones.
 
 ## What is left for a *fully functional* UI
 
-- **Country page**: replace the US sector panel with per-country sector returns (needs #3 above).
-- **Sub-sector chips**: return once level 2 exists (#4).
-- **Ticker search**: the exchange directory makes a real symbol search possible; nothing uses it yet.
-- **Stock pages for non-US names**: they resolve and price now, but market cap and fundamentals stay
-  blank until #5.
+Everything from the original brief now has data behind it. What remains is gated on money, not
+engineering:
+
+- **Market cap, fundamentals** — blank on every stock page until a paid provider or an FMP upgrade.
+- **A "track this" action** for an untracked listing — `promote-listing` exists and is admin-only;
+  no button calls it yet.
+- **Dividends / total return** — every number shown is a price return.
 
 ## How to operate it
 
