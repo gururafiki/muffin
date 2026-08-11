@@ -470,6 +470,18 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   `.catch(() => [])`. A throw and an empty answer are different facts. (Same defect as
   `figi_missing_at`, reintroduced two days later in a new resource — check for it whenever adding
   one.)
+- **Country display metadata is DERIVED, not authored.** Flag is a pure function of the ISO-2 code
+  (a regional-indicator pair); region comes from the **World Bank** lens because MSCI's regions are
+  *investment* regions and file Poland under `em-emea` (Middle East & Africa); tier comes from
+  MSCI's tier lens. `drillable` means "has a price series", not a hand-maintained boolean.
+- **A binary conditional over a three-value type is a bug that type-checks.** Three call sites read
+  `market === 'developed' ? 'Developed market' : 'Emerging market'`, so adding `frontier` would
+  have labelled Vietnam and Nigeria "Emerging market". Use a lookup, not a ternary.
+- **A registry populated by a hook does not survive a DEEP LINK.** Moving countries server-side
+  made `/country/poland` render "Unknown country" on a cold load: `getCountry` reads a registry
+  only a screen already running `useCountries` has filled. Any page resolving a route param must
+  mount the query — and must distinguish PENDING from MISSING, or it calls a real thing
+  nonexistent while still loading.
 - **Admin is `app_metadata.role`, never `user_metadata`** — a user can write their own
   `user_metadata` through the ordinary auth API, so a role kept there is self-assignable. Refresh
   is admin-only, which is why the warm-up cron uses the service-role key rather than anon.
