@@ -301,6 +301,15 @@ change, unless noted. Free/paid marked where a provider is involved.
 - [ ] Anything **no tracked fund holds** — coverage grows by adding funds, not by scanning.
 - [ ] Mutual/closed-end funds, individual bonds, futures/options/MMF, crypto beyond BTC/ETH, pre-IPO.
 
+**Statements — verified available, not yet pulled (2026-08-11)**
+- [ ] `equity/fundamental/income` / `balance` / `cash` / `dividends` all return real data from
+      KEYLESS yfinance, for non-US listings too. Measured: AAPL income 4 periods x 34 fields,
+      balance 4 x 63, cash 4 x 46, dividends 92 payments; Samsung (005930.KS) 4 x 48, 4 x 82,
+      4 x 58, 60 payments. Pulling them is a SCHEMA decision (a statement is ~50 line items per
+      period per security, so ~10k securities x 4 periods x 3 statements is millions of rows) —
+      most likely a `security_statement(security_id, statement, period, data jsonb)` rather than a
+      column per line item.
+
 **Data not pulled**
 - [ ] **Fundamentals (P/E, revenue, margins)** — every provider we hold a key for was measured
       2026-08-11 and none can serve this universe:
