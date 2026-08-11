@@ -499,6 +499,12 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   key is **FIGI, not ISIN** — the endpoint returns no ISIN at all — so the composite FIGI is
   captured while resolving local symbols. `securityType2: 'Common Stock'` is mandatory: unfiltered,
   "Samsung Electronics" returns 8,725 hits that are nearly all options.
+- **Units can be MIXED inside one provider response.** In `equity/fundamental/metrics`,
+  `profit_margin` (0.62966) and `return_on_equity` (1.14288) are FRACTIONS while `dividend_yield`
+  is already a PERCENT (NVDA 0.46, Samsung 0.65) — and `dividend_yield_5y_avg` is a fraction again
+  (0.0005), in the same object. One shared `pct()` rendered NVIDIA at a 46% dividend yield on the
+  deployed page: wrong by two orders of magnitude and entirely plausible-looking. Format per
+  field, and read the rendered page, not the diff.
 - **A backlog view defined as "wants X and does not have X" re-asks FOREVER for the things that
   can never have X**, and they crowd out the ones that would resolve. Four columns exist for this
   (`figi_missing_at`, `profile_missing_at`, `local_symbol_missing_at`, `performance_missing_at`)
