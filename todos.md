@@ -331,12 +331,33 @@ change, unless noted. Free/paid marked where a provider is involved.
       `RR/.L` `AV/.L` `NG/.L`), 1 carries `&` (`PE&OLES*.MX`).
       muffin-deployment #69 makes the URL well-formed (they were corrupting whole batches), but an
       ENCODED wrong symbol is still a wrong symbol — yfinance will answer for none of these.
-      **Do not author the translation table from memory.** The plausible rules (`BRK/B`→`BRK-B`,
-      `BP/.L`→`BP.L`, `WALMEX*.MX`→`WALMEX.MX`) are recall, and recall is what dropped Taiwan's 534
-      securities in `exchanges.ts`. Derive it: probe the provider with the candidates and keep what
-      answers, or use OpenFIGI's own per-exchange `ticker` vs `securityDescription` fields.
-      Cheap to bound — roughly 2% of symbols, and they negative-cache themselves via
-      `industry_missing_at` in the meantime, so nothing is stuck.
+      **Do not author the translation table from memory.** A SOURCE EXISTS, and probing it
+      2026-08-12 already caught a rule I would have got wrong:
+
+      `GET https://query2.finance.yahoo.com/v1/finance/search?q=<ISIN>` — public, keyless, and it
+      accepts an ISIN, which `market.security_identifier` already holds for 9,865 securities.
+
+      | ISIN | Yahoo returns | the rule I would have written |
+      |---|---|---|
+      | `US0846707026` (Berkshire B) | `BRK-B` | `BRK-B` ✓ |
+      | `GB00B63H8491` (Rolls-Royce) | `RR.L` | `RR.L` ✓ |
+      | `MXP810081010` (Walmex) | **`4GNB.F`** — Frankfurt, and the ONLY hit | ~~`WALMEX.MX`~~ ✗ |
+      | `MXP4987V1378` (Televisa) | `TLEVISACPO.MX` — local, correct | — |
+
+      So the endpoint works but its ISIN index is INCONSISTENT: sometimes the local line, sometimes
+      only a foreign cross-listing. **Taking the first hit would price a Mexican retailer off a thin
+      German listing** — precisely what `exchanges.ts` says not to do ("picking arbitrarily would
+      price a Korean bank off its Frankfurt line"). Any implementation must require the hit's
+      `exchange` to match the security's country and negative-cache the rest, rather than accept
+      whatever comes back. Searching the malformed symbol itself is useless and actively
+      misleading: `q=BRK/B` returns four unrelated leveraged ETFs.
+
+      **Design decision for Alex before building:** this would be a NEW direct dependency on Yahoo,
+      alongside (not through) OpenBB. Alternatives: probe `openbb equity/profile` with candidate
+      spellings and keep what answers (no new dependency, but it is a guess-and-check over rules I
+      invented), or leave these ~2% unresolved.
+      Cheap to bound either way — roughly 2% of symbols, and they negative-cache themselves via
+      `industry_missing_at` meanwhile, so nothing is stuck.
 
 **OPEN (2026-08-11) — 19 instrument returns at ≥ +1000%, undiagnosed**
 - [ ] The extremes are two Tel Aviv listings at +9453.7% (`AMRM.TA`) and +8946.9% (`ISHO.TA`),
