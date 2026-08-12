@@ -334,10 +334,25 @@ change, unless noted. Free/paid marked where a provider is involved.
       A resolved symbol CLEARS `industry/profile/performance/fundamentals/statements_missing_at`,
       or the spelling would be fixed while the security stayed excluded from every backlog for 30
       days.
-- [ ] **Observe the first real runs.** 3,739 securities are in `pending_yahoo_symbol`. Unknown
-      until measured: how many resolve, and whether Yahoo rate-limits the one-call-per-security
-      pattern at this volume. The resource is wall-clock bounded and an endpoint refusal does NOT
-      negative-cache the security, so a rate limit costs a slow drain rather than lost data.
+- [x] **First runs measured 2026-08-12: it works, and it vindicates using a SOURCE over rules.**
+      81 symbols resolved across 4 paced runs of 40, `failed: 0` — no rate limiting at that pace.
+      The translations are ones I could not have written from memory:
+
+      | | |
+      |---|---|
+      | Saudi + Malaysia are NUMERIC | `ARAMCO.SR -> 2222.SR`, `SABIC.SR -> 2010.SR`, `MAY.KL -> 1155.KL`, `CIMB.KL -> 1023.KL` |
+      | Ireland is an unrelated code | `AIBG.IR -> A5G.IR`, `KSP.IR -> KRX.IR`, `KYGA.IR -> KRZ.IR` |
+      | Chile renames outright | `BSAN.SN -> BSANTANDER.SN`, `MALLPLAZ.SN -> MALLPLAZA.SN` |
+      | Nordics hyphenate the class | `NOVOB.CO -> NOVO-B.CO`, `ERICB.ST -> ERIC-B.ST`, `MAERSKB.CO -> MAERSK-B.CO` |
+      | Hong Kong pads to four | `388.HK -> 0388.HK`, `2.HK -> 0002.HK` |
+      | Bloomberg forms | `BRK/B -> BRK-B`, `BP/.L -> BP.L`, `NG/.L -> NG.L` |
+
+      **A rules-from-memory approach would have covered HK padding and the Nordic hyphen and
+      silently missed Saudi, Malaysia, Ireland and Chile entirely** — the exact failure mode of the
+      hand-written exchange table that dropped Taiwan.
+      Resolution CLEARED the negative caches as designed: `industry_missing_at` is down to 76 and
+      `pending_industry` went back UP (6,192 -> 6,244) as recovered securities re-entered the queue.
+      That is the intended direction — a backlog growing because securities became answerable again.
 - [ ] It shipped UNREACHABLE first (`unknown resource`), because a resource must be added to the
       `EXTRA` allow-list as well as the handler. Now guarded in `logic-check.ts`, which reads the
       cron workflow and the handler as text and asserts every resource the cron calls is accepted.
