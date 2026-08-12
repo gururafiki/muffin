@@ -558,6 +558,49 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   for every row (the income/balance/cash endpoints carry no currency field; `reported_currency` was
   a wrong guess), so the label comes from `security.currency_code` — N-PORT `curCd` first, the
   yfinance metrics response second.
+- **The same conflict key twice fails the WHOLE upsert.** Postgres rejects an
+  `INSERT … ON CONFLICT DO UPDATE` whose statement carries a key twice —
+  `ON CONFLICT DO UPDATE command cannot affect row a second time` (SQLSTATE 21000) — and fails the
+  statement, so the batch and the resource go with it. `pending_industry` yields one row per
+  (security, level-1 sector), so a security in two sectors arrived twice; `security-industries`
+  therefore returned a bare 502 on any page large enough to contain one, which is why `limit` 10 and
+  20 succeeded and 40/100/300 did not. **It looked exactly like a size or timeout problem and was
+  neither** — both black-box theories (the per-security market-cap write loop, slow foreign
+  lookups) were wrong. The edge-runtime logs on the node named it in one line: when a bare 502 is
+  reproducible, `docker service logs muffin_supabase-functions` first, bisecting second. Third
+  instance of this shape (fund holdings dedupe lots; the sector views `distinct on`), so it is now a
+  shared `dedupeBy` at every `DO UPDATE` upsert fed by a provider, a backlog or a filing.
+  `ignoreDuplicates` (DO NOTHING) is exempt.
+- **A DISCONTINUITY IN A PRICE SERIES IS NOT A MARKET MOVE, and a big number is not by itself
+  wrong.** Measured 2026-08-12 across all 40 securities returning ≥ +300%, by re-fetching each
+  series: the largest legitimate one-day move was **2.04x** and the smallest illegitimate one
+  **6.0x**, with nothing between. AMRM.TA and ISHO.TA jump ~100x on the SAME day (2026-05-18), both
+  quoted in `ILA` — Yahoo switched Tel Aviv quotes from shekels to agorot; the USD outliers are OTC
+  lines with an unadjusted ratio change, which a reverse split would mimic exactly. `returnsFor`
+  omits any period whose anchor predates the most recent >5x move, **per period**, so the short
+  windows survive a break. The other 34 are left alone: SNDK really is up ~2,700%, and capping it
+  would swap a right number for a different wrong one — which is why the guard is a tripwire on the
+  count, not a ceiling on the value.
+- **An upsert cannot retract.** A period the refresh stops producing keeps whatever was written last
+  time, forever, looking freshly written. Any cache keyed on (entity, period) must DELETE what a
+  successful run deliberately did not produce, or a number that is now known to be untrustworthy
+  outlives the fix that stopped generating it.
+- **Symbols are not URL-safe, and the silent one is `&`.** Batched calls interpolated `join(',')`
+  raw. `BRK/B` (and the UK form `BP/.L`, `RR/.L`) 400s and takes its whole batch of 20 with it —
+  noisy but survivable. `PE&OLES*.MX` unencoded **ends the `symbol` parameter and starts a new
+  one**, so the provider answers 200 for a truncated list and every symbol after it vanishes with no
+  error. Encode each symbol and keep the comma literal. `*` (`WALMEX*.MX`) is URL-legal and
+  therefore untouched by encoding — that is a symbol-FORMAT problem: OpenFIGI's `ticker` is the
+  Bloomberg spelling and yfinance wants its own. Yahoo's public search takes an ISIN
+  (`query2.finance.yahoo.com/v1/finance/search?q=<ISIN>`) and gives the right answer, but its index
+  is inconsistent — Televisa returns its local `.MX` line while Walmex returns ONLY a Frankfurt one,
+  so any use of it must require the exchange to match the security's country rather than take the
+  first hit.
+- **CI never touched the edge functions until 2026-08-12** — every job was Postgres, Terraform or
+  Ansible, so a Deno file could not even be typechecked. `quality.yml` now runs `deno check` plus a
+  network-free `logic-check.ts` on every PR; `check.ts` still covers the same ground against a live
+  openbb-api but needs one, so it only ran when someone remembered. The pure check caught a real gap
+  the same hour it was written.
 - **`market-verify.yml` asserts shape, not exceptions**, because every one of the above returned
   HTTP 200. Both guard types were proven by injecting the failure (one all-zero CUSIP → exit 1;
   deleting 6,000 securities → three floors breached). Keep it that way: a guard that cannot fail

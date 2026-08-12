@@ -359,6 +359,55 @@ change, unless noted. Free/paid marked where a provider is involved.
       Cheap to bound either way — roughly 2% of symbols, and they negative-cache themselves via
       `industry_missing_at` meanwhile, so nothing is stuck.
 
+**RESOLVED (2026-08-12) — the extreme returns: 6 fabricated, 34 real**
+- [x] Settled by re-fetching the daily series for all 40 securities with a 1y return >= +300% and
+      taking each one's largest single-day ratio. The populations separate with NOTHING in between:
+      discontinuous — AMRM.TA 96.6x, ISHO.TA 101.0x, ARZTF 30.3x, PBMRF 28.7x, YZOFF 25.5x,
+      KLTHF 6.0x; real — ASAAF 2.04x, KXHCF 1.45x, 009150.KS 1.30x, SNDK 1.28x, MU 1.19x.
+      AMRM.TA and ISHO.TA jump ~100x on **the same day** (2026-05-18) and are both quoted in `ILA`:
+      Yahoo switched Tel Aviv quotes from shekels to agorot. The USD names are OTC lines carrying an
+      unadjusted ratio change; a reverse split looks identical and is equally not comparable.
+      Fixed in #70: `returnsFor` omits any period whose anchor predates the most recent >5x move —
+      per PERIOD, so after a break the short windows survive. Migration 33 clears the six.
+      **The 34 real ones are deliberately untouched.** SNDK really is up ~2,700%; capping it would
+      replace a right number with a different wrong one. This is why the guard in `market-verify.yml`
+      is a TRIPWIRE on the count (25) rather than an assertion that no number may be large.
+
+**OPEN (2026-08-11) — symbols are BLOOMBERG-format where the provider wants its own**
+- [ ] `security_identifier.kind_code = 'ticker'` is written from OpenFIGI, whose `ticker` is the
+      Bloomberg spelling. Measured in a 1,000-symbol sample of `pending_industry`: 10 carry `*`
+      (`WALMEX*.MX`, `AC*.MX`, `PINFRA*.MX`), 8 carry `/` (`BRK/B`, and the UK convention `BP/.L`
+      `RR/.L` `AV/.L` `NG/.L`), 1 carries `&` (`PE&OLES*.MX`).
+      muffin-deployment #69 makes the URL well-formed (they were corrupting whole batches), but an
+      ENCODED wrong symbol is still a wrong symbol — yfinance will answer for none of these.
+      **Do not author the translation table from memory.** A SOURCE EXISTS, and probing it
+      2026-08-12 already caught a rule I would have got wrong:
+
+      `GET https://query2.finance.yahoo.com/v1/finance/search?q=<ISIN>` — public, keyless, and it
+      accepts an ISIN, which `market.security_identifier` already holds for 9,865 securities.
+
+      | ISIN | Yahoo returns | the rule I would have written |
+      |---|---|---|
+      | `US0846707026` (Berkshire B) | `BRK-B` | `BRK-B` ✓ |
+      | `GB00B63H8491` (Rolls-Royce) | `RR.L` | `RR.L` ✓ |
+      | `MXP810081010` (Walmex) | **`4GNB.F`** — Frankfurt, and the ONLY hit | ~~`WALMEX.MX`~~ ✗ |
+      | `MXP4987V1378` (Televisa) | `TLEVISACPO.MX` — local, correct | — |
+
+      So the endpoint works but its ISIN index is INCONSISTENT: sometimes the local line, sometimes
+      only a foreign cross-listing. **Taking the first hit would price a Mexican retailer off a thin
+      German listing** — precisely what `exchanges.ts` says not to do ("picking arbitrarily would
+      price a Korean bank off its Frankfurt line"). Any implementation must require the hit's
+      `exchange` to match the security's country and negative-cache the rest, rather than accept
+      whatever comes back. Searching the malformed symbol itself is useless and actively
+      misleading: `q=BRK/B` returns four unrelated leveraged ETFs.
+
+      **Design decision for Alex before building:** this would be a NEW direct dependency on Yahoo,
+      alongside (not through) OpenBB. Alternatives: probe `openbb equity/profile` with candidate
+      spellings and keep what answers (no new dependency, but it is a guess-and-check over rules I
+      invented), or leave these ~2% unresolved.
+      Cheap to bound either way — roughly 2% of symbols, and they negative-cache themselves via
+      `industry_missing_at` meanwhile, so nothing is stuck.
+
 **OPEN (2026-08-11) — 19 instrument returns at ≥ +1000%, undiagnosed**
 - [ ] The extremes are two Tel Aviv listings at +9453.7% (`AMRM.TA`) and +8946.9% (`ISHO.TA`),
       then `ARZTF` +2928%, `SNDK` +2692%, `ODINE.IS` +2299%. 31 rows are ≥ +500%.
@@ -370,22 +419,23 @@ change, unless noted. Free/paid marked where a provider is involved.
       including `1d`, and no market moves identically over one day and one year. These do not have
       that signature, so they get investigated rather than deleted.
 
-**OPEN (2026-08-11) — `security-industries` 502s on larger pages, UNDIAGNOSED**
-- [ ] With the backlog unblocked (#67), `security-industries` returns a bare 502 at `limit` 40/100
-      and the default 300, while `limit` 5 and 10 return 200 cleanly (`classified: 10, capped: 10,
-      batchesFailed: 0` in ~1s). Not yet bisected past 10 — 20/40/80 were still running when this
-      was written.
-      Ruled out already: the view read is fast (0.25s, 200, 31 KB for the 300-row page the handler
-      takes); other resources are healthy (`security-fundamentals` 200 in 2s); and it is NOT the
-      in-flight lock — that returns a clean `{"skipped":true,"reason":"fresh or in flight"}` 200,
-      which is what a too-eager drain loop hits and what made the first attempts look worse than
-      they were.
-      A bare 502 means the worker died, so look at time and memory, not error handling. Two
-      candidates, both untested: the market-cap write does ONE sequential `update` per security
-      (up to 300 round trips) and is NOT inside the deadline check; and yfinance answers
-      `equity/profile` far more slowly for foreign listings, which is now most of the backlog.
-      The 2-minute in-flight TTL makes each experiment cost 2 minutes — bisect with waits, and do
-      not read a `skipped` 200 as a success.
+**RESOLVED (2026-08-12) — `security-industries` 502s were a DUPLICATE CONFLICT KEY**
+- [x] Root-caused from the edge-runtime logs on the node, not by bisecting:
+      `[Error] market-refresh(security-industries) failed: security_taxonomy upsert failed:
+      ON CONFLICT DO UPDATE command cannot affect row a second time`.
+      Postgres refuses an upsert whose statement carries the same conflict key twice (SQLSTATE
+      21000) and fails the WHOLE statement. `pending_industry` yields one row per (security,
+      level-1 sector), so a security classified into two sectors arrived twice and produced two
+      identical `security_taxonomy` writes.
+      **That is why it looked like a page-size problem** — the duplicated securities only fall
+      inside the larger slices, so `limit` 10 and 20 returned 200 while 40/100/300 returned a bare
+      502. Both of my candidate theories (the market-cap write loop, slow foreign lookups) were
+      wrong, and neither would ever have been disproved by more black-box bisecting. **Read the
+      worker logs first when a bare 502 is reproducible.**
+      Third occurrence of this shape: `ingest.ts` already dedupes fund holdings (one position,
+      several lots) and the sector views had to `distinct on`. Fixed in muffin-deployment #70 with a
+      shared `dedupeBy` at every `DO UPDATE` upsert fed by a provider, a backlog or a filing, plus a
+      dedupe at the source. `ignoreDuplicates` (DO NOTHING) has no such restriction.
 
 **OPEN (2026-08-11) — half the sector list is UNTAPPABLE, because the view only knows `ticker`**
 - [ ] `sector_constituents.symbol` comes from a lateral over `security_identifier` with
