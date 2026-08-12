@@ -630,6 +630,42 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   (`ESSITY-B.ST`). So "the provider has no data for this security" is frequently "we asked using the
   wrong name" — do not read a `*_missing_at` population as a statement about the securities until
   the spelling has been ruled out.
+- **A SYMBOL IS NOT A STABLE KEY, and the display symbol was the wrong one.** The app named a
+  security `coalesce(ticker, provider_symbol)` — ticker FIRST — but that identifier is OpenFIGI's
+  *US* lookup, which for a foreign company is a thin OTC foreign-ordinary line. Measured 2026-08-12:
+  **365 of 900 sampled non-US securities (41%)** were displayed as `SAABF`/`HXGBF`/`SAPGF` while
+  being priced off `SAAB-B.ST`/`HEXA-B.ST`/`SAP.DE`. The prices were never wrong — the FETCH key was
+  always `coalesce(provider_symbol, ticker)` — only the label. `market.listing.is_primary` now
+  decides it per security, because "local always wins" is wrong for a company whose ADR really is
+  the primary market. Re-keying `performance.scope_id` needed a hand-written migration; anything
+  keyed on `security_id` needed nothing, which is why `market.security_price` is.
+- **`market.instruments` is a curated OVERLAY, not a redundant universe.** It was going to be
+  retired; measuring first showed 8 of its rows are editorial ADR picks (`TSM`, `SAP`, `RIO`, where
+  the fund-derived universe knows only `TSMWF`, `SAPGF`) and 12 are not securities at all (`USD`,
+  `US10Y`, `BTC`, `WTI`, `GLD`). `priced = false` is what makes cash and a bond yield render NO
+  number rather than "+0.0%". It now carries a nullable `security_id` and `instrument_current`
+  merges the two: curated columns win for editorial fields, the security supplies provider-refreshed
+  ones.
+- **The same fact in two places WILL drift.** The venue map (exchange code → country → provider
+  suffix) lived in `exchanges.ts` AND in `exchange_cursor`'s seed; measured 2026-08-12 they had
+  drifted to **54 rows against 38**, so `security-local-symbols` resolved symbols on sixteen venues
+  (China, Canada, Australia, Brazil, UAE, Colombia) that `exchange-listings` never swept.
+  `market.exchange` is now the source and the functions read it. Where a rule genuinely must exist
+  twice — suffix→venue is both SQL (the `listing` backfill) and TypeScript (`venueForSymbol`) —
+  assert both.
+- **Migrations re-run in full, so a view's DEPENDENTS must be dropped before it — and a
+  hand-maintained list of them is wrong within hours.** Three views built on `security_symbol`
+  (`pending_performance`, `instrument_current`, `price_series`) each broke every re-run until added
+  to migration 35's drop list. The failure lands on the SECOND pass, after the first has already
+  succeeded. Migration 35 now discovers dependents via `pg_depend` instead. Verify by applying the
+  whole set **four times**, not twice.
+- **The migration tests run as SUPERUSER, so they prove nothing about grants.** A table can be
+  created, apply cleanly four times, pass every check, and be unreachable in production:
+  `security_price upsert failed: permission denied for table security_price` — migration 42 granted
+  the two views and forgot the table they read. Same shape as the PGRST205 schema-cache incident.
+  `stack/supabase/tests/every-table-is-reachable.sql` asserts `service_role` can read AND write
+  every `market` table and `anon` can read every serving view; it found two more the moment it was
+  written, including `listing`, which the ISIN resolver writes on every run.
 - **CI never touched the edge functions until 2026-08-12** — every job was Postgres, Terraform or
   Ansible, so a Deno file could not even be typechecked. `quality.yml` now runs `deno check` plus a
   network-free `logic-check.ts` on every PR; `check.ts` still covers the same ground against a live
