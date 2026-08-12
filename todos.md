@@ -280,7 +280,12 @@ change, unless noted. Free/paid marked where a provider is involved.
       is why `provider_sector` sits beside the curated `sector_id`.
 - [ ] **Sub-industry depth** — `taxonomy_node.parent_id` already models sector → industry group
       → industry → sub-industry; only level 1 is populated.
-- [ ] **Style (growth/value/blend)** — still a fake heuristic in `taxonomy.ts`
+- [x] **Style (growth/value/blend) — the fake heuristic is DELETED (2026-08-12, muffin-ui #76).**
+      `taxonomy.ts` derived it from the price move (`changePct > 15 ? 'growth'`), which is not what
+      growth and value mean, and nothing rendered or filtered on it. Removed rather than sourced:
+      a real style classification needs a factor or fundamentals source, and inventing one from a
+      return is worse than having none. Still open as a thing we do not pull:
+      - [ ] **Style (growth/value/blend)** — needs a real factor/style source
       (`changePct > 15 ? 'growth'`). Needs a real factor source.
 - [ ] **Size bands, factor exposures, ESG, credit ratings, per-fund currency exposure.**
 
@@ -556,6 +561,10 @@ change, unless noted. Free/paid marked where a provider is involved.
 - [x] **"Also in this group" listed countries with no page.** Largely fixed — 46 countries are
       drillable, up from 19. Measured against MSCI's tier lens 2026-08-12:
       **developed 22 members / 0 without a page; emerging 24 / 4** (CZ, HU, QA, KW — was 14).
+      **Qatar and Kuwait added 2026-08-12** (muffin-deployment #76: QAT and KWT exist, confirmed
+      against the provider), leaving emerging at 2. **Czechia and Hungary stay** — no liquid
+      single-country ETF exists, so there is no price series to derive, and a regional proxy would
+      put a number under a country's name that is not that country's.
       **Frontier is 21 / 19 and stays that way**: single-country ETFs mostly do not exist for those
       markets, so there is nothing to derive a page from. That is a structural limit, not a backlog.
 
