@@ -330,9 +330,10 @@ change, unless noted. Free/paid marked where a provider is involved.
       a fact from a filing rather than an estimate.
 
 **OPEN (2026-08-12) — what the reference-model work did NOT finish**
-- [ ] **`security-fundamentals` draining is UNPROVEN.** #87 unstuck it and #88 fixed the bug #87
-      introduced, but the claim "it drains" has not been demonstrated after a deploy. Verify:
-      backlog should fall and `written` should be non-zero. It has been stuck at ~6,075 all day.
+- [x] **`security-fundamentals` drains — PROVEN 2026-08-12 after #88 deployed.** Two runs wrote
+      470 and 207 rows where it had written **0 all day**; backlog 6,108 → 5,258, rows 2,937 →
+      3,614. `missing` is now ~53 per run rather than 600, so the outage rule is holding: a batch
+      that fails no longer negative-caches the page.
 - [ ] **The 8 editorial ADR links are unset.** `TSM`/`SAP`/`NVO`/`HSBC`/`RIO`/`BHP`/`SHEL` have no
       `security_id` because the fund-derived universe knows them only as OTC lines (`TSMWF`,
       `SAPGF`) and auto-matching on an alias cannot bridge that. Settable by hand in Studio — the
