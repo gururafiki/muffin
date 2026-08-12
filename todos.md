@@ -329,6 +329,91 @@ change, unless noted. Free/paid marked where a provider is involved.
 - [ ] **Market cap** — same gap; the sector page currently ranks by fund weight instead, which is
       a fact from a filing rather than an estimate.
 
+**OPEN (2026-08-12) — what the reference-model work did NOT finish**
+- [ ] **`security-fundamentals` draining is UNPROVEN.** #87 unstuck it and #88 fixed the bug #87
+      introduced, but the claim "it drains" has not been demonstrated after a deploy. Verify:
+      backlog should fall and `written` should be non-zero. It has been stuck at ~6,075 all day.
+- [ ] **The 8 editorial ADR links are unset.** `TSM`/`SAP`/`NVO`/`HSBC`/`RIO`/`BHP`/`SHEL` have no
+      `security_id` because the fund-derived universe knows them only as OTC lines (`TSMWF`,
+      `SAPGF`) and auto-matching on an alias cannot bridge that. Settable by hand in Studio — the
+      table is seeded `on conflict do nothing`, so an edit survives a redeploy.
+- [ ] **`instrument-prices` (curated) still downsamples into `market.prices`** while
+      `security-prices` stores daily into `security_price`. Both are served through `price_series`,
+      which prefers the security series, so this is duplication rather than a defect — but the
+      curated resource could be retired for anything that has a `security_id`.
+- [ ] **Constituent % coverage was 34 of 150 sampled (23%)** before today's symbol work. Worth
+      re-measuring now that the primary listing names the security and `performance` has been
+      re-keyed — the earlier number was partly an artefact of asking under the OTC name.
+- [ ] **More ETFs deliberately NOT added yet** (style/size IWF IWD IWM MDY RSP; thematic SMH ICLN;
+      fixed income AGG LQD HYG TIP EMB; commodity DBC USO SLV). Adding a fund is a row in
+      `tracked_fund`, but each one adds securities to backlogs that are still ~24,000 deep. Add
+      them once the current universe has drained, or the new holdings sit unclassified for a week.
+
+**RECURRING (2026-08-12) — a rule at one call site is not a rule**
+- [ ] The same defect shape appeared FOUR times in one day, each time in code that had just been
+      written or reviewed:
+      1. `fetchWithIsolation` did not carry `security-performance`'s "a whole batch failing is an
+         outage" rule, and negative-cached **1,369** good securities during a drain.
+      2. `security-yahoo-symbols` shipped unreachable — a resource must be registered in the
+         handler AND in the `EXTRA` allow-list.
+      3. The currency lookup was learned from filings in `ingest.ts` and not in the fundamentals
+         path, so an unseen code failed the whole resource on a foreign key.
+      4. #87 applied isolation to `security-fundamentals`, then let the EMPTY-ANSWER branch
+         negative-cache **600** securities on a batch that had failed — the same mistake as (1),
+         shipped by the fix for it.
+      Three now have guards (`logic-check.ts` for the outage rule, the registry check, the
+      reachability test). What has no guard is the general shape: **a request that FAILED and a
+      request that ANSWERED NOTHING are different facts**, and every branch acting on an empty
+      result has to know which it is looking at.
+
+**DONE (2026-08-12) — the reference-model rebuild.** Alex asked what should be captured in the
+universe rather than derived at runtime. Identifiers were already a real catalog (9,865 ISINs,
+4,350 tickers, 1,495 CUSIPs; the LEI on `issuer`, because an LEI identifies the ISSUER); the
+EXCHANGE layer was not. Six PRs, each verified live:
+
+- [x] **`market.exchange` — one venue catalog** (deployment #77). The map (exchange code → country →
+      provider suffix) existed in `exchanges.ts` AND in `exchange_cursor`'s seed, and had drifted to
+      **54 rows against 38** — so `security-local-symbols` resolved symbols on sixteen venues
+      (China, Canada, Australia, Brazil, UAE, Colombia) that `exchange-listings` never swept. The
+      seed was extracted from the code programmatically, not retyped.
+- [x] **`market.listing` — where a security trades** (#78). `exchange_listing` holds 59,324 venue
+      rows and has no `security_id`; only 536 securities carry a FIGI, so 99% floated unattached.
+      Built on the provider-symbol suffix instead (**8,522 reachable**), because the FIGI join would
+      have made the table look built and stay empty. **9,575 linked.** The ISIN resolver now keeps
+      every venue it sees rather than discarding all but one — that is the ADR data.
+- [x] **The primary listing NAMES the security** (#79). The display symbol was
+      `coalesce(ticker, provider_symbol)` — ticker first — and that ticker is OpenFIGI's *US* lookup,
+      a thin OTC line for a foreign company. **365 of 900 sampled non-US securities (41%)** were
+      labelled `SAABF`/`HXGBF` while priced off `SAAB-B.ST`/`HEXA-B.ST`. Prices were never wrong;
+      the label was. `performance.scope_id` had to be re-keyed by hand — anything keyed on
+      `security_id` needed nothing, which is why `security_price` is.
+- [x] **`market.instruments` kept as a curated OVERLAY** (#80), not retired as originally planned.
+      Measuring first showed 8 rows are editorial ADR picks (`TSM`, `SAP`, `RIO`) and 12 are not
+      securities at all (`USD`, `US10Y`, `BTC`, `WTI`, `GLD`). `priced = false` is what makes cash
+      and a bond yield render NO number. It now carries a nullable `security_id`, and
+      `instrument_current` merges the two: curated wins for editorial fields, the security supplies
+      provider-refreshed ones. **32 of 47 auto-linked**; AAPL and NESN now carry live market caps.
+- [x] **`market.security_price` — prices for the whole universe** (#81, re-keyed in #82). Fetched
+      INCREMENTALLY from the newest stored bar: **20 rows in ~1s** against 10,737 in 52s for a first
+      pass. Stored daily in a 400-day window rather than downsampled, because downsampling and
+      appending fight (a bar that was daily never becomes weekly as it ages) and the chart's longest
+      range is 1Y. **0 → 194,347 bars.**
+- [x] **Reachability guard** (#83). The migration tests apply DDL as a SUPERUSER, so they prove a
+      table can be created and nothing about whether anyone can reach it. `security_price` shipped
+      with no grant; the new test found two more the moment it was written, including `listing`,
+      which the ISIN resolver writes on every run.
+
+**DONE (2026-08-12) — ingestion throughput and health**
+- [x] **Pages are now bounded by the DEADLINE, not by their size** (#84). Every resource was
+      finishing inside its 55s budget, so at 4 runs/day prices needed **20 days** to drain and
+      statements **32**. Measured, then raised: prices 120→400 (52s), statements 60→200 (54s),
+      fundamentals/industries 300→600. Cron every 3 hours instead of 6.
+- [x] **A durable resource-health check** (#86). Every other check asserts data SHAPE, which cannot
+      see a resource failing on every run — the table just stops growing. Fires only after 12h
+      without a success, so a provider blip does not cry wolf.
+- [x] **Isolation applied to `security-fundamentals` and `security-profiles`** (#87). Fundamentals
+      was 100% stuck: all 60 batches of a 600-row page 400'd on one bad symbol (`2689.HK`).
+
 **IN PROGRESS (2026-08-12) — resolving symbols from ISINs via Yahoo search**
 - [x] Alex chose the Yahoo ISIN route. `security-yahoo-symbols` resolves a security's provider
       symbol from `query2.finance.yahoo.com/v1/finance/search?q=<ISIN>` (public, keyless; we hold

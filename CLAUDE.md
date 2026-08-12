@@ -607,6 +607,15 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   what fails alone, and never mark a symbol dead that the deadline stopped you asking about.
   "One dead symbol kills a batched provider call" had already appeared for `group-performance` (FM,
   liquidated 2025) and `security-profiles` (foreign listings); this is the generic fix.
+- **A REQUEST THAT FAILED AND A REQUEST THAT ANSWERED NOTHING ARE DIFFERENT FACTS — at EVERY branch
+  that acts on an empty result, not just the first one.** This shape appeared FOUR times on
+  2026-08-12 alone: `fetchWithIsolation` missing `security-performance`'s outage rule (1,369
+  securities wrongly negative-cached); `security-yahoo-symbols` shipping unreachable because a
+  resource must be registered in two places; the currency lookup learned in `ingest.ts` and not in
+  the fundamentals path; and finally the isolation fix itself, which correctly judged a failed batch
+  an outage and returned no dead symbols — and then let the empty-answer branch one level down
+  negative-cache all 600 anyway (`written: 0, missing: 600`). Each fix was correct and none
+  generalised. **When you fix one of these, grep for the other call sites before shipping.**
 - **WHEN NOTHING ANSWERS, BLAME THE PROVIDER, NOT THE UNIVERSE — and do not drain a backlog by
   hammering it.** Isolating bad symbols (above) is right until it is applied to an outage. Draining
   `security-industries` aggressively tripped yfinance's rate limit; every batch then failed; every
