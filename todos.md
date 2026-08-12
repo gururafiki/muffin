@@ -532,34 +532,43 @@ change, unless noted. Free/paid marked where a provider is involved.
       timeout, a refused connection, a bad URL and an empty answer alike. Every wrong theory was
       consistent with what the code was willing to say.
 
-**Found by using the deployed app (2026-08-10) — these are BUGS, not just gaps**
-- [ ] **A country page shows GLOBAL sector performance, unlabelled.** `/country/south-korea`
-      renders `useSectorPerformance`, which is `scope=sector` from **finviz — US-listed only**.
-      So a Korea page displays US sector returns under a "Sectors" heading. This is why "no sector
-      shows the +121.9%": that number is EWY's real 1-year return (`KR 1y = 121.93`, correct), and
-      the sector rows beside it are a different market entirely. Either label them as US, or drop
-      them from country pages until per-country sector returns exist.
-- [ ] **A sector inside a non-US country is always empty.** `/sector/information-technology?countryId=south-korea`
-      filters `sector_constituents` on `country_iso2=KR` and gets nothing, because sector
-      classification is derived from the **11 US sector SPDRs**, which hold no Korean securities.
-      Needs either global sector ETFs or per-security provider classification.
-- [ ] **Most constituents show no % change.** `market.performance` scope=`instrument` still covers
-      only the 35 curated symbols, so 500+ real constituents render with no number. Needs an
-      incremental, wall-clock-bounded per-security performance resource (same shape as
-      `security-tickers`), because 500 symbols will not fit one 60 s worker.
-- [ ] **"Also in this group" lists countries with no page.** MSCI Emerging has **24** members;
-      only **12** of them are modelled with an ETF, so 14 (PL, ID, TH, TR, MY, PH, PE, GR, EG, CZ,
-      HU, CO, KW, QA) appear as names with no drill-down. Not intentional — the original scope was
-      19 countries. **Single-country ETFs exist for most of them** (EPOL Poland, EIDO Indonesia,
-      THD Thailand, TUR Turkey, EWM Malaysia, EPHE Philippines, EPU Peru, GREK Greece). Adding one
-      is a row in `market.countries.etf_symbol` + a row in `market.tracked_fund` — no deploy.
+**Found by using the deployed app (2026-08-10) — re-verified 2026-08-12**
+- [x] **A country page showed GLOBAL sector performance, unlabelled.** Fixed: the page reads
+      `market.country_sector_performance` (a weighted mean of the country's own constituents) and
+      names the fund it came from. Where a country has no coverage it still falls back to the US
+      panel, but titled **"US sector performance"** — the original complaint was that it was
+      unlabelled, not that it existed.
+- [x] **A sector inside a non-US country was always empty.** Fixed by per-security provider
+      classification. Verified live 2026-08-12: `/sector/information-technology?countryId=south-korea`
+      renders Korean constituents with `.KS` symbols and real sub-sector chips (Consumer
+      Electronics, Semiconductor Equipment & Materials).
+- [ ] **Most constituents still show no % change — 34 of 150 sampled IT constituents (23%).**
+      The incremental resource this asked for EXISTS (`security-performance`, wall-clock bounded,
+      writing 20,399 rows), so this is no longer "only the 35 curated". What limits it now is
+      SYMBOL CORRECTNESS: 3,037 securities carry `performance_missing_at` because yfinance had no
+      series for the name we sent, and many of those names were the Bloomberg spelling.
+      **This should improve on its own** — `security-yahoo-symbols` clears `performance_missing_at`
+      when it resolves a better symbol, so those securities are re-fetched under the right name.
+      Worth re-measuring once the resolver has worked through its 3,579 backlog. No key mismatch:
+      `security_symbol` uses `coalesce(ticker, provider_symbol)`, the same key
+      `pending_performance` writes `performance.scope_id` under (checked, because the serving view
+      changed on 2026-08-12 and this was the obvious way to break it).
+- [x] **"Also in this group" listed countries with no page.** Largely fixed — 46 countries are
+      drillable, up from 19. Measured against MSCI's tier lens 2026-08-12:
+      **developed 22 members / 0 without a page; emerging 24 / 4** (CZ, HU, QA, KW — was 14).
+      **Frontier is 21 / 19 and stays that way**: single-country ETFs mostly do not exist for those
+      markets, so there is nothing to derive a page from. That is a structural limit, not a backlog.
 
-**Asked for, not yet built (2026-08-10)**
-- [ ] **A "refresh" button on every data page**, triggering that page's resources.
-- [ ] **Restrict refresh (button AND the edge function) to ADMIN users.** Today any valid JWT can
-      trigger a refresh; only `force` is service-role gated. Needs an admin claim/role check in
-      `market-refresh` plus UI gating.
-- [ ] **Infinite scroll instead of "Load more"** on the sector constituents list.
+**Asked for 2026-08-10 — all but one now built**
+- [x] **A "refresh" button on every data page.** Shipped on markets, country, sector and stock
+      (`refresh-button.tsx` + `PAGE_RESOURCES`), each with an `i` affordance naming the data and
+      the provider per resource.
+- [x] **Restrict refresh to ADMIN users.** `market-refresh` checks `app_metadata.role` on the
+      verified token (never `user_metadata`, which a user can write themselves), and the button
+      renders nothing for a non-admin. The client boolean decides what is OFFERED; the server check
+      is the permission.
+- [x] **Infinite scroll on the sector constituents list.** `onEndReached` drives it; the "Load
+      more" button stays as the fallback for platforms where the scroll event does not fire.
 - [ ] **Market data TTLs (revisit at launch).** Current values are deliberately LONG because
       nobody is watching yet and every refresh spends free-tier quota. Intended production values:
       sector/country/group performance 30-60 min, instrument performance 60 min, prices 24 h,
