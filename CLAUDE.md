@@ -596,6 +596,17 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   is inconsistent — Televisa returns its local `.MX` line while Walmex returns ONLY a Frankfurt one,
   so any use of it must require the exchange to match the security's country rather than take the
   first hit.
+- **A BAD SYMBOL RATE IS AMPLIFIED BY THE BATCH SIZE — 2.6% of symbols blocked 28% of the work.**
+  Measured 2026-08-12 on the live `pending_industry` head: 26 of 1,000 symbols carry a Bloomberg
+  spelling (`BRK/B`, `WALMEX*.MX`, `PE&OLES*.MX`), and because one 400 fails its whole batch of 20,
+  **14 of 50 batches** were poisoned on the real ordering. It gets worse as a backlog drains,
+  because the answerable securities leave and the unanswerable ones concentrate — consecutive drain
+  runs went `batchesFailed` 1 → 10 → 15 of 15 and `classified` 241 → 77 → 0, which looks exactly
+  like a provider outage or a rate limit and is neither. So: on a batch failure, retry the symbols
+  individually and let the PROVIDER name the bad one (`fetchWithIsolation`), negative-cache only
+  what fails alone, and never mark a symbol dead that the deadline stopped you asking about.
+  "One dead symbol kills a batched provider call" had already appeared for `group-performance` (FM,
+  liquidated 2025) and `security-profiles` (foreign listings); this is the generic fix.
 - **CI never touched the edge functions until 2026-08-12** — every job was Postgres, Terraform or
   Ansible, so a Deno file could not even be typechecked. `quality.yml` now runs `deno check` plus a
   network-free `logic-check.ts` on every PR; `check.ts` still covers the same ground against a live
