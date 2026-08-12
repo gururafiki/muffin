@@ -324,34 +324,35 @@ change, unless noted. Free/paid marked where a provider is involved.
 - [ ] **Market cap** — same gap; the sector page currently ranks by fund weight instead, which is
       a fact from a filing rather than an estimate.
 
-**OPEN (2026-08-12) — the provider needs a spelling this pipeline does not produce**
-- [ ] `security_identifier.kind_code = 'ticker'` comes from OpenFIGI, whose `ticker` is the
-      BLOOMBERG spelling. This is bigger than it first looked, and the non-obvious cases matter most.
-      Measured against Yahoo directly on 2026-08-12:
+**IN PROGRESS (2026-08-12) — resolving symbols from ISINs via Yahoo search**
+- [x] Alex chose the Yahoo ISIN route. `security-yahoo-symbols` resolves a security's provider
+      symbol from `query2.finance.yahoo.com/v1/finance/search?q=<ISIN>` (public, keyless; we hold
+      9,865 ISINs). The HOME MARKET is required — matched on the suffix table already verified
+      against the provider — because Yahoo's ISIN index is inconsistent: Televisa's returns the
+      local `TLEVISACPO.MX`, Walmex's returns ONLY a Frankfurt line. Taking the first hit would
+      price a Mexican retailer off a thin German listing.
+      A resolved symbol CLEARS `industry/profile/performance/fundamentals/statements_missing_at`,
+      or the spelling would be fixed while the security stayed excluded from every backlog for 30
+      days.
+- [ ] **Observe the first real runs.** 3,739 securities are in `pending_yahoo_symbol`. Unknown
+      until measured: how many resolve, and whether Yahoo rate-limits the one-call-per-security
+      pattern at this volume. The resource is wall-clock bounded and an endpoint refusal does NOT
+      negative-cache the security, so a rate limit costs a slow drain rather than lost data.
+- [ ] It shipped UNREACHABLE first (`unknown resource`), because a resource must be added to the
+      `EXTRA` allow-list as well as the handler. Now guarded in `logic-check.ts`, which reads the
+      cron workflow and the handler as text and asserts every resource the cron calls is accepted.
 
-      | symbol we send | why it fails | what works |
-      |---|---|---|
-      | `BRK/B` | Bloomberg class separator | `BRK-B` |
-      | `RR/.L` `BP/.L` `AV/.L` `NG/.L` | Bloomberg UK form | `RR.L` `BP.L` … |
-      | `WALMEX*.MX` `AC*.MX` `PINFRA*.MX` | Bloomberg Mexican form | (see below) |
-      | `6.HK` `27.HK` `392.HK` | **Hong Kong pads to FOUR digits** | `0006.HK` `0027.HK` |
-      | `ESSITYB.ST` | **Stockholm share class takes a hyphen** | `ESSITY-B.ST` |
-
-      The last two carry no odd character at all, so they are invisible to any check that looks for
-      `*` or `/`. **Amplified by batching**: 2.6% bad symbols poisoned 28% of 20-symbol batches
-      (measured on the real ordering), and it worsens as a backlog drains and the unanswerable ones
-      concentrate. muffin-deployment #71 stops one bad symbol taking nineteen good ones with it, but
-      it does not make the symbol right.
-      **A source exists** — `query2.finance.yahoo.com/v1/finance/search?q=<ISIN>`, public and
-      keyless, and `market.security_identifier` holds 9,865 ISINs. It returned `BRK-B` for
-      Berkshire and `RR.L` for Rolls-Royce. But its index is INCONSISTENT: Televisa's ISIN gives the
-      correct local `TLEVISACPO.MX` while Walmex's gives ONLY a Frankfurt line (`4GNB.F`), so any
-      implementation must require the hit's exchange to match the security's country and
-      negative-cache the rest — never take the first hit.
-      **Decision needed from Alex:** this would be a new direct dependency on Yahoo, alongside (not
-      through) OpenBB. The alternatives are to derive per-exchange rules by probing OpenBB with
-      candidate spellings (no new dependency, but the rules would be mine rather than a source's),
-      or to leave these unresolved.
+**RESOLVED (2026-08-12) — half the sector list was UNTAPPABLE**
+- [x] The serving views took `symbol` from `kind_code = 'ticker'` only, so a security addressable
+      only by a local provider symbol (`005930.KS`) had no symbol — and the list sets
+      `disabled: !s.symbol`. Measured before: 3,821 of 7,940 constituent rows carried a symbol,
+      against 8,521 securities holding a yfinance provider symbol.
+      Fixed in muffin-deployment #73 (`coalesce(ticker, provider_symbol)`, the same precedence the
+      ingest backlogs use) + muffin-ui #75. **Measured after: 7,934 of 7,940.**
+      The UI half was NOT optional: `use-fundamentals` and `use-statements` filtered on
+      `kind_code = 'ticker'` themselves, so shipping only the view change would have turned 3,400
+      dead rows into 3,400 blank pages. `useInstrument` also falls back to `security_current`,
+      which is what stops those pages rendering a bare ticker over blank space.
 
 **RESOLVED (2026-08-12) — the extreme returns: 6 fabricated, 34 real**
 - [x] Settled by re-fetching the daily series for all 40 securities with a 1y return >= +300% and
