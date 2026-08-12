@@ -324,40 +324,34 @@ change, unless noted. Free/paid marked where a provider is involved.
 - [ ] **Market cap** — same gap; the sector page currently ranks by fund weight instead, which is
       a fact from a filing rather than an estimate.
 
-**OPEN (2026-08-11) — symbols are BLOOMBERG-format where the provider wants its own**
-- [ ] `security_identifier.kind_code = 'ticker'` is written from OpenFIGI, whose `ticker` is the
-      Bloomberg spelling. Measured in a 1,000-symbol sample of `pending_industry`: 10 carry `*`
-      (`WALMEX*.MX`, `AC*.MX`, `PINFRA*.MX`), 8 carry `/` (`BRK/B`, and the UK convention `BP/.L`
-      `RR/.L` `AV/.L` `NG/.L`), 1 carries `&` (`PE&OLES*.MX`).
-      muffin-deployment #69 makes the URL well-formed (they were corrupting whole batches), but an
-      ENCODED wrong symbol is still a wrong symbol — yfinance will answer for none of these.
-      **Do not author the translation table from memory.** A SOURCE EXISTS, and probing it
-      2026-08-12 already caught a rule I would have got wrong:
+**OPEN (2026-08-12) — the provider needs a spelling this pipeline does not produce**
+- [ ] `security_identifier.kind_code = 'ticker'` comes from OpenFIGI, whose `ticker` is the
+      BLOOMBERG spelling. This is bigger than it first looked, and the non-obvious cases matter most.
+      Measured against Yahoo directly on 2026-08-12:
 
-      `GET https://query2.finance.yahoo.com/v1/finance/search?q=<ISIN>` — public, keyless, and it
-      accepts an ISIN, which `market.security_identifier` already holds for 9,865 securities.
-
-      | ISIN | Yahoo returns | the rule I would have written |
+      | symbol we send | why it fails | what works |
       |---|---|---|
-      | `US0846707026` (Berkshire B) | `BRK-B` | `BRK-B` ✓ |
-      | `GB00B63H8491` (Rolls-Royce) | `RR.L` | `RR.L` ✓ |
-      | `MXP810081010` (Walmex) | **`4GNB.F`** — Frankfurt, and the ONLY hit | ~~`WALMEX.MX`~~ ✗ |
-      | `MXP4987V1378` (Televisa) | `TLEVISACPO.MX` — local, correct | — |
+      | `BRK/B` | Bloomberg class separator | `BRK-B` |
+      | `RR/.L` `BP/.L` `AV/.L` `NG/.L` | Bloomberg UK form | `RR.L` `BP.L` … |
+      | `WALMEX*.MX` `AC*.MX` `PINFRA*.MX` | Bloomberg Mexican form | (see below) |
+      | `6.HK` `27.HK` `392.HK` | **Hong Kong pads to FOUR digits** | `0006.HK` `0027.HK` |
+      | `ESSITYB.ST` | **Stockholm share class takes a hyphen** | `ESSITY-B.ST` |
 
-      So the endpoint works but its ISIN index is INCONSISTENT: sometimes the local line, sometimes
-      only a foreign cross-listing. **Taking the first hit would price a Mexican retailer off a thin
-      German listing** — precisely what `exchanges.ts` says not to do ("picking arbitrarily would
-      price a Korean bank off its Frankfurt line"). Any implementation must require the hit's
-      `exchange` to match the security's country and negative-cache the rest, rather than accept
-      whatever comes back. Searching the malformed symbol itself is useless and actively
-      misleading: `q=BRK/B` returns four unrelated leveraged ETFs.
-
-      **Design decision for Alex before building:** this would be a NEW direct dependency on Yahoo,
-      alongside (not through) OpenBB. Alternatives: probe `openbb equity/profile` with candidate
-      spellings and keep what answers (no new dependency, but it is a guess-and-check over rules I
-      invented), or leave these ~2% unresolved.
-      Cheap to bound either way — roughly 2% of symbols, and they negative-cache themselves via
-      `industry_missing_at` meanwhile, so nothing is stuck.
+      The last two carry no odd character at all, so they are invisible to any check that looks for
+      `*` or `/`. **Amplified by batching**: 2.6% bad symbols poisoned 28% of 20-symbol batches
+      (measured on the real ordering), and it worsens as a backlog drains and the unanswerable ones
+      concentrate. muffin-deployment #71 stops one bad symbol taking nineteen good ones with it, but
+      it does not make the symbol right.
+      **A source exists** — `query2.finance.yahoo.com/v1/finance/search?q=<ISIN>`, public and
+      keyless, and `market.security_identifier` holds 9,865 ISINs. It returned `BRK-B` for
+      Berkshire and `RR.L` for Rolls-Royce. But its index is INCONSISTENT: Televisa's ISIN gives the
+      correct local `TLEVISACPO.MX` while Walmex's gives ONLY a Frankfurt line (`4GNB.F`), so any
+      implementation must require the hit's exchange to match the security's country and
+      negative-cache the rest — never take the first hit.
+      **Decision needed from Alex:** this would be a new direct dependency on Yahoo, alongside (not
+      through) OpenBB. The alternatives are to derive per-exchange rules by probing OpenBB with
+      candidate spellings (no new dependency, but the rules would be mine rather than a source's),
+      or to leave these unresolved.
 
 **RESOLVED (2026-08-12) — the extreme returns: 6 fabricated, 34 real**
 - [x] Settled by re-fetching the daily series for all 40 securities with a 1y return >= +300% and

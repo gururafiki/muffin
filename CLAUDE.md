@@ -607,6 +607,29 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   what fails alone, and never mark a symbol dead that the deadline stopped you asking about.
   "One dead symbol kills a batched provider call" had already appeared for `group-performance` (FM,
   liquidated 2025) and `security-profiles` (foreign listings); this is the generic fix.
+- **WHEN NOTHING ANSWERS, BLAME THE PROVIDER, NOT THE UNIVERSE — and do not drain a backlog by
+  hammering it.** Isolating bad symbols (above) is right until it is applied to an outage. Draining
+  `security-industries` aggressively tripped yfinance's rate limit; every batch then failed; every
+  symbol also failed when retried alone; and the isolation pass concluded that **1,369 securities
+  were permanently unanswerable and negative-cached them for 30 days** — including `HTHT` (H World)
+  and `LEGN` (Legend Biotech), ordinary Nasdaq tickers. It reported `classified: 0, noIndustry: 200`
+  per run while doing it, which reads as progress; the only tell was `classified: 0` for four
+  consecutive runs against a backlog that kept shrinking. Cleared by hand with a `PATCH … set
+  industry_missing_at = null`. The rule now lives in `fetchWithIsolation`: a bad symbol is rare and
+  isolated, so if EVERY symbol fails alone, mark nothing and let the next run try.
+  **`security-performance` already carried this exact rule in a comment** — "if the whole batch
+  fails, the provider is down or rate-limiting, mark nothing, or a single outage would
+  negative-cache thousands of perfectly answerable securities for a month" — at one call site, where
+  it did not travel to the helper that later generalised the batching. **A rule written at one call
+  site is not a rule.** Pace a manual drain (the warm-up cron does ~4 runs/day for a reason), and
+  treat a run that negative-caches more than it classifies as a red flag, not as throughput.
+- **SEVERAL EXCHANGES NEED A SPELLING THIS PIPELINE DOES NOT PRODUCE, and they are not all
+  obvious.** Beyond the `*` / `/` Bloomberg forms, measured 2026-08-12 against Yahoo directly:
+  `6.HK` and `27.HK` return "No data found" because Hong Kong tickers are **zero-padded to four
+  digits** (`0006.HK`), and `ESSITYB.ST` fails because Stockholm share classes take a **hyphen**
+  (`ESSITY-B.ST`). So "the provider has no data for this security" is frequently "we asked using the
+  wrong name" — do not read a `*_missing_at` population as a statement about the securities until
+  the spelling has been ruled out.
 - **CI never touched the edge functions until 2026-08-12** — every job was Postgres, Terraform or
   Ansible, so a Deno file could not even be typechecked. `quality.yml` now runs `deno check` plus a
   network-free `logic-check.ts` on every PR; `check.ts` still covers the same ground against a live
