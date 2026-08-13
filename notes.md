@@ -41,53 +41,83 @@ On the main page (with map) I would like also to see growth per tier (in the sam
 11. just curious - right now we have timeouts on edge funcitons - maybe we can extend it for our self-hosted setup? Or it's not a problem?
 
 ----
-Every external call
-Three upstreams. Everything else is internal.
+Every external call — rebuilt from what is deployed, 2026-08-13
+(The version this replaces described 3 upstreams and 7 resources; there are now 4 and 17.)
 
-Upstream	Called by	Endpoints	Auth
-openbb-api (internal) → finviz, yfinance	performance/profile/price resources	equity/compare/groups, etf/historical, equity/price/historical, equity/profile	keyless providers
-SEC EDGAR	fund-holdings	company_tickers_mf.json, data.sec.gov/submissions/CIK…, efts.sec.gov/…search-index, Archives/…/primary_doc.xml	User-Agent only
-OpenFIGI	security-tickers	api.openfigi.com/v3/mapping	your key
-What syncs, and its TTL
-Resource	Writes	TTL
-sector-performance	market.performance (sectors)	30 min
-country-performance	market.performance (countries)	60 min
-instrument-performance	market.performance (35 instruments)	60 min
-instrument-profile	market.instruments sector/industry/cap	24 h
-instrument-prices	market.prices (~400-day window)	24 h
-fund-holdings	security, issuer, identifier, fund_holding	7 days
-derive-classifications	security_taxonomy, security.country_iso2	7 days
-security-tickers	ticker identifiers, is_tradeable	10 min
-Who triggers it
-Three ways, and only one is automatic.
+| Upstream | Called by | Auth |
+|---|---|---|
+| **openbb-api** (internal) → finviz, yfinance | every performance / profile / price / fundamentals / statements resource | keyless providers |
+| **SEC EDGAR** | `fund-holdings` | descriptive User-Agent only; ~10 req/s fair-access limit |
+| **OpenFIGI** | `security-tickers`, `security-local-symbols`, `exchange-listings` | your key — 250 req/min x 100 ids (anonymous is 25 x 10) |
+| **Yahoo search** (`query2.finance.yahoo.com`) | `security-yahoo-symbols` | keyless; resolves an ISIN to its HOME-market symbol |
 
-Cron — market-warmup.yml, 02:10/08:10/14:10/20:10 UTC. Runs all seven resources with the anon key. Each self-skips inside its TTL, so a pass is cheap.
-The app itself. Stale-while-revalidate: a screen reading a row past stale_after fires triggerRefresh in the background. The reader is never blocked.
-You, manually. gh workflow run market-warmup.yml -f resource=<name>, or a direct POST with the service-role key for force and fund scoping:
+**FMP, Alpha Vantage, Tiingo, FRED and Biztoc keys are all set and none is used by this pipeline.**
+FMP cannot be: openbb's fmp provider calls the **v3** API, which now answers `403 Legacy Endpoint`
+for anyone without a pre-August-2025 subscription — AAPL included.
 
+## What syncs, and its real TTL
+
+| Resource | TTL | Why that number |
+|---|---|---|
+| `sector-` / `country-` / `group-` / `instrument-performance` | 24 h | daily returns |
+| `instrument-prices` | 24 h | the curated ~400-day window |
+| `security-prices` | 24 h | daily bars, fetched incrementally from the last stored date |
+| `security-tickers` | 24 h | OpenFIGI, and the backlog now drains in one keyed pass |
+| `instrument-profile` | 7 days | curated overlay |
+| `fund-holdings`, `derive-classifications` | **30 days** | N-PORT is quarterly; a short TTL would re-ask SEC for last quarter's answer |
+| `security-profiles`, `-industries`, `-fundamentals`, `-statements`, `-performance`, `-local-symbols`, `-yahoo-symbols`, `security-refresh`, `promote-listing`, `exchange-listings` | **10 min** | INCREMENTAL — each run drains a slice, so the TTL only has to permit the *next* run. A completion-shaped TTL stalls a backlog for a week. |
+
+## Who triggers it
+
+- **Cron** — `market-warmup.yml`, now **eight times a day** (02:10, 05:10, 08:10, 11:10, 14:10,
+  17:10, 20:10, 23:10 UTC), service-role key, **paced 30 s between resources**. The pacing is not
+  cosmetic: firing all seventeen back to back is what tripped yfinance's rate limit and let ~8,300
+  securities be recorded as unanswerable.
+- **`market-verify.yml`** — daily at 03:00 UTC, 39 assertions, as anon.
+- **The app** — stale-while-revalidate; a screen reading a row past `stale_after` fires
+  `triggerRefresh` in the background. The reader is never blocked. Writes are **admin-only**
+  (`app_metadata.role`), so the button is hidden for everyone else.
+- **A stock page** — `security-refresh` does returns, market cap, fundamentals **and statements**
+  for one symbol, on demand. That last one matters: the statements backlog is ~5 weeks deep, so
+  without it the securities someone actually opens would be last in the queue.
+- **You** — `gh workflow run market-warmup.yml -f resource=<name>`, or a direct POST with the
+  service-role key for `force` and fund scoping:
+
+```
 curl -X POST "https://supabase.rafiki.guru/functions/v1/market-refresh" \
   -H "apikey: $SERVICE_KEY" -H "Authorization: Bearer $SERVICE_KEY" \
   -H 'Content-Type: application/json' \
   -d '{"resource":"fund-holdings","fund":"XLE","force":true}'
-market-verify.yml also runs daily at 03:00 UTC, asserting shape as anon.
+```
 
-To add an ETF: insert a row in market.tracked_fund in Studio (symbol, name, kind, represents_code), then run the scoped refresh above, then derive-classifications, then security-tickers. No deploy — proven with SMH.
+`force` bypasses the TTL and the error backoff but **not** the in-flight lock, and is service-role
+only — the anon key is public, and a public cache-buster is a free way to hammer the provider.
 
-The gaps, and why
-Partially synced:
+**To add an ETF:** a row in `market.tracked_fund` in Studio, then the scoped `fund-holdings` refresh,
+then `derive-classifications`. No deploy. Everything downstream — symbols, sectors, industries,
+prices, fundamentals — picks it up from the backlogs on its own.
 
-Tickers: 4,246 of 9,786. Resolution asks OpenFIGI for the US line; most non-US local listings have none. Needs an exchange→provider-suffix map (security_provider_symbol exists for this, NESN → NESN.SW). Rows without one render by name and are correctly not tappable.
-Sector classification: 514 of 9,786. Coverage is exactly what the 11 sector SPDRs hold — US large caps. A security no sector fund holds gets no sector. Grows by adding ETFs.
-% change: 35 securities. market.performance still only covers the curated instruments, so most constituents show no number rather than an invented one.
-Not synced at all:
+## The gaps, measured 2026-08-13
 
-Market cap and fundamentals — FMP's free tier gates per symbol (AAPL 200, BHP/SAP/NEE/PLD 402). This is why the sector page ranks by fund weight instead.
-Sub-industries — fund holdings carry no industry. taxonomy_node.parent_id models the tree; nothing populates level 2. This is why I removed the chips rather than let authored slugs stand in.
-The sector donut — etf/sectors is FMP-premium, index/sectors is TMX-only. fund_sector_weight is now built and renormalising, but nothing reads it yet.
-Total return / dividends (everything is price return), corporate actions, index membership, GICS proper (needs a licence).
-Structurally impossible: non-US UCITS funds file no N-PORT, so they can never be tracked here.
+Of **12,348 equities** (the universe is 27,627 securities; the rest are bonds, derivatives and cash,
+correctly typed and correctly excluded from every equity view):
 
-Timeliness caveat: N-PORT is filed ~60 days in arrears, so holdings can be up to ~4 months old. Fine for reference data — but any UI showing weights must show as_of and never imply they're live.
+| | coverage |
+|---|---|
+| fundamentals | **92%** (3% negative-cached as genuinely unavailable) |
+| sector | **89%** |
+| market cap | 66% |
+| industry | 61% |
+| statements | **12.5%** — see the caveat above; a row count reads ~12x this |
+
+Still draining: prices, statements, performance. Nothing is code-blocked.
+
+**Blocked on money or a licence:** GICS proper, total return / dividends (everything today is a
+*price* return), index membership, per-symbol fundamentals beyond what keyless yfinance gives.
+
+**Structurally impossible, not deferred:** non-US UCITS funds file no N-PORT; commodity funds are
+trusts or pools filing 10-K (SLV, USO, DBC); MDY is a unit investment trust. None of these can be
+reached by adding a row to `tracked_fund`.
 
 ----
 
