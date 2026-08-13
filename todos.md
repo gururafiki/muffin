@@ -290,9 +290,16 @@ change, unless noted. Free/paid marked where a provider is involved.
 - [ ] **Size bands, factor exposures, ESG, credit ratings, per-fund currency exposure.**
 
 **ETFs not tracked** (a row in `market.tracked_fund` each)
-- [ ] Style/size: IWF, IWD, IWM, MDY, RSP · Thematic: SMH, ICLN, cyber-security, AI/data-centre
-      (these are the "Sectors: AI infrastructure, cyber security" item above)
-- [ ] Fixed income: AGG, LQD, HYG, TIP, EMB · Commodity: DBC, USO, SLV
+- [x] **Style/size and thematic ADDED 2026-08-13** (migration 48): IWF, IWD, IWM, RSP, SMH, ICLN.
+      IWM alone brought 1,922 small caps no other tracked fund holds. **MDY was REJECTED** — it is
+      a unit investment trust, and UITs file no N-PORT.
+- [x] **Fixed income ADDED 2026-08-13**: AGG, LQD, HYG, TIP, EMB. AGG brought 13,266 securities and
+      is why `market.security` is now majority BONDS (15,159 vs 12,348 equities).
+- [ ] **Commodity: DBC, USO, SLV — STRUCTURALLY IMPOSSIBLE, not deferred.** SLV is a commodity
+      trust and USO/DBC are commodity pools filing 10-K; none files N-PORT. Needs a different
+      source entirely.
+- [ ] Still not tracked: cyber-security and AI/data-centre thematics (the "Sectors: AI
+      infrastructure, cyber security" item above).
 - [ ] **Non-US UCITS funds — structurally impossible**, they file no N-PORT. Not a backlog item.
 - [x] FM disabled — no NPORT-P since 2024-11-30, the fund was reorganised away.
 
@@ -345,14 +352,14 @@ change, unless noted. Free/paid marked where a provider is involved.
 - [x] **Constituent % coverage re-measured 2026-08-12: 23% → 37%** (56 of the same 150 IT
       constituents now carry a 1y return, up from 34). The earlier figure WAS partly an artefact of
       asking under the OTC name, as suspected.
-- [ ] **Price coverage is 13% and drainng** — 331,441 bars ≈ 1,325 securities of 10,060, backlog
-      9,440 → 7,661. A sample of 150 IT constituents showed only 4 with bars, which is consistent
-      with 13% rather than a defect; re-check once the backlog is under ~1,000 before concluding
-      anything about a specific sector.
-- [ ] **More ETFs deliberately NOT added yet** (style/size IWF IWD IWM MDY RSP; thematic SMH ICLN;
-      fixed income AGG LQD HYG TIP EMB; commodity DBC USO SLV). Adding a fund is a row in
-      `tracked_fund`, but each one adds securities to backlogs that are still ~24,000 deep. Add
-      them once the current universe has drained, or the new holdings sit unclassified for a week.
+- [ ] **Price coverage 2026-08-13: 1,252,553 bars across ~4,600 securities** (was 331,441 across
+      ~1,325). Backlog 6,228 and NOT draining on its own — it grew when migration 50 unlocked the
+      4,801 equities whose `prices_missing_at` a corrected symbol had never cleared. Needs the
+      paced drain to work through it.
+- [x] **Those ETFs were added 2026-08-13** — 11 of them, taking tracked funds 63 → 74 and the
+      universe 10,060 → 27,627 securities. The caveat in the original note turned out to be the
+      right one and was accepted deliberately: the new holdings DO sit in the backlogs, which is
+      why prices is 6,228 and fundamentals 4,973. Adding funds is cheap; draining them is not.
 
 **RECURRING (2026-08-12) — a rule at one call site is not a rule**
 - [ ] The same defect shape appeared FOUR times in one day, each time in code that had just been
