@@ -461,6 +461,20 @@ change, unless noted. Free/paid marked where a provider is involved.
       were fixed and this call site was not, so it is now asserted against the source in
       `logic-check.ts` rather than left to review.
 
+- [x] **~8,300 securities wrongly negative-cached in one afternoon, by my own drain.** Running six
+      resources back to back tripped yfinance's rate limit, and a throttled yfinance answers
+      **200-with-no-rows** rather than erroring — which every outage rule in the pipeline was blind
+      to, because they are all THROW checks. Six marking sites then recorded "the provider has
+      nothing for this security": industry 1,414 (INTC, PEP, XOM, TXN, EA, SCCO), statements 5,613
+      (EQH, TOST, CRBG, ACM, RKT), performance 1,205 (EMR, TPL, REGN, UPS), fundamentals 122,
+      prices 40. `pending_industry` went to 0 and read as *drained*. All six now gate on the
+      endpoint having answered for someone in the run; the marks were cleared afterwards.
+- [x] **The guard I wrote for it was decorative, and I nearly shipped it as proven.** It walked each
+      branch to its closing brace looking for a gate — brace depth counts braces in comments and
+      template literals, so it caught one of four deleted gates while printing "all six marking
+      sites gated". The first mutation run also used `sed` with mis-escaped `&&` and changed
+      nothing, so four passes meant four no-ops. Now a named list of the six exact gate expressions.
+
 **OPEN (2026-08-13) — known limits, not bugs**
 - [ ] **`market_cap` is stored in the security's own currency**, so ordering by it mixes ¥, ₩ and $ —
       191 securities exceed "5T" purely for that reason. Correct per security, wrong for ranking.

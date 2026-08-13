@@ -681,6 +681,30 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   an outage and returned no dead symbols — and then let the empty-answer branch one level down
   negative-cache all 600 anyway (`written: 0, missing: 600`). Each fix was correct and none
   generalised. **When you fix one of these, grep for the other call sites before shipping.**
+- **A THROTTLED PROVIDER ANSWERS 200-WITH-NO-ROWS, WHICH EVERY OUTAGE RULE HERE WAS BLIND TO.**
+  `fetchWithIsolation`'s outage rule, `security-prices`' "only when the batch did not fail", and
+  `security-statements`' `failed === 0` are all THROW checks. yfinance under rate limit does not
+  throw — it returns an empty 200 — so nothing failed, nothing answered, and six separate marking
+  sites recorded "the provider has nothing for this security" when the truth was "the provider is
+  not talking to us". Measured 2026-08-13 after one afternoon's over-eager drain: **industry 1,414
+  (INTC, PEP, XOM, TXN, EA, SCCO), statements 5,613 (EQH, TOST, CRBG, ACM, RKT), performance 1,205
+  (EMR, TPL, REGN, UPS), fundamentals 122, prices 40** — ~8,300 securities, silently, while
+  `pending_industry` went to 0 and read as drained. **A backlog that empties by MARKING looks
+  exactly like one that empties by WORKING**; compare the two populations, never one count. Every
+  site now gates on a success counter proving the endpoint answered for someone in the run.
+- **SIX call sites, four spellings — find them all before fixing any.** The empty-result test was
+  written as `rows.length === 0`, `priceRows.length === 0`, `fetched` empty and
+  `anyAnswer || failed === 0`; fixing the ones that matched a single grep certified the rest as
+  safe. Three consecutive PRs each fixed a subset because each grep found only its own spelling.
+- **A GUARD MUST BE PROVEN BY DELETING WHAT IT GUARDS, AND THE MUTATION MUST BE VERIFIED TO APPLY.**
+  The first source check for the above walked from each empty-answer branch to its closing brace and
+  looked for a gate inside. It caught **one of four** deleted gates: brace depth counts braces in
+  comments and template literals, so most blocks ended early and the write fell outside the window
+  — it printed `all six marking sites gated` while three were not. It was nearly shipped described
+  as proven, because the first mutation run used `sed` with mis-escaped `&&` and silently changed
+  nothing, so four "ok"s meant four no-ops. Replaced by a named list of the six exact gate
+  expressions: brittle to refactoring on purpose, since rewording fails loudly while DELETING can
+  never pass silently.
 - **WHEN NOTHING ANSWERS, BLAME THE PROVIDER, NOT THE UNIVERSE — and do not drain a backlog by
   hammering it.** Isolating bad symbols (above) is right until it is applied to an outage. Draining
   `security-industries` aggressively tripped yfinance's rate limit; every batch then failed; every
