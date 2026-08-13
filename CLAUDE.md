@@ -668,6 +668,21 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   to migration 35's drop list. The failure lands on the SECOND pass, after the first has already
   succeeded. Migration 35 now discovers dependents via `pg_depend` instead. Verify by applying the
   whole set **four times**, not twice.
+- **"APPLIES TWICE ON AN EMPTY DATABASE" IS NOT "APPLIES TWICE ON THIS DATABASE".** Migration 38's
+  backfill inserts a PRIMARY listing with `on conflict (security_id, exch_code) do nothing` — which
+  names the primary key and NOT the partial unique index `listing_one_primary_idx`. On a fresh
+  database that is fine, because nothing else has written a primary. In production
+  `security-yahoo-symbols` had recorded securities' other venues, so the backfill tried to add a
+  second primary on a different exchange and the statement errored, **failing the deploy on
+  2026-08-13**. The three-pass migration test could not see it: the state that breaks it only exists
+  after a resource has run. When a migration writes rows a RESOURCE also writes, reproduce the
+  resource's rows in the test before believing it. The blast radius is the real lesson — migration
+  35 drops the dependent views before 38 runs, so a failure there left production without
+  `pending_prices` until the next successful pass; a mid-chain migration failure is not atomic.
+- **A partial unique index is not covered by `on conflict`.** `upsert(..., { onConflict: 'a,b',
+  ignoreDuplicates: true })` silences conflicts on `(a,b)` and nothing else, so a `unique … where
+  is_primary` still throws and fails the whole statement. To move such a flag, insert non-primary
+  and then demote-and-promote in two statements — an upsert cannot express "move this flag".
 - **The migration tests run as SUPERUSER, so they prove nothing about grants.** A table can be
   created, apply cleanly four times, pass every check, and be unreachable in production:
   `security_price upsert failed: permission denied for table security_price` — migration 42 granted

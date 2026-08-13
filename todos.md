@@ -371,6 +371,42 @@ change, unless noted. Free/paid marked where a provider is involved.
       request that ANSWERED NOTHING are different facts**, and every branch acting on an empty
       result has to know which it is looking at.
 
+**DONE (2026-08-13) — universe correctness: what was wrong and how ingestion now handles it**
+- [x] **Egypt, Nigeria and Portugal reported +0.0% on EVERY period, dated today.** Their ETFs
+      (EGPT/NGE/PGAL) are liquidated — last N-PORT 2022, 2023, 2024 — and the price provider serves a
+      dead fund's final bars forever, so each period was measured between two identical closes.
+      +0.0% reads as "the market was flat". Fixed GENERALLY in `returnsFor`, which refuses any series
+      whose last bar is over 10 days old (not a list of dead tickers: **Colombia's GXG still trades**
+      and its +42.5% is real, only its filings stopped). 212 stored flat rows cleared; the funds
+      carry `retired_at`; EG/NG/PT lost their country pages, since `drillable` derives from
+      `etf_symbol` and a page with no number is worse than none.
+- [x] **N-PORT's `curCd` mislabelled currencies.** It is the currency the FUND valued the position
+      in — often USD for a US-domiciled fund — not the security's quote currency. Measured: of 1,000
+      securities with fundamentals, 14 disagreed and every one was `stored=USD` vs
+      `provider=PEN/CLP/BRL/EUR`. The provider now wins.
+- [x] **`security-industries` was discarding the currency** in the same `equity/profile` response it
+      reads for market cap, leaving 1,675 securities with a cap and no currency. Now captured — no
+      extra request, and the codes are learned before being referenced.
+- [x] **Three live funds were never ingested** (Singapore, Qatar, Kuwait) — now in, with holdings.
+- [x] **The universe reached only large-cap equities.** Eleven style/size/thematic/fixed-income funds
+      added, each CHECKED against SEC's ticker file first. Four were rejected structurally: SLV is a
+      commodity trust, USO and DBC are commodity pools filing 10-K, and MDY is a UNIT INVESTMENT
+      TRUST — UITs file no N-PORT.
+- [x] **The ISIN resolver could not see securities with NO symbol** — nothing had tried to fetch
+      them, so no `*_missing_at` flag was set, so they never entered any backlog. 485 securities,
+      including Exxon Mobil. Now first in the queue; already naming Honeywell and several Gulf banks.
+
+**OPEN (2026-08-13) — known limits, not bugs**
+- [ ] **`market_cap` is stored in the security's own currency**, so ordering by it mixes ¥, ₩ and $ —
+      191 securities exceed "5T" purely for that reason. Correct per security, wrong for ranking.
+      Needs FX rates, which no keyless provider here supplies.
+- [ ] **Commodity and UIT funds cannot be ingested from N-PORT at all** (SLV, USO, DBC, MDY). A
+      different filing type or provider would be required; not a backlog item.
+- [ ] **~1,858 securities cannot get fundamentals** because their symbols are Bloomberg spellings
+      (`QQ/.L`, `SCC/F.BK`, `HEI/A`). The ISIN resolver is the upstream fix and is rate-limited at 60
+      per run, so this drains slowly. A batch where EVERY symbol is bad is indistinguishable from an
+      outage, so the resource correctly marks nothing and waits.
+
 **DONE (2026-08-12) — the reference-model rebuild.** Alex asked what should be captured in the
 universe rather than derived at runtime. Identifiers were already a real catalog (9,865 ISINs,
 4,350 tickers, 1,495 CUSIPs; the LEI on `issuer`, because an LEI identifies the ISSUER); the
