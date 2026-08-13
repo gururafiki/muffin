@@ -505,6 +505,14 @@ change, unless noted. Free/paid marked where a provider is involved.
       holdings somewhere in its 13,267, which is a bond fund holding a few equities — not a typing
       defect. Nothing renders a bond fund's donut anyway.
 
+- [ ] **Statements coverage is ~12.5%, not the ~60% a row count suggests.**
+      `security_statement_current` returns one row per (security, statement, period) — about twelve
+      per security — so 12,928 rows is ~1,544 securities. Measured 2026-08-13 from the backlog
+      arithmetic: 12,348 equities − 8,355 pending − 2,449 negative-cached. The resource fetches ONE
+      security per call (the provider does not batch income/balance/cash), so this drains slowly;
+      `security-refresh` covers anything a user opens on demand, which is what makes the depth
+      tolerable rather than fixed.
+
 **OPEN (2026-08-13) — known limits, not bugs**
 - [ ] **`market_cap` is stored in the security's own currency**, so ordering by it mixes ¥, ₩ and $ —
       191 securities exceed "5T" purely for that reason. Correct per security, wrong for ranking.

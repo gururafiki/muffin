@@ -132,10 +132,16 @@ Updated 2026-08-11. Numbers are measured against production, not estimated.
 | equities with a sector | ~35 | 6,687 | **10,878 of 12,348 (88%)** |
 | equities with an industry | 0 | 345 | **5,673** |
 | securities with fundamentals | 0 | — | **6,397** |
-| securities with statements | 0 | 12 | **7,039** |
+| securities with statements | 0 | 12 | **~1,544 (12.5%)** |
 | price bars | 0 | ~331,441 | **1,252,553** |
 | exchange directory | none | 2,422 listings / 4 venues | **59,324 listings / 54 venues** |
 | symbol backlog | — | — | **0** (was 8,532 this morning) |
+
+**Careful with the statements figure.** `security_statement_current` returns one row per
+(security, statement, period) — about twelve per security — so a row count reads as roughly 12x the
+coverage. 12,928 rows is ~1,544 securities, not 12,928. I quoted the row count as coverage several
+times on 2026-08-13 before catching it; the honest number comes from the backlog arithmetic:
+12,348 equities − 8,355 pending − 2,449 negative-cached.
 
 **Securities are now TYPED from the filing's `assetCat`** (2026-08-13). Every non-share holding used
 to be `other` — 15,205 of them — so a futures contract and a sovereign bond were the same kind of
