@@ -571,6 +571,16 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   moment the good work finished. Fourth instance of throw-vs-empty in this file — and it cost five
   wrong theories, because `catch (_e)` gave one message to a timeout, a refused connection, a bad
   URL and an empty answer alike. Every backlog catch needs `lastError`.
+- **…and `security-profiles` still had it, which is why the shape is now checked against the
+  SOURCE.** Those two were fixed and this third call site was not: `if (providerFailed ||
+  rows.length === 0)`, behind a comment calling the two "indistinguishable". They never are —
+  `providerFailed` is the flag that distinguishes them, and OpenBB answers 204 when a provider
+  genuinely has nothing. Measured 2026-08-13: `pending_profile` fell 2,665 → 2,437 and FROZE, while
+  `security-industries`, `security-statements` and `security-fundamentals` — same `equity/profile`
+  endpoint, same hour — all reported ok. I spent the afternoon treating it as a rate limit;
+  `refresh_log` had already ruled that out. `logic-check.ts` now fails on any branch ORing a failure
+  flag with an empty result, because a behavioural test cannot reach a decision inlined in a
+  200-line handler and it is the SHAPE that keeps recurring.
 - **OpenBB answers 204 NO CONTENT when the provider has nothing** — a legitimate answer, not a
   fault. Treating it as an error failed whole batches (22 of 24) over a few listings yfinance does
   not carry, losing the symbols alongside them. Strictness belongs at the caller that requires

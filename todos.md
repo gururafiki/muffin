@@ -452,6 +452,15 @@ change, unless noted. Free/paid marked where a provider is involved.
       every security has an industry`. The "stuck" batches had drained. It was also unsafe on its
       own terms, since a progressive rate limit makes "it answered earlier" no evidence it is up now.
 
+- [x] **`security-profiles` could never finish, and it looked like a provider outage.** An empty
+      answer shared a branch with a thrown failure, so a batch the provider ANSWERED nothing for
+      was counted failed and skipped its negative-cache write — returning every run forever — and
+      the "all batches failed" guard then failed the resource at exactly the point where only
+      unanswerable securities remained. `pending_profile` froze at 2,437 while three sibling
+      resources on the same endpoint reported ok. Fifth instance of throw-vs-empty; the first two
+      were fixed and this call site was not, so it is now asserted against the source in
+      `logic-check.ts` rather than left to review.
+
 **OPEN (2026-08-13) — known limits, not bugs**
 - [ ] **`market_cap` is stored in the security's own currency**, so ordering by it mixes ¥, ₩ and $ —
       191 securities exceed "5T" purely for that reason. Correct per security, wrong for ranking.
