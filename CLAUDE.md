@@ -555,6 +555,15 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   while answering others, so `rows.length > 0`, the rule never fires, and the refused ones are
   negative-cached as permanently unanswerable — the same mechanism that once cost 1,369 ordinary
   tickers. The wire text said `YFRateLimitError: Too Many Requests` throughout. Classify on it.
+- **THE BINDING CONSTRAINT IS REQUESTS PER UNIT TIME, so throughput improves only by cutting
+  requests PER SECURITY — never by raising the page size.** The worker budget is not what limits
+  these resources: `security-industries` uses 30 calls of its 90 seconds and `security-profiles` the
+  same, so the pages look like they have room. They do not. Measured 2026-08-13, `security-fundamentals`
+  at 60 calls a run tripped yfinance's limit while industries at 30 only partly did — raising a page
+  raises calls per run and trips it sooner, buying nothing. The one optimisation that IS a win is
+  the opposite shape: `security-statements` fetched one security at a time (3 calls each, 180 per
+  run for 60 securities), and batching it to ten symbols a call made the same 90 requests cover five
+  times the securities. Fewer requests per security, not more requests per run.
 - **Draining faster than the provider allows drains LESS, and corrupts the backlog on the way.**
   Six resources back to back tripped the limit within three cycles. The drain loop now paces 45s
   between resources, 90s between cycles, and backs off 6 minutes on any throttle signature.
