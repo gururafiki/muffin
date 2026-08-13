@@ -141,6 +141,55 @@ Updated 2026-08-11. Numbers are measured against production, not estimated.
 to be `other` — 15,205 of them — so a futures contract and a sovereign bond were the same kind of
 thing. `other` is now 0.
 
+## 2026-08-13 — what changed, and the one thing that went wrong
+
+**Twenty PRs.** The universe work is done; most of the day went on a defect I caused and the guards
+that now make it impossible.
+
+| backlog | morning | evening |
+|---|---|---|
+| yahoo_symbol | 8,532 | **0** |
+| profile | 2,437 | **0** |
+| industry | 7,593 | **0** |
+| fundamentals | 5,250 | ~2,960 |
+| prices | 6,268 | ~4,958 |
+| statements | 8,791 | ~8,715 |
+
+**The defect worth knowing about.** Draining six resources back to back tripped yfinance's rate
+limit. A throttled yfinance answers **200 with no rows** rather than erroring — and every outage
+rule in the pipeline was a *throw* check, so all of them stayed quiet while six marking sites
+recorded **~8,300 securities as permanently unanswerable**: INTC, PEP, XOM, TXN, EA, SCCO, EQH,
+REGN, UPS among them. Nothing errored. `pending_industry` went to 0 and read as *drained*.
+
+A backlog that empties by MARKING looks exactly like one that empties by WORKING. All six sites now
+gate on the endpoint having answered for someone in the run; `market-verify` has a mega-cap canary
+that cannot be decorative (it read 109 of 213 when the incident was live); the warm-up cron is paced;
+and the marks were cleared.
+
+**Three of my own fixes were wrong first, and measurement caught each:**
+
+- a rule that would have re-caused the same incident — disproved by re-running once throttling stopped
+- a source guard that reported "all six sites gated" while three were not (brace-matching counts
+  braces in comments; and the first mutation run used mis-escaped `sed`, so four passes were four
+  no-ops)
+- a production tripwire that passed on the exact data it was written to catch (the incident was a
+  30-minute window inside a day that classified 2,020)
+
+**Also fixed:** the Markets donut was timing out for anon in the deployed app (7s view, 3s anon
+limit) and now answers in 0.46s with real filed weights; search returned bond lines above every real
+bank; a frozen price series was reported as a flat market; 28 securities were named
+`New Issuer: BB Company ID:<n>` and OpenFIGI names them in a response we already make; migrations
+now apply atomically, so a deploy no longer breaks every reader mid-flight.
+
+**One assumption failed and reported itself.** I batched the statements fetch on the reasoning that
+`equity/fundamental/metrics` batches. Those endpoints do not — `symbolsAsked 50, symbolsAnswered 0`
+on the first run, with nothing written and nothing wrongly marked. Reverted. Statements instead got
+an on-demand path so the securities someone opens are not last in a five-week queue.
+
+**What is genuinely left** is drain time on two provider-rate-bound backlogs, and the things that
+need money or a licence: GICS, total return, index membership. Commodity and UIT funds are
+structurally unreachable — they file no N-PORT.
+
 ## Your original asks — status
 
 | # | Ask | State |
