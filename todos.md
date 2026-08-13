@@ -513,6 +513,20 @@ change, unless noted. Free/paid marked where a provider is involved.
       `security-refresh` covers anything a user opens on demand, which is what makes the depth
       tolerable rather than fixed.
 
+- [ ] **muffin-ui's 3 Dependabot alerts are DELIBERATELY not fixed — investigated 2026-08-13.**
+      Left open with a reason, because an unexplained alert invites someone to "fix" it with an
+      override that breaks the build.
+      - `image-size` (2 HIGH, DoS via malformed ICNS/JXL/HEIF) — **no patched version exists**
+        (`first_patched_version: none`). It arrives via `expo → @expo/metro → metro`, i.e. the
+        BUNDLER. Nothing to upgrade to, and nothing to do but wait for metro.
+      - `uuid` (MEDIUM, missing buffer bounds check in v3/v5/v6 when `buf` is supplied) — installed
+        at **7.0.3** via `expo-splash-screen → @expo/config-plugins → xcode@3.0.1`, and patched in
+        **11.1.1**. Forcing four major versions into a package pinned to v7 is a real risk to
+        `expo prebuild` in exchange for a DoS in a tool that only runs at build time.
+      Both are BUILD-TIME dependencies — the bundler and the native-project generator. Neither ships
+      in the web bundle or the app, and exploiting either needs malicious input into our own repo.
+      Revisit when Expo bumps `metro` or `@expo/config-plugins`.
+
 **OPEN (2026-08-13) — known limits, not bugs**
 - [ ] **`market_cap` is stored in the security's own currency**, so ordering by it mixes ¥, ₩ and $ —
       191 securities exceed "5T" purely for that reason. Correct per security, wrong for ranking.
