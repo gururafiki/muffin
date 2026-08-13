@@ -430,6 +430,28 @@ change, unless noted. Free/paid marked where a provider is involved.
       negative cache, i.e. reintroduce the exact failure the flag prevents, as the fix for it.
       There was nowhere to say "run once"; now there is.
 
+- [x] **Search returned eight symbol-less bond rows above every real bank.** The universe comes
+      from fund holdings, so adding AGG/LQD/HYG/TIP/EMB made `market.security` majority BONDS
+      (15,159 vs 12,348 equities) and the app's search had no type filter. Ordering is alphabetical
+      (PostgREST cannot rank), so `AFRICAN DEVELOPMENT BANK` × 8 — no symbol, no price series, no
+      page to open — crowded out the entire first page for "bank". Filtered to `equity`/`etf` at the
+      query, not in `security_current`, which is the security record and is right as it stands.
+      Only fixable once securities carried a real type.
+- [x] **The drain became its own outage.** Running six resources back to back tripped
+      `YFRateLimitError: Too Many Requests` within three cycles. `fetchWithIsolation` decided by
+      TALLY — all-failed means the provider, otherwise the symbols — which is blind to a
+      PROGRESSIVE throttle: yfinance refuses some symbols while answering others, so `rows.length
+      > 0`, the rule never fires, and the refused ones get negative-cached as unanswerable. Exactly
+      the mechanism that cost 1,369 ordinary tickers. Now classified from the wire text, which said
+      so all along. The drain loop paces 45s/resource, 90s/cycle, and backs off 6 min on a throttle.
+- [x] **A wrong theory, recorded because it was nearly shipped.** On the truncated message
+      (`Error getting data for ITGR -> YFR…`, which reads as a symbol failure) I built a rule to
+      blame the symbols whenever the provider had answered earlier in the run — theorising that a
+      draining backlog concentrates unanswerable symbols into uniformly-bad batches. Disproved by
+      measurement: once throttling stopped, `security-industries` reported `remaining: 0, note:
+      every security has an industry`. The "stuck" batches had drained. It was also unsafe on its
+      own terms, since a progressive rate limit makes "it answered earlier" no evidence it is up now.
+
 **OPEN (2026-08-13) — known limits, not bugs**
 - [ ] **`market_cap` is stored in the security's own currency**, so ordering by it mixes ¥, ₩ and $ —
       191 securities exceed "5T" purely for that reason. Correct per security, wrong for ranking.

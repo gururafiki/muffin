@@ -102,6 +102,16 @@ muffin-ui  ──supabase.schema('market').select()──►  PostgREST (supabas
   same edge-runtime image locally). Never reproduced off the node. Batching bounds peak memory to
   one batch and makes any recurrence name the batch. **A bare 502 from an edge function means the
   worker died — look at memory, not at your error handling.**
+  **That rule was only true again from 2026-08-13.** Until then `market-refresh` ALSO answered 502
+  on an ordinary application failure, and the JSON body naming the reason never arrived: something
+  in Cloudflare/Traefik/Kong owns that status and substitutes its own 16-byte `error code: 502`.
+  Measured — a 400 from the same function arrives with its full 482-byte body, so it is the 502
+  specifically that is synthesized. It cost four probes on a `security-profiles` failure whose
+  cause (`profile provider returned nothing for all 30 batches`, i.e. the rate limit) was sitting
+  in `refresh_log` the whole time, and it had been making the warm-up log
+  `::warning::… failed (HTTP 502): error code: 502` — a monitoring line with no content. An
+  application failure is now **200 with `"ok": false`**: the invocation succeeded and is reporting
+  a failed outcome. Keep 5xx for genuine crashes, or the bare-502 rule stops meaning anything.
 - **`market.prices` is deliberately a ~400-day window**, daily for the recent 90 days and weekly
   before that (~107 bars/symbol). It exists because the
   performance refresh already downloads full daily history and discards it. The chart offers
@@ -539,6 +549,21 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   over it (`tests/securities-are-typed-from-the-filing.sql`). Note `data_source` and
   `asset_category` rows are LEARNED by the ingest at runtime, so no migration seeds them and a test
   that needs them must create them itself.
+- **A provider that is REFUSING you says so — read the message, do not infer it from counts.**
+  `fetchWithIsolation` decided by tally: if every symbol in a batch failed alone, blame the
+  provider; otherwise blame the symbols. yfinance throttles PROGRESSIVELY, refusing some symbols
+  while answering others, so `rows.length > 0`, the rule never fires, and the refused ones are
+  negative-cached as permanently unanswerable — the same mechanism that once cost 1,369 ordinary
+  tickers. The wire text said `YFRateLimitError: Too Many Requests` throughout. Classify on it.
+- **Draining faster than the provider allows drains LESS, and corrupts the backlog on the way.**
+  Six resources back to back tripped the limit within three cycles. The drain loop now paces 45s
+  between resources, 90s between cycles, and backs off 6 minutes on any throttle signature.
+- **A truncated error message is not evidence — get the whole thing.** `Error getting data for
+  ITGR -> YFR…` reads as an ordinary symbol failure; the full text was `YFRateLimitError`. On that
+  misreading I designed a rule to blame the symbols whenever the provider had answered earlier in
+  the run, which would have negative-cached innocent securities in exactly the 1,369 situation.
+  Disproved by measurement: once the throttling stopped, `security-industries` reported
+  `remaining: 0, note: every security has an industry` — the "permanently stuck" batches had drained.
 - **An EMPTY answer counted as a FAILURE will kill a backlog the moment its answerable work is
   done.** `security-fundamentals` and `security-industries` both died this way: an empty batch
   incremented `batchesFailed` instead of negative-caching, so those securities came back every run
