@@ -555,6 +555,17 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   while answering others, so `rows.length > 0`, the rule never fires, and the refused ones are
   negative-cached as permanently unanswerable — the same mechanism that once cost 1,369 ordinary
   tickers. The wire text said `YFRateLimitError: Too Many Requests` throughout. Classify on it.
+- **ANON HAS A 3-SECOND STATEMENT TIMEOUT AND `service_role` DOES NOT, so a slow view fails for the
+  APP while looking fine to you.** `fund_sector_weight` answered `service_role` in 7.2s and gave anon
+  `57014 canceling statement due to statement timeout` — and `muffin-ui` reads it with the anon key,
+  so the Markets donut had been failing in the deployed app while every service-role probe said it
+  was healthy. It was correct at 10,060 securities and too slow at 27,627. **Time a view as ANON
+  before believing it works**, and treat a role difference as a timeout question before reaching for
+  RLS — I asserted RLS first here and it was wrong. The fix was not an index: restricting it to
+  equity holdings (a *sector* weight over bonds is meaningless) and to level-1 taxonomy nodes cut it
+  to 0.46s, and both halves were correctness fixes independently. The level filter also closed a
+  latent wrong-answer bug — with 5,673 industries classified, `distinct on … order by ds.priority`
+  could return an INDUSTRY as a security's sector.
 - **THE BINDING CONSTRAINT IS REQUESTS PER UNIT TIME, so throughput improves only by cutting
   requests PER SECURITY — never by raising the page size.** The worker budget is not what limits
   these resources: `security-industries` uses 30 calls of its 90 seconds and `security-profiles` the
