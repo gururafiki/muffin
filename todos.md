@@ -496,6 +496,14 @@ change, unless noted. Free/paid marked where a provider is involved.
       sites gated". The first mutation run also used `sed` with mis-escaped `&&` and changed
       nothing, so four passes meant four no-ops. Now a named list of the six exact gate expressions.
 
+- [ ] **A few bond-fund holdings are typed `equity`.** After the equity-only donut fix, `AGG` still
+      returns one slice — `unclassified` at 100% — which can only happen if some of its holdings are
+      typed `equity` and have no sector. Migration 49 types from the filing's `assetCat` and falls
+      back to `units` when that is absent, so these are likely holdings filed without a category.
+      Cosmetic today (nothing renders a bond fund's donut; the app uses IVV), but it means
+      `security_type_code` is not fully trustworthy for the minority of holdings whose filing omits
+      `assetCat`. Worth a count before deciding whether it needs a second signal.
+
 **OPEN (2026-08-13) — known limits, not bugs**
 - [ ] **`market_cap` is stored in the security's own currency**, so ordering by it mixes ¥, ₩ and $ —
       191 securities exceed "5T" purely for that reason. Correct per security, wrong for ranking.
