@@ -124,17 +124,22 @@ Updated 2026-08-11. Numbers are measured against production, not estimated.
 
 ## Where we are
 
-| | at the start | now |
-|---|---|---|
-| securities | 35 hand-authored | **10,060** |
-| Taiwan securities with a symbol | 0 (silently dropped) | **525 of 534** |
-| holdings | — | **17,474** from 66 tracked funds |
-| securities with a sector | ~35 | **6,687** |
-| per-security return rows | 405 | **13,431** |
-| symbols the price provider accepts | 35 | **7,996** (+4,268 display tickers) |
-| countries offered in the app | 19 | **46** |
-| tier (developed/emerging/frontier) growth | none | live, 153 rows |
-| exchange directory | none | 2,422 listings, 4 of 38 venues |
+| | at the start | 2026-08-11 | **2026-08-13** |
+|---|---|---|---|
+| securities | 35 hand-authored | 10,060 | **27,627** (12,348 equity, 15,159 bond, 44 derivative, 2 cash) |
+| tracked funds | — | 66 | **74** |
+| holdings | — | 17,474 | **39,886** |
+| equities with a sector | ~35 | 6,687 | **10,878 of 12,348 (88%)** |
+| equities with an industry | 0 | 345 | **5,673** |
+| securities with fundamentals | 0 | — | **6,397** |
+| securities with statements | 0 | 12 | **7,039** |
+| price bars | 0 | ~331,441 | **1,252,553** |
+| exchange directory | none | 2,422 listings / 4 venues | **59,324 listings / 54 venues** |
+| symbol backlog | — | — | **0** (was 8,532 this morning) |
+
+**Securities are now TYPED from the filing's `assetCat`** (2026-08-13). Every non-share holding used
+to be `other` — 15,205 of them — so a futures contract and a sovereign bond were the same kind of
+thing. `other` is now 0.
 
 ## Your original asks — status
 
@@ -196,20 +201,35 @@ statement rather than compute over 50 line items across 10,000 companies.
 
 ## What is left for a *complete* universe
 
-**1. Finish the exchange directory — 24 of 38 venues, ~20k listings.** One venue per run; it is in
-the warm-up rotation, so the rest arrive on their own. The US alone is 20,112 listings.
+Measured 2026-08-13, not estimated.
 
-**2. Sector coverage: 7,838 of 10,060.** The rest are securities yfinance has no profile for.
+**1. The backlogs, which are provider-limited rather than code-limited.**
 
-**3. Market cap and fundamentals.** Blocked, not deferred: FMP's free tier gates **per symbol**
-(AAPL 200, BHP/SAP/NEE/PLD 402). This is why the sector page ranks by fund weight — a fact from a
-filing rather than an estimate.
+| backlog | outstanding | moving? |
+|---|---|---|
+| statements | 8,851 | throttle-bound |
+| prices | 6,165 | slowly |
+| fundamentals | 5,250 | throttle-bound |
+| industry | 1,722 | yes |
+| profile | 205 | nearly done |
+| yahoo_symbol | 23 | nearly done |
 
-**4. Total return, corporate actions, index membership, GICS proper.** All need a paid or licensed
-source. Everything today is *price* return, which understates high-yield markets.
+yfinance rate-limits us, and it signals that by answering **200 with no rows** rather than erroring
+— which is what let one afternoon's over-eager drain record ~8,300 securities as permanently
+unanswerable before the gates landed. Fundamentals and statements drain over days via the paced
+cron, not in a session.
 
-**5. Non-US UCITS funds are structurally impossible** — they file no N-PORT. Coverage of *funds*
-grows only by adding US-registered ones.
+**2. Market cap and fundamentals are NOT blocked** — the note above this one saying FMP gates per
+symbol is still true but no longer relevant, and there is now a second reason: **openbb's fmp
+provider calls the v3 API, which returns `403 Legacy Endpoint` for everyone without a pre-August-2025
+subscription — AAPL included.** Keyless yfinance serves `equity/fundamental/metrics`, and 6,397
+securities already have fundamentals from it.
+
+**3. Total return, corporate actions, index membership, GICS proper.** Still need a paid or licensed
+source. Everything today is *price* return.
+
+**4. Non-US UCITS funds remain structurally impossible** — they file no N-PORT. **Commodity funds
+too**: SLV is a trust, USO and DBC are pools filing 10-K. Neither is a backlog item.
 
 ## What is left for a *fully functional* UI
 
