@@ -342,9 +342,13 @@ change, unless noted. Free/paid marked where a provider is involved.
       `security-prices` stores daily into `security_price`. Both are served through `price_series`,
       which prefers the security series, so this is duplication rather than a defect — but the
       curated resource could be retired for anything that has a `security_id`.
-- [ ] **Constituent % coverage was 34 of 150 sampled (23%)** before today's symbol work. Worth
-      re-measuring now that the primary listing names the security and `performance` has been
-      re-keyed — the earlier number was partly an artefact of asking under the OTC name.
+- [x] **Constituent % coverage re-measured 2026-08-12: 23% → 37%** (56 of the same 150 IT
+      constituents now carry a 1y return, up from 34). The earlier figure WAS partly an artefact of
+      asking under the OTC name, as suspected.
+- [ ] **Price coverage is 13% and drainng** — 331,441 bars ≈ 1,325 securities of 10,060, backlog
+      9,440 → 7,661. A sample of 150 IT constituents showed only 4 with bars, which is consistent
+      with 13% rather than a defect; re-check once the backlog is under ~1,000 before concluding
+      anything about a specific sector.
 - [ ] **More ETFs deliberately NOT added yet** (style/size IWF IWD IWM MDY RSP; thematic SMH ICLN;
       fixed income AGG LQD HYG TIP EMB; commodity DBC USO SLV). Adding a fund is a row in
       `tracked_fund`, but each one adds securities to backlogs that are still ~24,000 deep. Add
