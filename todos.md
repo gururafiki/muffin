@@ -396,16 +396,51 @@ change, unless noted. Free/paid marked where a provider is involved.
       them, so no `*_missing_at` flag was set, so they never entered any backlog. 485 securities,
       including Exxon Mobil. Now first in the queue; already naming Honeywell and several Gulf banks.
 
+- [x] **Every non-share holding was typed `other`** — 15,205 bonds, futures, repos and money-market
+      positions sharing one type, so "E MINI RUSS 1000 VJUN26" (a futures contract) sat beside
+      "Saudi Government International Bonds" as the same kind of thing. `ingest.ts` typed from
+      N-PORT's `units` alone (`NS` → equity, everything else → other) and a comment asserted that
+      reading `assetCat` "would be a fiction". It is not: `assetCat` is a REQUIRED N-PORT field with
+      a closed vocabulary, was already captured on `fund_holding.asset_category_code`, and
+      `market.security_type` already carried bond/cash/derivative. Both vocabularies existed; only
+      the ingest was not using them. Fixed at ingest + backfilled (migration 49). Deployed
+      2026-08-13: **`other` 15,205 → 0** (15,159 bond, 44 derivative, 2 cash), equity untouched.
+      The backfill only widens from `other` and declines when two funds disagree — both guards
+      mutation-tested, against production-shaped rows rather than an empty database (which is how
+      migration 38 broke a deploy: its `update` matched nothing there, so its guards went
+      unexercised).
+- [x] **`market-verify` floored the TOTAL, which is no longer a proxy for the universe.** Bonds now
+      outnumber equities (15,159 vs 12,348) while every backlog and serving view filters
+      `security_type_code = 'equity'` — so a bug that retyped equities would empty the app and leave
+      check 1 green. Added an explicit equity floor.
+- [x] **FIFTH `*_missing_at` defect: a corrected symbol never cleared `prices_missing_at`.** The
+      resolver clears negative caches because a flag recording "we asked and got nothing" is not
+      evidence once the name we asked under was wrong — but it cleared a hand-written list of five
+      columns, and `prices_missing_at` (migration 42) arrived later. Measured: **4,801 of 12,348
+      equities** locked out of `pending_prices` after their symbol was fixed, with no error and
+      `ok: true` throughout. Adding a sixth line would leave the seventh resource to fail
+      identically, so the list moved into `market.clear_symbol_caches` next to the columns, and
+      `market.symbol_cache_classification` states for all nine which a new symbol invalidates and
+      why (figi/local_symbol are keyed on the ISIN, not the symbol; clearing them would re-ask a
+      rate-limited provider for an answer we hold). `tests/negative-caches-are-classified.sql` now
+      fails CI when a `%_missing_at` column is added that nobody classified.
+- [x] **`market.one_shot` — data repairs in a migration set that re-runs in full.** Re-applying
+      every migration on every deploy is what makes the schema self-healing, but re-applying a data
+      REPAIR is different: clearing `prices_missing_at` each deploy would permanently defeat the
+      negative cache, i.e. reintroduce the exact failure the flag prevents, as the fix for it.
+      There was nowhere to say "run once"; now there is.
+
 **OPEN (2026-08-13) — known limits, not bugs**
 - [ ] **`market_cap` is stored in the security's own currency**, so ordering by it mixes ¥, ₩ and $ —
       191 securities exceed "5T" purely for that reason. Correct per security, wrong for ranking.
       Needs FX rates, which no keyless provider here supplies.
 - [ ] **Commodity and UIT funds cannot be ingested from N-PORT at all** (SLV, USO, DBC, MDY). A
       different filing type or provider would be required; not a backlog item.
-- [ ] **~1,858 securities cannot get fundamentals** because their symbols are Bloomberg spellings
-      (`QQ/.L`, `SCC/F.BK`, `HEI/A`). The ISIN resolver is the upstream fix and is rate-limited at 60
-      per run, so this drains slowly. A batch where EVERY symbol is bad is indistinguishable from an
-      outage, so the resource correctly marks nothing and waits.
+- [ ] **~1,900 securities cannot get fundamentals** because their symbols are Bloomberg spellings
+      (`QQ/.L`, `SCC/F.BK`, `HEI/A`). The ISIN resolver is the upstream fix. It now does **300 per
+      run** (was 60) and is draining: 8,532 → ~3,100 on 2026-08-13, ~50% resolving and the rest
+      correctly negative-cached as having no Yahoo line. A batch where EVERY symbol is bad is
+      indistinguishable from an outage, so the resource marks nothing and waits.
 
 **DONE (2026-08-12) — the reference-model rebuild.** Alex asked what should be captured in the
 universe rather than derived at runtime. Identifiers were already a real catalog (9,865 ISINs,

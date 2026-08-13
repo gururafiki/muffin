@@ -509,6 +509,36 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   can never have X**, and they crowd out the ones that would resolve. Four columns exist for this
   (`figi_missing_at`, `profile_missing_at`, `local_symbol_missing_at`, `performance_missing_at`)
   because it was rediscovered four times. Every new backlog resource needs one.
+- **…and a CORRECTED SYMBOL must clear every symbol-keyed one, which is now enforced rather than
+  remembered.** Those flags record "we asked and got nothing" — but we asked under the wrong name,
+  so leaving them set fixes the spelling and still excludes the security for 30 days.
+  `security-yahoo-symbols` knew this and cleared a hand-written list of five columns;
+  `prices_missing_at` arrived later (migration 42) and never joined it, locking **4,801 of 12,348
+  equities** out of `pending_prices` with no error and `ok: true` throughout. Fifth instance. The
+  list now lives in `market.clear_symbol_caches` next to the columns, `market.symbol_cache_
+  classification` says which of the nine a new symbol invalidates and why, and
+  `tests/negative-caches-are-classified.sql` fails CI on a `%_missing_at` column nobody classified.
+  Do **not** "clear everything matching `%_missing_at`": `figi_missing_at` and
+  `local_symbol_missing_at` are keyed on the ISIN, so a new symbol says nothing about them and
+  clearing them re-asks a rate-limited provider for an answer already held.
+- **A DATA REPAIR inside this migration set runs on every deploy — use `market.one_shot`.** Schema
+  statements are idempotent by construction; a repair is not. Clearing `prices_missing_at` on every
+  deploy would permanently defeat the negative cache — reintroducing the exact failure the flag
+  prevents, as the fix for it.
+- **N-PORT's `assetCat` types a security, and reading it is reading the filing, not guessing.**
+  `ingest.ts` typed from `units` alone (`NS` → equity, everything else → `other`) behind a comment
+  claiming `assetCat` "would be a fiction". It is a REQUIRED field with a closed vocabulary
+  (`EC EP DBT ABS-MBS ABS-O LON DE DFE STIV RA`), it was already stored on
+  `fund_holding.asset_category_code`, and `market.security_type` already had bond/cash/derivative —
+  both vocabularies existed and only the ingest ignored them. 15,205 securities shared one type, so
+  a futures contract and a sovereign bond were indistinguishable. Fixed at ingest + migration 49;
+  `other` went 15,205 → 0.
+- **Applying migrations to an EMPTY database proves nothing about a BACKFILL.** Its `update` matches
+  zero rows there, so every guard inside it goes unexercised — which is exactly how migration 38
+  reached production and broke the deploy. Seed the production shape and `\i` the real migration
+  over it (`tests/securities-are-typed-from-the-filing.sql`). Note `data_source` and
+  `asset_category` rows are LEARNED by the ingest at runtime, so no migration seeds them and a test
+  that needs them must create them itself.
 - **An EMPTY answer counted as a FAILURE will kill a backlog the moment its answerable work is
   done.** `security-fundamentals` and `security-industries` both died this way: an empty batch
   incremented `batchesFailed` instead of negative-caching, so those securities came back every run
