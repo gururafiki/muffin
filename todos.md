@@ -269,11 +269,25 @@ The universe now comes from SEC N-PORT fund holdings: **38 funds → 9,786 secur
 change, unless noted. Free/paid marked where a provider is involved.
 
 **Set this up (free, 2 minutes, big win)**
-- [ ] **`OPENFIGI_API_KEY`** — FREE, instant, no approval: https://www.openfigi.com/api/register.
-      Ticker resolution (ISIN → symbol) is the one thing gating a complete sector page.
-      Anonymous is 25 req/min × 10 ISINs, so it grinds through ~120 securities per run;
-      a key makes it 250 × 100 and clears the whole backlog in a single pass. Plumbed
-      already (`openfigi_api_key` in secrets.yaml → `OPENFIGI_API_KEY`); it just needs a value.
+- [x] **`OPENFIGI_API_KEY` — SET SINCE 2026-08-10 AND WORKING.** This entry said "it just needs a
+      value" long after the value was there, and I relayed it to Alex as an outstanding action.
+      Verified 2026-08-13 by running the resource: `resolved: 2279, requestsUsed: 24` — about 95
+      ISINs per request, which is the KEYED rate (anonymous is 10, and would have needed ~228
+      requests). `remaining: 0` in a single pass, exactly as the keyed limit promises.
+      **Check a secret by exercising it, not by reading a note about it.**
+
+**Provider keys: what is actually usable (measured 2026-08-13)**
+- [ ] **FMP is DEAD for this stack, and no key fixes it.** OpenBB's fmp provider calls the **v3**
+      API, which now answers `403 Legacy Endpoint: only available for legacy users who have valid
+      subscriptions prior August 31, 2025` — for AAPL as readily as for anything else, so it is not
+      the per-symbol gating recorded previously. FMP's current `stable` API does work
+      (`/stable/key-metrics?symbol=AAPL` → 200), but **SAP and BHP still 402 Premium** there, so the
+      original reason fundamentals was reverted holds on the new API too. Nothing in the pipeline
+      asks for `provider=fmp`, so there is no breakage to fix — but do not expect an FMP key to
+      unblock anything without an openbb upgrade AND a paid plan.
+- [ ] **Alpha Vantage** is wired and keyed, but 25 calls/day, US listings only — a per-security
+      lookup for a page someone opens, never a universe-wide refresh.
+- [x] FRED, Tiingo, Biztoc keys are set. Unused by the market pipeline.
 
 **Classifications not pulled**
 - [ ] **GICS proper** — PAID, needs a licence. yfinance/finviz taxonomies are the proxy, which
