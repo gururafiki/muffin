@@ -603,6 +603,19 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   moment the good work finished. Fourth instance of throw-vs-empty in this file — and it cost five
   wrong theories, because `catch (_e)` gave one message to a timeout, a refused connection, a bad
   URL and an empty answer alike. Every backlog catch needs `lastError`.
+- **THE FIX FOR THAT HAS ITS OWN VERSION OF IT: `written > 0` KILLS A BACKLOG THE SAME WAY.** The
+  gate added to stop a throttled 200-with-no-rows marking a whole page — proof the endpoint produced
+  something for SOMEONE in the run — is correct and, once every security left is one the provider
+  does not carry, can never fire. `security-prices` reached exactly that state: measured 2026-08-14,
+  `written: 0, emptySeries: 300, batchesFailed: 0, remaining: 393`, identical run after run, 301
+  never priced at all. Confirmed rather than assumed — `security-refresh` at `ICT.PS` and `FAB.AE`
+  returns `returns: 0, "not covered"`, the Philippines and the UAE being outside keyless yfinance.
+  Nothing is wrongly marked and no data is wrong; it is pure waste against a rate-limited provider,
+  eight times a day, forever. **A run-wide tally can only ever be a floor on the provider's health,
+  never evidence about a symbol** — so marking takes per-symbol ISOLATION (as
+  `security-performance` now does), bounded by the deadline so a throttled run marks nothing. And
+  **isolation must KEEP what it recovers**: a batch is often empty because ONE member is bad, and
+  discarding the others' bars turns the fix into a slower version of the bug.
 - **…and `security-profiles` still had it, which is why the shape is now checked against the
   SOURCE.** Those two were fixed and this third call site was not: `if (providerFailed ||
   rows.length === 0)`, behind a comment calling the two "indistinguishable". They never are —
