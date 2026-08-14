@@ -527,6 +527,15 @@ landed.
 about. One `security-statements` run after the repair: `written: 408, failed: 0, symbolsAnswered
 34/60`. One `security-profiles` run: `homed: 276, noCountryMarked: 31, remaining: 2`.
 
+**And the decisive proof, measured a few hours later.** The 2,546 securities that re-entered
+`pending_performance` when migration 55 cleared their marks had drained to **3**, while
+`performance_missing_at` rose only 497 → 517. Symbols carrying performance went **9,268 → 11,499**.
+So ~2,231 of the cleared securities got real data and ~20 were honestly re-marked: they drained by
+FETCHING, not by being recorded unanswerable a second time. That is what makes the 2,548 marks
+demonstrably false rather than a judgement call — and it is the comparison to run whenever a
+negative cache is cleared, because a backlog that empties by marking looks identical to one that
+empties by working.
+
 **What the unresolved-name report bought:** it named Macau, Monaco, Guernsey, Jersey, Isle of Man
 and Gibraltar on its first run — six jurisdictions missing from `market.countries` entirely, which
 a guessed alias table would never have found. That is the argument for reporting what you could not
