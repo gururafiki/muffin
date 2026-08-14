@@ -737,6 +737,25 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   nothing, so four "ok"s meant four no-ops. Replaced by a named list of the six exact gate
   expressions: brittle to refactoring on purpose, since rewording fails loudly while DELETING can
   never pass silently.
+- **A RESOURCE THAT IS NEVER INVOKED CANNOT FAIL, AND AN UNREAD VIEW CANNOT BE WRONG.** Two
+  absences found 2026-08-14, both invisible to every count in the system. `exchange-listings` — the
+  ONLY resource that grows the universe beyond what the tracked funds hold — was written, deployed,
+  reachable and **absent from the cron**, so it ran when a human remembered: 16 venues had never
+  been enumerated (Australia, Japan, China, Indonesia). The guard asked "does everything the cron
+  calls exist?", which cannot see the reverse; the new one checks that every backlog resource is
+  actually SCHEDULED, with on-demand ones named explicitly. It immediately caught a second defect in
+  the cron PARSER — the list's last entry ends with `)` not `\`, so `derive-classifications` had
+  never been verified. Separately, `untracked_listing` excluded only on a `figi` identifier that
+  **547 of 27,628 securities have**, so it called 9,976 tracked companies untracked — Samsung
+  Electronics included — and nothing noticed for weeks because nothing read it. **When a feature
+  finally reads a view, re-measure what the view claims.**
+- **MEASURE AN IDENTIFIER BEFORE KEYING ON IT — the two obvious ones here are both something else.**
+  In `exchange_listing`, `country_iso2` is the **VENUE's** country, not the company's (TOYOTA BOSHOKU
+  is JP/JP, GR/DE, JT/JP, US/US), and `composite_figi` is per **country of listing**, not per company
+  (`BBG000BBRS83` for the two Japanese venues, `BBG000BS1B63` for Frankfurt, `BBG000C0L6P1` for the
+  US line). A "is this the local line" test written on `country_iso2` is **true for every row while
+  reading as logic** — which is worse than no test. Dedupe listings by NAME and prefer the
+  suffix-bearing local symbol over a bare US OTC one.
 - **A NEW COLUMN FILLED BY AN EXISTING RESOURCE NEEDS ITS BACKLOG WIDENED IN THE SAME CHANGE, OR IT
   IS INERT.** Migration 56 added `provider_country_iso2`, the resource wrote it correctly, the
   typecheck passed, three migration passes passed — and production sat at **0 rows populated**.

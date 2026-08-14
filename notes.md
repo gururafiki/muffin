@@ -538,14 +538,69 @@ Retail under Jersey, Sirius Real Estate under Guernsey, Scorpio Tankers under Mo
 offshore filing (KY/BM/VG/MH), and 12,333 of 12,348 equities (99.9%) now have a country.** The 16
 still marked are securities whose profile carries no country at all — correctly cached, not stuck.
 
+## The universe: what the sweep turned out to be doing
+
+Picked up after the above, on the ask to capture the whole stock market.
+
+**`exchange-listings` was never on the cron.** It is the ONLY resource that grows the universe
+beyond what the tracked funds happen to hold, and it was written, deployed, reachable and absent
+from the schedule — so it ran when a human remembered. Last run 08-11, three days earlier, with
+**16 venues never enumerated at all**: Australia, Japan, China, Indonesia, Sweden, Greece, Peru.
+Nothing reported it, because **a resource that is never invoked cannot fail** — every backlog it
+feeds was drained and every count was plausible. Same shape as the inert column in migration 56:
+the failure is an ABSENCE, and absences do not raise.
+
+The existing guard asked "does everything the cron calls exist?", which cannot see a resource that
+exists and is never called. The new one asks the other direction. It immediately found a second
+defect — in the cron PARSER: the last entry of the list ends with `)` rather than `\`, so the regex
+had been silently dropping `derive-classifications`, which the original check had therefore never
+verified. 17 names became 18.
+
+**Then driving the sweep by hand found two more, both live:**
+
+- **A 429 broke out of `listExchange` silently.** The resource returned `written: 0, pages: 0,
+  complete: false` with `ok: true` — byte-identical to a venue with nothing left to add. A refusal
+  read as completion. Now reported as `throttled`, and `complete` excludes it.
+- **`listings: written` was written unconditionally**, so that refused run overwrote Japan's
+  recorded 1,800 with 0. The rows were never touched — `exchange_listing` still held all 1,800 —
+  which is exactly why it went unnoticed: every listing was present and only the number above them
+  was wrong.
+
+**`untracked_listing` called 9,976 tracked companies untracked.** It excluded a listing only when a
+`security_identifier` of kind `figi` matched — and **547 of 27,628 securities have one**. So it
+answered "listings whose composite FIGI we have not happened to store", which reads exactly like
+"listings we do not track". Samsung Electronics is tracked as `005930.KS` with ticker `SSNLF` and
+both its directory rows sat in the untracked view. **An unread view cannot be wrong in a way anyone
+notices** — nothing had read it since migration 25, and it surfaced only because search was
+extended to use it.
+
+**Search now reaches the directory** (muffin-ui#84). 63,411 listings were catalogued and invisible
+to the one feature whose job is finding a company. Directory hits are labelled and inert — there is
+no stock page for a security with no price series. Deduped by NAME after measuring that both
+plausible identifiers are wrong: `country_iso2` is the VENUE's country (so a "local line" test on it
+is true for every row while reading as logic — my first version did exactly that), and
+`composite_figi` is per country of listing, not per company.
+
+**promote-by-ticker is verified working** — the last mechanical item from the morning handover.
+`{"resource":"promote-listing","symbol":"BABA","exchange":"US"}` returns `promoted: true`, and
+`security-refresh` then gave BABA $297bn market cap, 7 return periods, fundamentals and 12 statement
+rows.
+
+**`security-statements` marking is CORRECT as written, and the note below saying otherwise was
+wrong.** `STMT_BATCH = 1` — statements are fetched one symbol at a time, so an empty 200 IS
+per-symbol evidence. That is structurally different from `security-performance`, which batched 40
+and therefore had no evidence about an omitted symbol. Nothing to fix.
+
 ## Still open
 
 - `industry_missing_at` (3,479) and `fundamentals_missing_at` (492) were checked for the same
   defect and are **clean** — 1 and 0 contradictions respectively, and 1 of 221 significant holdings.
   Those marks look earned.
-- `security-statements` still marks on an empty per-security answer. The repair cleared the residue
-  and the weight canary will catch a recurrence, but its marking rule was not rewritten the way
-  `security-performance`'s was.
+- ~~`security-statements` still marks on an empty per-security answer.~~ **CHECKED AND WITHDRAWN.**
+  `STMT_BATCH = 1`, so an empty 200 is per-symbol evidence and the rule is right as written — the
+  reason `security-performance` needed rewriting is that it batched 40 and had no evidence about an
+  omitted symbol. Recorded here rather than deleted because "rewrite it like the other one" was a
+  plausible-sounding next step that would have been wasted work.
 - Splits detected, prices never adjusted (now in `todos.md`).
 
 **Deployed and verified for #122:** `one_shot` records `Cleared 2548`; `performance_missing_at`
