@@ -591,8 +591,19 @@ Yahoo search on the ticker it returns.** The two differ and that is the trap —
 OpenFIGI and `.QA` to Yahoo, Kuwait `KK`/`.KW`, Buenos Aires `AR`/`.BA`. A wrong suffix does not
 error; it produces a symbol the provider answers nothing for, which then gets negative-cached.
 
-**Directory growth this session: 59,324 → 82,752 listings** (+23,428), venues never enumerated
-16 → 7.
+**Directory growth this session: 59,324 → 95,926 listings (+62%)**, venues never enumerated 16 → 2
+(only Colombia and Peru left, and the cron now reaches them). `untracked_listing` fell to 81,007
+once it stopped counting 14,784 tracked companies as untracked.
+
+**And a fifth defect, found by reading a resource's own counters:** `security-prices` reported
+`written: 0, emptySeries: 300, batchesFailed: 0, remaining: 393` — identical run after run. The
+`written > 0` gate added that morning to stop a throttled provider marking a whole page is correct
+and, once every security left is one the provider does not carry, **can never fire**. Confirmed
+rather than assumed: `security-refresh` at `ICT.PS` and `FAB.AE` returns `returns: 0, "not covered"`
+— the Philippines and the UAE are outside keyless yfinance. Nothing was wrongly marked and no data
+was wrong; the same 300 symbols were simply re-asked eight times a day for ever. Fixed by per-symbol
+isolation (deployment#131), which **keeps what it recovers** — a batch is often empty because ONE
+member is bad, and discarding the others' bars would make the fix a slower version of the bug.
 
 **promote-by-ticker is verified working** — the last mechanical item from the morning handover.
 `{"resource":"promote-listing","symbol":"BABA","exchange":"US"}` returns `promoted: true`, and
