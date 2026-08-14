@@ -503,8 +503,44 @@ on different things.
 | deployment#122 | performance marking requires per-symbol evidence + retracts; migration 55 repair; flat-return check rewritten; contradicted-mark check added |
 | deployment#123 | `provider_country_iso2` — the operating country, so Alibaba is under China not Cayman |
 | deployment#124 | migration 57 statements repair; weight-based canary |
-| deployment#125 | market cap promoted out of `security_fundamentals.raw` — 66% → ~89% |
+| deployment#125 | market cap promoted out of `security_fundamentals.raw` — 66% → **92.8%** |
 | deployment#126 | the backlog widened so #123's column is actually filled |
+| deployment#127 | six jurisdictions the unresolved-name report named |
+
+## Verified in production, end to end
+
+| | before | after |
+|---|---|---|
+| market cap coverage | 8,163 (66.1%) | **11,454 (92.8%)** |
+| `performance_missing_at` | 3,045 | **500** |
+| `statements_missing_at` | 2,618 | **189** |
+| contradicted performance marks | 2,548 | **0** |
+
+`one_shot` records all four repairs: 2,548 performance marks cleared, 2,445 statement marks
+cleared, 3,290 market caps promoted, and the country marks cleared after the six jurisdictions
+landed.
+
+**Alibaba, the case this started from:** `filed=KY, provider=CN → shows CN (China)`. Alibaba Health
+`filed=BM, provider=HK → shows HK`.
+
+**The backlogs drain by WORKING, not by marking** — which is the distinction the whole day was
+about. One `security-statements` run after the repair: `written: 408, failed: 0, symbolsAnswered
+34/60`. One `security-profiles` run: `homed: 276, noCountryMarked: 31, remaining: 2`.
+
+**What the unresolved-name report bought:** it named Macau, Monaco, Guernsey, Jersey, Isle of Man
+and Gibraltar on its first run — six jurisdictions missing from `market.countries` entirely, which
+a guessed alias table would never have found. That is the argument for reporting what you could not
+resolve rather than pre-filling a mapping from memory.
+
+## Still open
+
+- `industry_missing_at` (3,479) and `fundamentals_missing_at` (492) were checked for the same
+  defect and are **clean** — 1 and 0 contradictions respectively, and 1 of 221 significant holdings.
+  Those marks look earned.
+- `security-statements` still marks on an empty per-security answer. The repair cleared the residue
+  and the weight canary will catch a recurrence, but its marking rule was not rewritten the way
+  `security-performance`'s was.
+- Splits detected, prices never adjusted (now in `todos.md`).
 
 **Deployed and verified for #122:** `one_shot` records `Cleared 2548`; `performance_missing_at`
 3,045 → **497** (exactly the 497 that had no recent bars — the numbers reconcile); the contradicted
