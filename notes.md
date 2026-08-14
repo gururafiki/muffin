@@ -600,6 +600,27 @@ Yahoo search on the ticker it returns.** The two differ and that is the trap —
 OpenFIGI and `.QA` to Yahoo, Kuwait `KK`/`.KW`, Buenos Aires `AR`/`.BA`. A wrong suffix does not
 error; it produces a symbol the provider answers nothing for, which then gets negative-cached.
 
+**The five venues WORKED, and the follow-up I wrote for them did not.** After deployment#130,
+Kuwait went 0 → 37 of 39 symbols, Qatar 0 → 33 of 35, Vietnam 0 → 56 of 57, and the sweep returned
+exactly the totals `/v3/filter` had predicted. I then saw `security-local-symbols` answer
+`remaining: 0` with 57 of 57 Vietnamese equities carrying `figi_missing_at`, concluded the negative
+cache was blocking resolution (the Taiwan pattern), and shipped a clear for it. **Wrong.** The cron
+resolved them twenty minutes later with the marks STILL SET — 38, 33, 57, unchanged. Marks unchanged
+plus symbols resolved is only possible if the marks were never the blocker: `figi_missing_at` gates
+the FIGI lookup, and `pending_local_symbol` — which is what actually assigns `SHIP.KW` — never
+consults it. I read a five-minute timing gap as a permanent exclusion. Corrected in deployment#134;
+the statement stays as a harmless one-off and explicitly not as a template.
+
+**And do not read a high `figi_missing_at` rate as a defect.** It records that OpenFIGI has no US
+line for an ISIN, which is simply true for most local listings: CN 96%, IN 99%, TW 96%, KR 97% of
+equities carry it and nearly all still have a working symbol. That is the expected shape of an
+emerging market. I nearly treated it as a second systemic bug.
+
+**`security-prices` verified after the isolation fix:** backlog **393 → 46**, `prices_missing_at`
+359 → 659 (+300 confirmed unanswerable one at a time), and **32,233 bars written** — recovered from
+batches that had been hiding answerable securities behind one bad member. That resource had written
+zero, run after run, for days.
+
 **Directory growth this session: 59,324 → 95,926 listings (+62%)**, venues never enumerated 16 → 2
 (only Colombia and Peru left, and the cron now reaches them). `untracked_listing` fell to 81,007
 once it stopped counting 14,784 tracked companies as untracked.
