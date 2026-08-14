@@ -530,7 +530,13 @@ about. One `security-statements` run after the repair: `written: 408, failed: 0,
 **What the unresolved-name report bought:** it named Macau, Monaco, Guernsey, Jersey, Isle of Man
 and Gibraltar on its first run — six jurisdictions missing from `market.countries` entirely, which
 a guessed alias table would never have found. That is the argument for reporting what you could not
-resolve rather than pre-filling a mapping from memory.
+resolve rather than pre-filling a mapping from memory. After #127 the report comes back **empty**:
+every provider country name now resolves, and Sands China sits under Macau, B&M European Value
+Retail under Jersey, Sirius Real Estate under Guernsey, Scorpio Tankers under Monaco.
+
+**Final country position: 291 securities carry an operating country, 169 of them relocated off an
+offshore filing (KY/BM/VG/MH), and 12,333 of 12,348 equities (99.9%) now have a country.** The 16
+still marked are securities whose profile carries no country at all — correctly cached, not stuck.
 
 ## Still open
 
