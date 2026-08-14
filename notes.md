@@ -581,6 +581,19 @@ plausible identifiers are wrong: `country_iso2` is the VENUE's country (so a "lo
 is true for every row while reading as logic — my first version did exactly that), and
 `composite_figi` is per country of listing, not per company.
 
+**Four drillable countries had NO VENUE in the sweep at all** — and three already held securities
+whose symbols could therefore never resolve: Kuwait 40, Qatar 35, Vietnam 57, every one of them
+symbol-less. The catalog covers 42 countries and the app offers a page for 45; nothing compared the
+two. Argentina is the case no per-security check can see — a page with nothing behind it looks the
+same as an empty market. Added VN/VM/KK/QD/AR (deployment#130), every code and suffix derived from
+a published source: **exchCode from OpenFIGI `/v3/mapping` on an ISIN we already hold, suffix from
+Yahoo search on the ticker it returns.** The two differ and that is the trap — Doha is `QD` to
+OpenFIGI and `.QA` to Yahoo, Kuwait `KK`/`.KW`, Buenos Aires `AR`/`.BA`. A wrong suffix does not
+error; it produces a symbol the provider answers nothing for, which then gets negative-cached.
+
+**Directory growth this session: 59,324 → 82,752 listings** (+23,428), venues never enumerated
+16 → 7.
+
 **promote-by-ticker is verified working** — the last mechanical item from the morning handover.
 `{"resource":"promote-listing","symbol":"BABA","exchange":"US"}` returns `promoted: true`, and
 `security-refresh` then gave BABA $297bn market cap, 7 return periods, fundamentals and 12 statement
