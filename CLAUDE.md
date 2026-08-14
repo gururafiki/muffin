@@ -459,6 +459,18 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   security can gain a US listing.
 - **A `.limit(n)` above `PGRST_DB_MAX_ROWS` is not an error, just a shorter answer.** The stack sets
   it to 1000, so a request for 4,000 silently got 1,000. Page explicitly when you need more.
+  **Third instance, 2026-08-14: a `market-verify` guard asked for `limit=5000`, got exactly 1000,
+  and would have reported "1000" for ever however bad things got — as a measurement.** Count with
+  `Prefer: count=exact` + `Range: 0-0` and read `content-range`, which returns the true total
+  without fetching rows and works through an `!inner` embed. **Never size a guard by measuring a
+  page whose end you cannot see.**
+- **Two PostgREST traps worth knowing before writing a query against `market`.** An embed can be
+  AMBIGUOUS: `security?select=...,sector_constituents!inner(weight)` fails `PGRST201` because both
+  are reachable through `fund_holding` as a many-to-many, and every disambiguation offered is that
+  fund join rather than the direct `security_id` match — fetch the two sets and intersect instead
+  (`.github/scripts/check_significant_holdings.py`). And **`urllib`'s default User-Agent gets a 403
+  from Cloudflare** on `supabase.<domain>`, which reads exactly like an auth failure and is not;
+  curl works, so set a User-Agent.
 - **A TTL'd resource cannot be a hook for anything else.** Classification lived inside the
   fund-holdings handler, which correctly self-skipped on its 7-day TTL — so production had
   holdings, no sectors, and no way to ask for them short of waiting a week. Anything an operator
@@ -725,6 +737,43 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   nothing, so four "ok"s meant four no-ops. Replaced by a named list of the six exact gate
   expressions: brittle to refactoring on purpose, since rewording fails loudly while DELETING can
   never pass silently.
+- **A TALLY IS NOT EVIDENCE ABOUT A SYMBOL, AND A NEGATIVE CACHE FREEZES THE DATA IT EXCLUDES.**
+  Two defects, one cause, both measured 2026-08-14 and both invisible in every count.
+  `security-performance` marked every symbol absent from a batched response, gated on
+  `fetched.length > 0` — "if any of the 40 answered, blame the rest". yfinance defeats that by
+  throttling **progressively**: it omits symbols from a 200 rather than erroring, so nothing throws
+  and `fetchWithIsolation` — which only engages on a throw — never runs. **2,548 of 3,045
+  securities carried `performance_missing_at` while `security-prices` was writing them daily bars
+  off THE SAME endpoint**; MediaTek, Tapestry, Ferguson, Royalty Pharma, ACS. 2,297 in one pass.
+  The second half is the one to remember: **marking excluded them from the backlog, and the
+  retraction that deletes periods a run stops producing only runs for symbols a run ANSWERS** — so
+  REA.AX, 1803.T and MRP.JO kept serving `1d/1w/1m = 0.00%` written four days earlier while their
+  prices moved daily. The guard that stopped PRODUCING a number could never REMOVE it. Marking now
+  requires the symbol to be asked ALONE, and marking retracts.
+- **A BURST IS A PROVIDER EVENT — compare a rate against its own steady state.** The same incident
+  hit `statements_missing_at`, where no contradiction is available (a security with no statements
+  has none, so holding the data cannot disprove the mark). The RATE settles it: 518 + 725 + 1,032
+  marks in three single hours against **~15/hour** either side. Re-driving ISRG, EXC and MLM
+  returned 12 rows of statements each. Over-clearing such a window is the cheap direction — an
+  honest mark is re-set on the next run, a false one costs 30 days.
+- **MARKET CAP IS THE WRONG LENS ON THIS UNIVERSE, and the mega-cap canary has three blind spots.**
+  It read `statements_missing_at = 0 of 213` on the morning 85 of the 221 securities that are a
+  ≥1.5% sector-fund holding were marked. `country_iso2 = 'US' and market_cap > 50e9` cannot see:
+  securities with **no market cap at all** (ISRG had none; 34% of the universe still does not),
+  securities **below $50bn** (EXC $46bn, MLM $33bn, ESS $19bn), and **every non-US security**
+  (Chubb is Swiss). It is US-only because `market_cap` is denominated in each security's own
+  currency, and that constraint is real. **Fund WEIGHT has neither problem** — a percentage is free
+  of currency, cap and country — so `check_significant_holdings.py` checks by weight instead. Keep
+  both; they fail on different things.
+- **AN EXACTLY-0.00% RETURN IS ARITHMETIC, NOT A DEFECT, ONCE THE UNIVERSE IS BIG.** `market-verify`
+  cried wolf at 12 rows with "a delisted instrument is being priced off its final bars" — for
+  Austrian Post, SpareBank 1 SMN and Bank Rakyat Indonesia, all trading normally. Most quotes sit
+  on a coarse tick grid (Tokyo and Shenzhen in whole units, Seoul in won), so a price returning to
+  exactly its anchor is ordinary: **10 of 18 were a provable exact round-trip**. "Vanishingly
+  unlikely" was true for 35 curated instruments and false for 12,348 equities. The discriminator is
+  **per symbol, not per row** — a frozen series is flat on EVERY window at once (Egypt, Nigeria and
+  Portugal were flat on all nine) and coincidence cannot land on three. Measured: 36 symbols had
+  one fresh zero, 2 had two, none had three.
 - **WHEN NOTHING ANSWERS, BLAME THE PROVIDER, NOT THE UNIVERSE — and do not drain a backlog by
   hammering it.** Isolating bad symbols (above) is right until it is applied to an outage. Draining
   `security-industries` aggressively tripped yfinance's rate limit; every batch then failed; every

@@ -219,6 +219,16 @@ the donut weights and index constituents). Both are tracked above under the mark
     non-US name tested is outside it. A metrics card that appears for Apple and silently vanishes
     for BHP is the kind of half-truth this whole workstream removed, so the code was reverted
     rather than shipped. Needs an FMP upgrade or another fundamentals provider.
+
+    **SUPERSEDED — fundamentals are NOT blocked, and the conclusion above was drawn from the wrong
+    search.** Every finding in it is true and beside the point: I probed the providers we hold
+    KEYS for, rather than the providers that could answer. **Keyless yfinance serves
+    `equity/fundamental/metrics`** for the whole universe, non-US local listings included
+    (`005930.KS`, `7203.T`, `KGH.WA`), with no key and no per-symbol gate. Measured 2026-08-14:
+    **11,395 of 12,348 equities have fundamentals (92%), `pending_fundamentals` = 0.** Twice in
+    two days the answer was already inside a response we were fetching — market cap was the first,
+    the operating country the third. Left here rather than deleted because the FMP measurements
+    are still the reason not to buy an FMP key.
   - [x] **Run/conclusion history for a ticker** — DONE + live 2026-08-09. Reuses the Calls tab's
     `threads.search` under the same query key; runs sit above the launchers. **Limit:** filters
     the 50 most recent threads, because `extract` is a display projection and not a queryable
@@ -292,8 +302,14 @@ change, unless noted. Free/paid marked where a provider is involved.
 **Classifications not pulled**
 - [ ] **GICS proper** — PAID, needs a licence. yfinance/finviz taxonomies are the proxy, which
       is why `provider_sector` sits beside the curated `sector_id`.
-- [ ] **Sub-industry depth** — `taxonomy_node.parent_id` already models sector → industry group
-      → industry → sub-industry; only level 1 is populated.
+- [x] **Sub-industry depth — level 2 IS populated** (corrected 2026-08-14; this entry claimed
+      "only level 1" long after it stopped being true). Measured: **11 level-1 sectors, 151
+      level-2 industries, 7,577 equities carrying one**, from `equity/profile.industry_category`.
+      What remains unpopulated is level **3+**:
+      - [ ] **Industry group / sub-industry (levels 3–4)** — `taxonomy_node.parent_id` models the
+            full GICS-shaped tree and level 3 is empty (measured: 0 nodes). yfinance gives one
+            industry level and no more, so this needs GICS proper or another taxonomy source —
+            it is the same blocker as the entry above, not a separate backlog item.
 - [x] **Style (growth/value/blend) — the fake heuristic is DELETED (2026-08-12, muffin-ui #76).**
       `taxonomy.ts` derived it from the price move (`changePct > 15 ? 'growth'`), which is not what
       growth and value mean, and nothing rendered or filtered on it. Removed rather than sourced:
@@ -533,11 +549,11 @@ change, unless noted. Free/paid marked where a provider is involved.
       Needs FX rates, which no keyless provider here supplies.
 - [ ] **Commodity and UIT funds cannot be ingested from N-PORT at all** (SLV, USO, DBC, MDY). A
       different filing type or provider would be required; not a backlog item.
-- [ ] **~1,900 securities cannot get fundamentals** because their symbols are Bloomberg spellings
-      (`QQ/.L`, `SCC/F.BK`, `HEI/A`). The ISIN resolver is the upstream fix. It now does **300 per
-      run** (was 60) and is draining: 8,532 → ~3,100 on 2026-08-13, ~50% resolving and the rest
-      correctly negative-cached as having no Yahoo line. A batch where EVERY symbol is bad is
-      indistinguishable from an outage, so the resource marks nothing and waits.
+- [x] **~1,900 securities cannot get fundamentals — DRAINED** (corrected 2026-08-14). The symbol
+      backlog that caused it went 8,532 → 0, and with it this one. Measured today:
+      **`pending_fundamentals` = 0, 11,395 of 12,348 equities have fundamentals (92%)**, and 492
+      carry `fundamentals_missing_at` — negative-cached as genuinely unanswerable rather than
+      stuck. The Bloomberg-spelling diagnosis was right and the ISIN resolver was the fix.
 
 **DONE (2026-08-12) — the reference-model rebuild.** Alex asked what should be captured in the
 universe rather than derived at runtime. Identifiers were already a real catalog (9,865 ISINs,
@@ -753,8 +769,23 @@ EXCHANGE layer was not. Six PRs, each verified live:
       and `market-verify.yml` check 7b (production data, service-role key since the `pending_*`
       views are not granted to anon).
 - [ ] **Total return / dividends** — everything is price return, which understates high-yield markets.
-- [ ] **Corporate actions** (splits, symbol changes) — the identifier model tolerates a rename,
-      nothing detects one.
+- [ ] **Corporate actions — splits are DETECTED but stored prices are never ADJUSTED.** Written
+      down properly 2026-08-14; it had only ever been implied by the guards that work around it.
+      `firstComparableIndex` refuses to report a return whose anchor predates a >5x single-bar
+      move, per period, so a split cannot fabricate a +900% — that part works and is measured
+      (largest legitimate one-day move 2.04x, smallest illegitimate 6.0x, nothing between).
+      What does NOT happen is any correction: the stored closes stay unadjusted, so the pre-split
+      history is silently **excluded rather than fixed**, and a chart drawn across the break shows
+      a cliff. Consequences worth stating so nobody rediscovers them:
+      - the 3Y/5Y numbers for a security that split inside the window are simply absent, not wrong
+      - `market.security_price` is a ~400-day window, so a split ages out of it in about 13 months
+        and the problem quietly disappears rather than being resolved
+      - the same guard fires on **redenominations** (Tel Aviv moving quotes from shekels to
+        agorot, 2026-05-18) which are not corporate actions at all and would need different handling
+      The fix needs a split/dividend feed — `equity/fundamental/splits` or similar — and a
+      back-adjustment pass over `security_price`. Neither exists. This is the last piece of
+      "prices are correct" that is still a workaround rather than a fix.
+- [ ] **Symbol changes** — the identifier model tolerates a rename, nothing detects one.
 - [ ] **Index membership** (S&P 500 etc.) — FMP premium; partially substitutable by fund holdings.
 
 **RESOLVED (2026-08-11) — statements rendered in the WRONG CURRENCY on non-US stocks**

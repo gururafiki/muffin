@@ -437,7 +437,97 @@ guard.
 
 ---
 
-# HANDOVER — 2026-08-14
+# HANDOVER — 2026-08-14 (afternoon): what the failing verify check turned out to mean
+
+`market-verify` was RED when this session picked up, with one assertion failing:
+
+> 12 returns are exactly 0.00% over 3m/6m/1y — a delisted instrument is being priced off its final bars
+
+The symptom was real. **Both halves of the diagnosis were wrong**, and pulling on it found two
+separate populations of falsely negative-cached securities that no count in the system could see.
+
+## The flat returns were arithmetic, not a defect
+
+The flagged names were live companies — Austrian Post, SpareBank 1 SMN, Bank Rakyat Indonesia.
+Most quotes sit on a coarse tick grid (Tokyo and Shenzhen in whole units, Seoul in won), so a price
+returning to **exactly** its anchor is ordinary: 10 of 18 were a provable exact round-trip, the
+identical close sitting in the anchor neighbourhood. "A real 0.00% is vanishingly unlikely" was
+written when the universe was 35 curated instruments and is false across 12,348 equities.
+
+The check now keys on the discriminator: **a symbol flat on 3+ FRESH periods**. A frozen series is
+flat on every window at once (Egypt, Nigeria and Portugal were flat on all nine); coincidence
+cannot land on three. Measured: 36 symbols had one fresh zero, 2 had two, none had three.
+
+## Two false-mark populations, same root cause
+
+**`performance_missing_at` — 2,548 of 3,045 marks were false.** Settled by contradiction:
+`security-prices` and `security-performance` call the SAME endpoint, and those securities had daily
+bars from the last five days. MediaTek, Tapestry, Ferguson, Royalty Pharma, Edenred, ACS.
+`security-refresh` against TPR and 2454.TW returned all seven periods, a market cap, fundamentals
+and statements. Cause: marking gated on `fetched.length > 0` — a TALLY. yfinance throttles
+**progressively**, omitting symbols from a 200 rather than erroring, so nothing throws and
+`fetchWithIsolation` (which only engages on a throw) never runs. 2,297 marks in one pass on 08-11.
+
+**`statements_missing_at` — ~2,445 marks from three bursts.** No contradiction is available here (a
+security with no statements has none), so the RATE settles it: 518 + 725 + 1,032 marks in three
+single hours against a ~15/hour steady state. ISRG, EXC and MLM each returned 12 rows of statements
+when re-driven today.
+
+**The part that made both invisible, and the thing most worth carrying forward:** a mark does not
+just stop new data, it **freezes the old data**. Exclusion from the backlog means the refresh never
+revisits the security, and the retraction that deletes periods a run stops producing only runs for
+symbols a run ANSWERS. So REA.AX, 1803.T and MRP.JO were still serving `1d/1w/1m = 0.00%` written on
+08-10, four days after their prices resumed moving daily. **The guard that stopped PRODUCING those
+numbers could never REMOVE them.**
+
+## The canary that was supposed to catch this, and why it did not
+
+`market-verify`'s mega-cap check read `statements_missing_at = 0 of 213` on the same morning 85 of
+the 221 securities that are a ≥1.5% sector-fund holding were marked. Its filter is
+`country_iso2 = 'US' and market_cap > 50e9`, which has three blind spots that this incident walked
+through completely:
+
+- **no market cap at all** — ISRG had none, and 34% of the universe still does not
+- **below $50bn** — EXC $46bn, MLM $33bn, ESS $19bn
+- **not American** — Chubb is Swiss
+
+It is US-only because `market_cap` is denominated in each security's own currency, and that
+constraint is real. **Fund weight has neither problem** — a percentage is free of currency, cap and
+country. `.github/scripts/check_significant_holdings.py` now checks by weight. Keep both: they fail
+on different things.
+
+## Shipped for it
+
+| PR | What |
+|---|---|
+| deployment#122 | performance marking requires per-symbol evidence + retracts; migration 55 repair; flat-return check rewritten; contradicted-mark check added |
+| deployment#123 | `provider_country_iso2` — the operating country, so Alibaba is under China not Cayman |
+| deployment#124 | migration 57 statements repair; weight-based canary |
+
+Every guard proven by mutation, each failing independently: reverting the evidence rule, deleting
+the retraction, widening migration 55's window, removing migration 57's cutoff, and the realistic
+one-shot drift (guard removed **and** ledger insert made conflict-tolerant — the crude version is
+caught by the ledger's own primary key, so it proves nothing).
+
+## Two traps that cost time today
+
+- **The contradicted-mark guard first asked for `limit=5000` and silently got 1000**
+  (`PGRST_DB_MAX_ROWS`). It would have reported "1000" for ever however bad things got — as a
+  measurement. Count with `Prefer: count=exact` + `Range: 0-0`; it works through an `!inner` embed.
+- **`urllib`'s default User-Agent gets a 403 from Cloudflare** on `supabase.<domain>` — reads like
+  an auth failure, is not. curl works.
+
+## Still open from this thread
+
+- **Splits are detected but stored prices are never adjusted.** Now written down properly in
+  `todos.md` rather than implied by the guards that work around it.
+- `security-statements` still marks on an empty per-security answer; the repair clears the residue
+  and the weight canary will catch a recurrence, but the marking rule itself was not changed the way
+  `security-performance`'s was.
+
+---
+
+# HANDOVER — 2026-08-14 (morning)
 
 Written so someone else can pick this up cold. Numbers are measured against production at the time
 of writing, not estimated.
