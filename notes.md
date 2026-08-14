@@ -503,6 +503,35 @@ on different things.
 | deployment#122 | performance marking requires per-symbol evidence + retracts; migration 55 repair; flat-return check rewritten; contradicted-mark check added |
 | deployment#123 | `provider_country_iso2` — the operating country, so Alibaba is under China not Cayman |
 | deployment#124 | migration 57 statements repair; weight-based canary |
+| deployment#125 | market cap promoted out of `security_fundamentals.raw` — 66% → ~89% |
+| deployment#126 | the backlog widened so #123's column is actually filled |
+
+**Deployed and verified for #122:** `one_shot` records `Cleared 2548`; `performance_missing_at`
+3,045 → **497** (exactly the 497 that had no recent bars — the numbers reconcile); the contradicted
+count 2,548 → **0**; `pending_performance` 0 → **2,546**, i.e. those securities are back in the
+refresh cycle rather than excluded for 30 days.
+
+## Two of my own changes were wrong first, and measurement caught both
+
+- **#123 shipped an INERT column.** `provider_country_iso2` was written correctly by the resource,
+  and production sat at 0 rows populated: `security-profiles` is driven by `pending_profile`, which
+  asks for securities with no SECTOR, and that backlog was drained — so the resource answered
+  "every security has a sector" and fetched nothing. Nothing could report it; the resource was
+  *succeeding*. #126 widens the backlog, scoped to the 384 securities no country page can show
+  rather than all 11,395 (re-queueing everything would have spent eighteen runs of the rate limit
+  to change nothing, and starved statements).
+- **A verify guard measured a page instead of counting.** It asked for `limit=5000` and silently got
+  1,000 — `PGRST_DB_MAX_ROWS` — so it would have reported "1000" for ever however bad things got.
+
+## And a fourth instance of the oldest lesson here
+
+`security.market_cap` was at 8,163 of 12,348 (66%) because `equity/profile` carries no cap for most
+non-US listings. **2,871 of the 2,952 missing caps were already in `security_fundamentals.raw`** —
+fetched, stored in jsonb, never promoted to the column the app reads. COSCO Shipping, HEXPOL, Emmi,
+Trina Solar. Coverage → ~89% with no new upstream call. That is four: market cap and the operating
+country both ride on `equity/profile`; the currency and *this* market cap both ride on
+`equity/fundamental/metrics`. **Check what a response CONTAINS before concluding a field needs a
+provider or a paid key.**
 
 Every guard proven by mutation, each failing independently: reverting the evidence rule, deleting
 the retraction, widening migration 55's window, removing migration 57's cutoff, and the realistic

@@ -737,6 +737,26 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   nothing, so four "ok"s meant four no-ops. Replaced by a named list of the six exact gate
   expressions: brittle to refactoring on purpose, since rewording fails loudly while DELETING can
   never pass silently.
+- **A NEW COLUMN FILLED BY AN EXISTING RESOURCE NEEDS ITS BACKLOG WIDENED IN THE SAME CHANGE, OR IT
+  IS INERT.** Migration 56 added `provider_country_iso2`, the resource wrote it correctly, the
+  typecheck passed, three migration passes passed — and production sat at **0 rows populated**.
+  `security-profiles` fills it and is driven by `pending_profile`, which asks for securities with no
+  SECTOR; that backlog was drained, so the resource answered `every security has a sector` and
+  returned success having fetched nothing. True, and useless. **Nothing could report this — the
+  resource was succeeding.** Found by measuring the column after the deploy. The counterpart trap is
+  over-correcting: re-queueing all 11,395 securities to collect one field would have spent eighteen
+  runs of the rate limit to change nothing for securities already on a country page, and starved
+  `security-statements`. Scope a backlog to the population the field actually serves — here 384.
+- **THE ANSWER IS USUALLY ALREADY IN A RESPONSE YOU FETCH — check what it CONTAINS before concluding
+  a field needs a provider or a paid key.** Four times now: market cap and the operating country
+  both ride on `equity/profile`, and the currency and *another* market cap both ride on
+  `equity/fundamental/metrics`. The last one was the starkest — `security.market_cap` sat at 8,163
+  of 12,348 (66%) because `equity/profile` carries no cap for most non-US listings, while **2,871 of
+  the 2,952 missing caps were already in `security_fundamentals.raw.market_cap`**, fetched and
+  written to jsonb and never promoted to the column the app reads. Coverage went to ~89% with no new
+  upstream call. When promoting out of provider jsonb, gate on `jsonb_typeof(...) = 'number'`: a
+  numeric-looking string casts cleanly and writes a wrong type silently, while `"n/a"` raises and
+  **aborts the whole deploy**, since migrations apply `--single-transaction`.
 - **A TALLY IS NOT EVIDENCE ABOUT A SYMBOL, AND A NEGATIVE CACHE FREEZES THE DATA IT EXCLUDES.**
   Two defects, one cause, both measured 2026-08-14 and both invisible in every count.
   `security-performance` marked every symbol absent from a batched response, gated on
