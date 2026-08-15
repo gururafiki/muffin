@@ -841,3 +841,86 @@ genuinely blocked).
 
 Each carries the measurement behind its advice, because the reasons are what stop the next person
 undoing them.
+
+---
+
+# DATA CORRECTNESS AUDIT — 2026-08-15
+
+Coverage says how much data exists; this audits whether the VALUES are right. Two real bugs, and one
+of them I found by making the mistake myself.
+
+## Verified correct
+
+| dimension | method | result |
+|---|---|---|
+| prices | compared against **Yahoo directly**, same dates | GOOG/AAPL/005930.KS/7203.T match to **0.00–0.03%**; STX, ROST <0.5% |
+| market caps | `cap ÷ price` = implied share count | right for all: AAPL 14.7bn, MSFT 7.5bn, NVDA 24.4bn, MediaTek 1.59bn |
+| fundamentals units | range check on 800 securities | **0** outside expected bands — the fraction/percent trap is closed |
+| sector classification | 17 unambiguous companies | **17/17**, incl. GOOG→communication-services, AMT→real-estate |
+| identifiers | placeholder / empty scan | 0 placeholder CUSIPs, 0 placeholder ISINs, 0 empty, across 27,406 |
+| extreme returns | largest 1-day ratio per security | 6 above +1000%, all 1.10–1.42x daily — real runs, not splits |
+| price bars | integrity scan | 0 non-positive, 0 future-dated, across 3.06M |
+| statements | period dates + magnitude vs market cap | none future-dated; Toyota ¥50.7tn, Samsung ₩333.6tn plausible |
+| classification chain | full reconciliation | **0 unexplained** (see below) |
+
+**Samsung's market cap looked wrong and was not.** ₩1,802tn is above the band I expected — but
+`cap ÷ price` gives 6.73bn shares, which is right. The price is ₩268,000 in this data. The
+measurement corrected me, not the reverse; do not "fix" a number because it disagrees with a
+half-remembered figure.
+
+## Bug 1 — statement figures labelled in the wrong currency
+
+**Alibaba's revenue reads $1.02 TRILLION**, which would make it larger than Walmart. The figure is
+1,023,670,000,000 **CNY** (~$141bn). `security_statement.currency` is null on all 83,211 rows, so the
+view falls back to `security.currency_code` — the QUOTE currency. BABA genuinely trades in USD;
+its accounts are not in USD. **565 non-US companies are quoted in USD, 376 of them with statements.**
+Xiaomi (CNY) and Itaú (BRL) are the same shape. Correct for every LOCAL listing (7203.T JPY,
+005930.KS KRW, SAP.DE EUR).
+
+**No source here can supply the reporting currency, and I checked five before concluding it:** the
+statement endpoints carry none; `equity/fundamental/metrics` and Yahoo chart meta both return the
+quote currency; `quoteSummary.financialCurrency` answers `Invalid Crumb`; a country→currency guess is
+wrong (VALE and NU are Brazilian and report in USD); and **deriving it from `enterprise_to_revenue`
+was tested and FAILS** — Yahoo computes that ratio inside the reporting currency, so BABA reads 1.00,
+and it false-positives on VALE (0.18) and Samsung (0.69).
+
+So the label is WITHHELD rather than invented (deployment#135 + muffin-ui#85) — `money.ts`'s own rule
+applied to the case that still defaulted. A number with no unit is worse than one with the right unit
+and far better than one with the wrong unit.
+
+## Bug 2 — found by making the mistake myself
+
+An audit query paged `security_current` with `limit`/`offset` and **no `order`**, and reported 1,935
+company names on multiple securities with repeated ISINs — which would mean a broken identity model.
+Re-run with `order=security_id`: **12,000 rows, 12,000 distinct ids, ZERO repeated ISINs**, and 181
+repeated names that are all genuine share classes (PETR3/PETR4 local, PBR/PBR-A ADRs, four distinct
+ISINs). The data was right; the query was not.
+
+**Two resources had the same shape.** `security-local-symbols` (3 pages) and `security-tickers`
+(4 pages) both ordered by `best_weight` alone — which is **0 for every security no tracked fund
+holds**, i.e. most of the backlog. Postgres gives no stable order among ties, so successive `range()`
+calls can return one row twice and another never. Re-processing is harmless; the SKIPPED rows sit at
+a page boundary the resource never reaches, and the symptom is a backlog that stops draining while
+every run reports success. Both now carry `security_id` as a unique tiebreak (deployment#136), and
+the check counts `range()` reads against tiebreaks so a new paged read cannot be added without one.
+
+## The classification chain reconciles exactly
+
+`pending_industry` is 0 while industry coverage is 62.4%, which is the shape of a backlog that thinks
+it is finished. It is not one — the accounting closes with **0 unexplained**:
+
+    7,700  have an industry
+    3,479  industry_missing_at   (profile answered, carried no industry_category)
+      837  profile_missing_at    (provider has no profile at all)
+      331  no symbol             (cannot be asked about)
+    ─────
+   12,347  of 12,349 equities
+
+Industry at 62.4% is genuinely provider-limited. `pending_industry` requires a level-1 sector, so the
+1,168 sector-less equities can never enter it — and every one of them is accounted for upstream.
+
+## One thing left unexplained
+
+NESN.SW and SAP.DE drift ~1% from Yahoo's closes over 25 days, where GOOG/AAPL/Samsung/Toyota match
+to 0.03%. Most likely dividend-adjustment differences between the two feeds. Not investigated
+further; recorded so it is not rediscovered as new.
