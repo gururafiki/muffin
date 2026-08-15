@@ -297,6 +297,17 @@ change, unless noted. Free/paid marked where a provider is involved.
       unblock anything without an openbb upgrade AND a paid plan.
 - [ ] **Alpha Vantage** is wired and keyed, but 25 calls/day, US listings only — a per-security
       lookup for a page someone opens, never a universe-wide refresh.
+- [x] **FMP re-tested with the live key, 2026-08-15 — DO NOT BUY IT for this.** Two separate walls:
+      - **v3 is dead**: `403 Legacy Endpoint` for anyone without a pre-August-2025 subscription.
+        openbb's fmp provider calls v3, so an FMP key cannot reach this pipeline through openbb at
+        all, paid or not.
+      - **`stable` works but gates PER SYMBOL, harder than recorded.** `stable/splits?symbol=AAPL`
+        returns real data (4-for-1 on 2020-08-31); `7203.T`, `SAP.DE`, `005930.KS`, `NESN.SW`,
+        `BHP.AX` — and **`ROST` and `TPR`, ordinary US large caps** — all return
+        `402 Premium Query Parameter`. The free tier is a short allowlist, not "US only".
+      So FMP would need BOTH a paid plan AND a direct client bypassing openbb, to buy something
+      Tiingo already gives for the US universe. Tiingo is the right choice; this is recorded so the
+      option is not re-explored.
 - [x] FRED and Biztoc keys are set. Unused by the market pipeline.
 - [x] **Tiingo is now USED** (2026-08-15, deployment#139) — `security-corporate-actions` reads its
       daily EOD for `splitFactor` and `divCash`. The key had been sitting in GitHub secrets since
