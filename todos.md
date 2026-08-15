@@ -297,7 +297,10 @@ change, unless noted. Free/paid marked where a provider is involved.
       unblock anything without an openbb upgrade AND a paid plan.
 - [ ] **Alpha Vantage** is wired and keyed, but 25 calls/day, US listings only — a per-security
       lookup for a page someone opens, never a universe-wide refresh.
-- [x] FRED, Tiingo, Biztoc keys are set. Unused by the market pipeline.
+- [x] FRED and Biztoc keys are set. Unused by the market pipeline.
+- [x] **Tiingo is now USED** (2026-08-15, deployment#139) — `security-corporate-actions` reads its
+      daily EOD for `splitFactor` and `divCash`. The key had been sitting in GitHub secrets since
+      08-10 while this file said it was unusable. See the correction below.
 
 **Classifications not pulled**
 - [ ] **GICS proper** — PAID, needs a licence. yfinance/finviz taxonomies are the proxy, which
@@ -355,7 +358,14 @@ change, unless noted. Free/paid marked where a provider is involved.
 **Data not pulled**
 - [ ] **Fundamentals (P/E, revenue, margins)** — every provider we hold a key for was measured
       2026-08-11 and none can serve this universe:
-      FMP free gates PER SYMBOL (BHP/SAP/NEE 402); Tiingo free is **limited to the DOW 30**
+      FMP free gates PER SYMBOL (BHP/SAP/NEE 402); ~~Tiingo free is **limited to the DOW 30**~~
+      **— THAT WAS WRONG, measured 2026-08-15.** Tiingo answered for every US-listed name tried
+      (ROST, STX, TPR, ISRG, SNDK) plus ADRs, and a 28-symbol sample of our OWN tickers came back
+      **26 covered (93%)**, thin OTC foreign-ordinary lines included. What it genuinely does not
+      cover is LOCAL FOREIGN listings — 7203.T, SAP.DE, 005930.KS, NESN.SW all 404. The claim cost
+      weeks: corporate actions and total return were both filed under "blocked on money" while a
+      working key sat in GitHub secrets. **Re-test a provider claim before building a roadmap on
+      it**
       ("Free and Power plans are limited to the DOW 30"); Alpha Vantage has NO per-symbol gating
       (SAP, BHP, NEE all return P/E, revenue and margin) but covers **US listings only** — every
       local symbol tested came back empty — and caps at **25 calls/day**, which is ~160 days for
@@ -783,8 +793,14 @@ EXCHANGE layer was not. Six PRs, each verified live:
       - the same guard fires on **redenominations** (Tel Aviv moving quotes from shekels to
         agorot, 2026-05-18) which are not corporate actions at all and would need different handling
       The fix needs a split/dividend feed — `equity/fundamental/splits` or similar — and a
-      back-adjustment pass over `security_price`. Neither exists. This is the last piece of
-      "prices are correct" that is still a workaround rather than a fix.
+      back-adjustment pass over `security_price`.
+      **THE FEED NOW EXISTS** (2026-08-15, deployment#139): `market.security_corporate_action`
+      records splits and dividends from Tiingo for the ~6,645 US-tickered securities, verified
+      against known history (NVDA 4-for-1 and 10-for-1, TSLA 3-for-1, GOOGL 20-for-1, WMT 3-for-1).
+      What remains is the SECOND half — a back-adjustment pass that applies those splits to stored
+      closes, and a total-return calculation from `divCash`. Both are now ordinary work rather than
+      blocked. Local foreign listings stay uncovered (Tiingo 404s them), so a Japanese split is
+      still invisible.
 - [ ] **Symbol changes** — the identifier model tolerates a rename, nothing detects one.
 - [ ] **Index membership** (S&P 500 etc.) — FMP premium; partially substitutable by fund holdings.
 - [ ] **The reporting currency of a STATEMENT is unknown for 376 securities** (audit 2026-08-15).
