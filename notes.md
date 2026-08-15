@@ -929,3 +929,89 @@ single most recent bar differs. That is a provisional last close — European ma
 
 The lesson is about the measurement, not the data: `max diff over 25 days` hid the fact that 24 of
 those days were exact. **Compare a whole series before believing a single aggregate difference.**
+
+---
+
+# NEXT STEPS EXECUTED — 2026-08-15
+
+The four next steps from the status reading, done. Two of them uncovered defects that only existed
+because of the step itself.
+
+## 1. The directory is actionable (muffin-ui#86)
+
+99,811 listings were searchable and inert. `promote-listing` had worked since the directory was
+built — BABA returns `promoted: true` and `security-refresh` then gives it a market cap, seven
+periods, fundamentals and twelve statement rows — and **nothing called it**. There is now a Track
+button on untracked search hits: admin-only (same rule as `RefreshButton`, because the server
+rejects a non-admin token), promoting **by FIGI** rather than ticker (the directory row carries the
+exact FIGI; a bare ticker is ambiguous across venues), and it does not claim the security is ready —
+promotion creates it and the backlogs fill it.
+
+**This resolves the bulk-promotion question rather than answering it.** 81,007 listings stay
+findable and promotable on demand; tracking them all would 3x the universe and flood the
+rate-limited backlogs for weeks. If that is ever wanted it is a `tracked_fund`-style control
+surface, not a code change.
+
+## 2. Two defects the button exposed
+
+**A 200 from `market-refresh` is not proof the work happened.** `promote-listing` answers
+`{ skipped: true, reason: 'fresh or in flight' }` when the TTL has not elapsed, and
+`{ promoted: false }` when it resolves a FIGI it cannot build from. Both are 200s with no `error`,
+so the first version of the button said "added" for either. It now requires `promoted === true`, and
+`triggerRefresh` returns the body so it can check. Measured by hitting the `skipped` case, not
+imagined.
+
+**An early return after `begin_refresh` leaked the claim** (deployment#137). Three validation paths
+returned 400/500 without `finish_refresh`, so a malformed request refused the resource for the
+in-flight TTL — a `promote-listing` call with no `figi` made the next VALID call, 45 seconds later,
+fail. **My first reading was that the lock was stuck; it is not** — `p_inflight_ttl` is two minutes
+and it self-heals. The alarm was worse than the bug, but one mistake still cost two failures.
+
+## 3. The currency gate failed open on the case it exists for (deployment#138)
+
+#135 gave the statements view `country_iso2` so the app could withhold a currency label for a non-US
+company quoted in USD. It exposed the **FILED** country — and BABA has none, because it was promoted
+from the directory rather than ingested from a filing. `country_iso2` NULL, `provider_country_iso2`
+CN. The caller tests `USD AND country !== 'US'`; **NULL is falsy**, so the gate declined to fire and
+labelled Alibaba's CNY revenue USD again.
+
+Caught by verifying the deploy against production rather than trusting the merge. **A guard that
+fails open on its own headline case is worse than no guard, because it is now believed.** 21
+securities are in that shape, all promoted rather than ingested — a population that only exists
+since the Track button. The view now answers the EFFECTIVE country, and the test encodes the
+CALLER'S rule rather than the column: asserting `country_iso2 is not null` would have passed while
+the UI mislabelled.
+
+## 4. The price drift was not a defect
+
+NESN.SW and SAP.DE differed ~1% from Yahoo where mega-caps matched to 0.03%. The dividend-adjustment
+hypothesis was **wrong** (raw and `adjclose` give an identical difference). Per-date measurement
+showed **every settled bar matches to 0.000%** and only the most recent one differs — a provisional
+close, since European markets settle at 17:30 CET and the fetch caught a different moment. The
+lesson is about the measurement: `max diff over 25 days` hid that 24 of them were exact.
+
+## Where ingestion stands
+
+    universe    27,628 securities · 12,349 equity · 99,811 listings · 59 venues
+    coverage    country 99.9% · symbol 97.3% · currency 94.0% · cap 93.7% · sector 90.5% · industry 62.4%
+    health      20 resources, 0 failing · market-verify GREEN
+
+Backlogs cycle daily by design (prices ~2,900, performance ~5,300 are the 24h TTL, not a stall —
+**zero** never-priced securities remain). `derive-classifications`, `instrument-profile` and
+`fund-holdings` look stale and are not: their TTLs are 7 to 30 days.
+
+**Industry at 62.4% is provider-limited, and the chain reconciles with ZERO unexplained:** 7,700 have
+one, 3,479 the provider answered without one, 837 have no profile at all, 331 have no symbol to ask
+about. `pending_industry` reading 0 is correct, not a stalled backlog.
+
+## What is genuinely left
+
+- **Statements ~4,300 pending** — provider-bound, drains over days. The on-demand path covers
+  anything a user opens.
+- **The reporting currency** — the label is now withheld rather than wrong, which is correct but is
+  not the same as knowing. Needs `quoteSummary.financialCurrency` (blocked on a crumb) or an openbb
+  release that surfaces it. Four dead ends are recorded in `todos.md` so nobody retries them.
+- **Corporate actions** — splits are detected but stored prices are never adjusted. Needs a splits
+  feed that does not exist here.
+- **Blocked on money or licence:** GICS proper, total return / dividends, index membership.
+- **Structurally impossible:** non-US UCITS funds file no N-PORT; commodity funds file 10-K.
