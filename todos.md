@@ -787,6 +787,26 @@ EXCHANGE layer was not. Six PRs, each verified live:
       "prices are correct" that is still a workaround rather than a fix.
 - [ ] **Symbol changes** — the identifier model tolerates a rename, nothing detects one.
 - [ ] **Index membership** (S&P 500 etc.) — FMP premium; partially substitutable by fund holdings.
+- [ ] **The reporting currency of a STATEMENT is unknown for 376 securities** (audit 2026-08-15).
+      `security_statement.currency` is null on all 83,211 rows; the view falls back to
+      `security.currency_code`, which is the QUOTE currency. That is right for a local listing and
+      wrong for an ADR: Alibaba's CNY 1,023,670,000,000 revenue read **$1.02 TRILLION**, larger
+      than Walmart. 565 non-US companies are quoted in USD, 376 of them with statements.
+      deployment#135 + muffin-ui#85 WITHHOLD the label rather than invent one, which is correct but
+      is not the same as knowing. To actually fix it, one of:
+      - `quoteSummary.financialCurrency` — the real answer; needs a crumb/cookie, currently
+        `Unauthorized: Invalid Crumb`
+      - an openbb release that surfaces a currency on `equity/fundamental/income|balance|cash`
+      **Already ruled out, do not retry:** `equity/fundamental/metrics.currency` and Yahoo chart
+      meta are both the QUOTE currency; a country→currency guess is wrong (VALE and NU are
+      Brazilian and genuinely report in USD); and deriving it from `enterprise_to_revenue` FAILS —
+      Yahoo computes that ratio inside the reporting currency, so BABA reads 1.00 while VALE (0.18)
+      and Samsung (0.69) false-positive.
+- [ ] **NESN.SW and SAP.DE drift ~1% from Yahoo's closes** over a 25-day window, where GOOG, AAPL,
+      005930.KS and 7203.T match to 0.00–0.03%. Most likely a dividend-adjustment difference
+      between openbb's yfinance path and Yahoo's chart endpoint. Small, but unexplained — recorded
+      so it is not rediscovered as new. Worth one measurement: compare an ex-dividend date against
+      both feeds.
 
 **RESOLVED (2026-08-11) — statements rendered in the WRONG CURRENCY on non-US stocks**
 - [x] The income-statement card prefixed every figure with `$` (`formatCap` hardcoded it) and the
