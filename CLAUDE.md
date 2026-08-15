@@ -750,6 +750,27 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   nothing, so four "ok"s meant four no-ops. Replaced by a named list of the six exact gate
   expressions: brittle to refactoring on purpose, since rewording fails loudly while DELETING can
   never pass silently.
+- **A GUARD THAT FAILS OPEN ON ITS OWN HEADLINE CASE IS WORSE THAN NO GUARD, BECAUSE IT IS NOW
+  BELIEVED.** The statements view was given `country_iso2` so the app could withhold a currency
+  label for a non-US company quoted in USD — Alibaba's CNY revenue was rendering as **$1.02
+  TRILLION**. It exposed the FILED country, and BABA has none: promoted from the exchange directory,
+  it has `provider_country_iso2 = CN` and `country_iso2 = NULL`. The caller's test is
+  `USD AND country !== 'US'`; **NULL is falsy**, so the gate declined to fire on the exact security
+  it was built for. Two rules fall out. Expose the EFFECTIVE value (`coalesce(provider, filed)`, the
+  same one `security_current` answers with) so two views cannot disagree about where a company is —
+  21 securities have statements, are quoted in USD and have no filed country, all of them promoted
+  rather than ingested. And **write the test against the CALLER'S RULE, not the column**: asserting
+  `country_iso2 is not null` would have passed while the UI mislabelled, whereas asserting "this
+  security's label is withheld" fails for the reason the user would see.
+- **A 200 FROM `market-refresh` IS NOT PROOF THE WORK HAPPENED.** `begin_refresh` answers
+  `{ skipped: true, reason: 'fresh or in flight' }` when the TTL has not elapsed or another
+  invocation holds the lock, and `promote-listing` answers `{ promoted: false }` when it resolves a
+  FIGI it cannot build a security from. Both are 200s with no `error`, so a caller checking only for
+  a thrown error reports success. Tolerable for a background warm-up; **wrong for an action a person
+  took and is watching** — which is why `triggerRefresh` returns the body and the Track button
+  requires `promoted === true`. Related: every early return AFTER `begin_refresh` must call
+  `finish_refresh`, or a malformed request costs the resource a two-minute outage on top of its own
+  400 (measured — a `promote-listing` call with no `figi` refused the next valid call 45s later).
 - **A RESOURCE THAT IS NEVER INVOKED CANNOT FAIL, AND AN UNREAD VIEW CANNOT BE WRONG.** Two
   absences found 2026-08-14, both invisible to every count in the system. `exchange-listings` — the
   ONLY resource that grows the universe beyond what the tracked funds hold — was written, deployed,
