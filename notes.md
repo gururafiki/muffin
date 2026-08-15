@@ -1004,6 +1004,28 @@ Backlogs cycle daily by design (prices ~2,900, performance ~5,300 are the 24h TT
 one, 3,479 the provider answered without one, 837 have no profile at all, 331 have no symbol to ask
 about. `pending_industry` reading 0 is correct, not a stalled backlog.
 
+## `pending_local_symbol` sits at 283 for ever, and that is FINE
+
+Worth writing down because the number invites a chase. **221 of the 283 already have a symbol** from
+`security-yahoo-symbols`, a different resolver on a different path — so the backlog is not blocking
+them and only ~62 securities genuinely lack one, 0.5% of the universe.
+
+The composition explains the rest: **190 are offshore incorporations** (KY 119, BM 56, MH 10, VG 5)
+where no exchange exists for `security-local-symbols` to resolve against, so they can never leave a
+backlog defined as "has an ISIN, has no local symbol". The resource already filters to addressable
+countries after reading, so they cost no provider calls — the view lists them, the run skips them.
+
+The remainder are ~93 securities in REAL markets with no venue in the catalogue: LU 21, RU 16, IS 15,
+RO 9, HU 6, EG 6, PA 5, CZ 5. Adding those venues is the same shape as VN/KK/QD/AR and would work —
+but none of those countries is drillable, most of the securities already have symbols, and the
+`every-drillable-country-is-swept` test passes because they are not app-visible. Low value, recorded
+rather than done.
+
+**A correction:** deployment#136's description said the missing paging tiebreak was "consistent with
+`pending_local_symbol` sitting at 283". That implication was wrong — the 283 are venue-less
+jurisdictions and the tiebreak did not move the number, as measured after it deployed. The tiebreak
+fix is still correct (unordered pages can genuinely skip rows); it simply was not the cause of this.
+
 ## What is genuinely left
 
 - **Statements ~4,300 pending** — provider-bound, drains over days. The on-demand path covers
