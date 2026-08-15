@@ -919,8 +919,13 @@ it is finished. It is not one — the accounting closes with **0 unexplained**:
 Industry at 62.4% is genuinely provider-limited. `pending_industry` requires a level-1 sector, so the
 1,168 sector-less equities can never enter it — and every one of them is accounted for upstream.
 
-## One thing left unexplained
+## The one loose thread, now resolved
 
-NESN.SW and SAP.DE drift ~1% from Yahoo's closes over 25 days, where GOOG/AAPL/Samsung/Toyota match
-to 0.03%. Most likely dividend-adjustment differences between the two feeds. Not investigated
-further; recorded so it is not rediscovered as new.
+NESN.SW and SAP.DE drifted ~1% from Yahoo over 25 days where the mega-caps matched to 0.03%. The
+dividend-adjustment hypothesis was **wrong** — raw and `adjclose` give an identical difference.
+Measuring PER DATE showed the real shape: **every settled bar matches to 0.000%** and only the
+single most recent bar differs. That is a provisional last close — European markets settle at
+17:30 CET and the fetch caught a different moment than Yahoo's final print. Not a defect.
+
+The lesson is about the measurement, not the data: `max diff over 25 days` hid the fact that 24 of
+those days were exact. **Compare a whole series before believing a single aggregate difference.**

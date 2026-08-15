@@ -802,11 +802,16 @@ EXCHANGE layer was not. Six PRs, each verified live:
       Brazilian and genuinely report in USD); and deriving it from `enterprise_to_revenue` FAILS —
       Yahoo computes that ratio inside the reporting currency, so BABA reads 1.00 while VALE (0.18)
       and Samsung (0.69) false-positive.
-- [ ] **NESN.SW and SAP.DE drift ~1% from Yahoo's closes** over a 25-day window, where GOOG, AAPL,
-      005930.KS and 7203.T match to 0.00–0.03%. Most likely a dividend-adjustment difference
-      between openbb's yfinance path and Yahoo's chart endpoint. Small, but unexplained — recorded
-      so it is not rediscovered as new. Worth one measurement: compare an ex-dividend date against
-      both feeds.
+- [x] ~~**NESN.SW and SAP.DE drift ~1% from Yahoo's closes**~~ **RESOLVED 2026-08-15, and it is not
+      a defect.** The dividend-adjustment hypothesis was wrong — raw and `adjclose` give an
+      identical difference. Measuring the drift PER DATE showed the shape: **every settled bar
+      matches to 0.000%**, and only the single most recent bar differs (2026-08-13 for both). That
+      is a provisional last close, not bad data — European markets settle at 17:30 CET and our
+      fetch caught a different moment than Yahoo's final print. Recorded because "1% off from
+      Yahoo" reads as a data-quality problem and is instead the ordinary cost of a daily pipeline:
+      the latest bar can move after we read it. **Compare a whole series before believing a
+      single aggregate difference** — `max diff` over 25 days hid the fact that 24 of them were
+      exact.
 
 **RESOLVED (2026-08-11) — statements rendered in the WRONG CURRENCY on non-US stocks**
 - [x] The income-statement card prefixed every figure with `$` (`formatCap` hardcoded it) and the
