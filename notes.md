@@ -1470,6 +1470,49 @@ bounded by it. Nothing is being fixed for it now because the resource demonstrab
 560 securities cleanly; it is recorded so that if `WorkerRequestCancelled` starts recurring, the
 first place to look is the unbounded tail, not the provider.
 
+## 6c. "Are there blockers for markets beyond the US?" — measured 2026-08-17
+
+Short answer: **no blocker of coverage or capability. The blocker was THROUGHPUT, and it was
+arithmetic.** The two things that sound like blockers were both checked first and neither is one.
+
+**Venue coverage is not a blocker.** 59 venues across 46 countries, every one swept within the past
+week — Germany 14,184 listings, India 5,432, UK 4,346, Japan 4,086 + 3,950, Switzerland 3,471,
+Thailand 3,194, plus Korea, Taiwan, Mexico, Brazil, Australia, China.
+
+**The 15,000 paging ceiling is not a blocker either, and I expected it to be.** Partitioning
+triggers off the `total` the API itself reports (`total > PAGING_CEILING`), not a hardcoded list of
+"big exchanges" — so any venue that grows past the cap partitions automatically. That was written
+generically the first time.
+
+**Symbol resolution beyond the US is healthy** — measured per country, equities with no provider
+symbol: JP 0%, DE 1%, IN 1%, KR 1%, CH 2%, HK 2%, TW 2%, AU 2%, CA 2%, CN 2%, VN 2%, IL 2%, MY 2%,
+TH 3%, BR 3%, SG 3%, ZA 3%, GB 4%, MX 4%, PH 5%. No country shows the Taiwan signature (securities
+present, symbols absent), which is the failure mode worth watching for.
+
+**The real blocker (deployment#146):**
+
+```
+59 venues x 3 instrument types                             = 174 slices
++ 36 letter-partitions x 3, for the one venue over the cap = 108 slices
+                                                             282 slices
+```
+
+`exchange-listings` swept exactly ONE venue/type/prefix slice per invocation, 8 cron runs a day —
+a **35-day full catalogue pass**. And most slices are trivial: Portugal is 50 listings and a single
+request, costing a whole cron slot exactly like a 4,000-listing venue.
+
+**Neither binding limit was per-invocation.** OpenFIGI's keyed allowance is 250 requests a MINUTE
+and one page is one request, so a run sweeping twenty single-page venues spends twenty of them. The
+loop now budgets wall clock and requests explicitly, and **refuses to START a venue it cannot
+finish** rather than merely checking the deadline has not passed — the distinction that has
+`security-performance` sitting at 89s of its 90s limit.
+
+**Catalogued is still not the same as tracked, and that gap is by design.** Japan has 8,036
+catalogued listings and 1,368 tracked equities; the tracked universe is the union of what
+US-registered funds hold (via N-PORT) plus promoted listings. Growing tracked non-US coverage means
+adding country/regional ETFs to `tracked_fund`, or bulk promotion — a product decision, not an
+engineering gap.
+
 ## 7. The pattern, stated once more because it recurred twice today
 
 **Both defects reported success while doing nothing.** `skipped: true` is a legitimate success that
