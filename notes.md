@@ -1434,6 +1434,42 @@ finish on its own; it is slow because the sweep is fair, not because it is stuck
 
 **Still structurally impossible:** non-US UCITS funds file no N-PORT; commodity funds file 10-K.
 
+## 6b. Post-deploy verification, and one thing that looked like a regression and was not
+
+All four fixes confirmed against production after deploying:
+
+| | evidence |
+|---|---|
+| #144 TTL | all three stalled resources run on demand; newest price bar **2026-08-14 -> 2026-08-17** |
+| #141 actions | 855 rows, **0 of 855** mismatched between `observed_symbol` and the security's price symbol (was 33 of 45 securities) |
+| #140/#144 units | statements `60-25-1 = 34`, performance `1000-560 = 440` — both reported `0` before |
+| #145 fund labels | `figi_security_type = 'ETP'` populating: SPY, DIA, ISHARES MSCI INDIA, ABF SINGAPORE BOND FUND |
+
+**Two resources showed `ok: false` immediately after the deploy and both were deploy-window
+artifacts**, worth knowing because "is anything failing?" is the obvious health check and it gives
+false alarms for a few minutes after every deploy:
+
+- `security-performance` was **in flight** when the functions container restarted, so it never
+  called `finish_refresh` and left `finished_at: null`. The 2-minute in-flight TTL self-heals it.
+- `security-prices` hit `relation "market.pending_prices" does not exist` — migrations apply
+  `--single-transaction` **per file**, so between migration 35 (which drops dependent views) and
+  the file that recreates them there is a real window where a reader 404s. Transient by
+  construction; the view had 11,009 rows minutes later.
+
+**`WorkerRequestCancelled` on `security-performance` looked like a regression and was not.** Settled
+by retrying across the in-flight window rather than by reasoning: the next clean attempt returned
+`refreshed: 3880, securitiesCovered: 560, batchesFailed: 0, remaining: 440` — more work than the
+run that had failed.
+
+**But one real measurement came out of chasing it, and it is a standing risk rather than a bug:**
+the cron's own `security-performance` run at 14:51 today — hours before any change — took
+**89 seconds against a 90-second worker limit** (`workerTimeoutMs` in `functions/main/index.ts`).
+The mechanism is the one already documented in this file: the 60s deadline gates whether to START a
+batch, and that batch's tail (fetch, isolation, upsert, retraction, stale-period prune) is not
+bounded by it. Nothing is being fixed for it now because the resource demonstrably completes
+560 securities cleanly; it is recorded so that if `WorkerRequestCancelled` starts recurring, the
+first place to look is the unbounded tail, not the provider.
+
 ## 7. The pattern, stated once more because it recurred twice today
 
 **Both defects reported success while doing nothing.** `skipped: true` is a legitimate success that
