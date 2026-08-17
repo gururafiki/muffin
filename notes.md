@@ -1037,3 +1037,400 @@ fix is still correct (unordered pages can genuinely skip rows); it simply was no
   feed that does not exist here.
 - **Blocked on money or licence:** GICS proper, total return / dividends, index membership.
 - **Structurally impossible:** non-US UCITS funds file no N-PORT; commodity funds file 10-K.
+
+---
+
+# HANDOVER — 2026-08-15 (evening): corporate actions exist, and are one deploy from correct
+
+Written to be picked up cold after a context compaction. Every number below was measured against
+production at 14:45 UTC on 2026-08-15, not estimated.
+
+## 1. THE ONE THING THAT NEEDS A HUMAN
+
+**`muffin-deployment` #140 and #141 are MERGED TO `main` AND NOT DEPLOYED.**
+
+```bash
+gh workflow run "Deploy to Oracle Cloud" --ref main    # in muffin-deployment
+```
+
+Merging muffin-deployment does **not** auto-deploy — `Deploy to Oracle Cloud` is
+`workflow_dispatch` only. (The auto-CD path in `MEMORY.md` is for the *build* repos, which dispatch
+`deploy` after pushing an image; a deployment-repo change has no image to build and therefore no
+dispatcher.) I tried to trigger it and the permission classifier blocked the call, so it is sitting
+on `main` unapplied. **Nothing else in this handover is blocked on you.**
+
+Until that deploy lands, production is in a known-inconsistent state: the 521 corporate-action rows
+described below are still present and still unattributable, and `security_corporate_action` has no
+`observed_symbol` column. Confirmed at 14:45 UTC — the count is 521 and the column 42703s.
+
+**After it deploys, verify in this order:**
+
+1. `security_corporate_action` count is **0** (migration 68 one-shot-deletes the 521).
+2. Run the resource:
+   ```bash
+   curl -X POST "$BASE/functions/v1/market-refresh" -H "apikey: $SRV" -H "Authorization: Bearer $SRV" \
+     -H 'Content-Type: application/json' -d '{"resource":"security-corporate-actions","force":true}'
+   ```
+3. Assert every new row carries an `observed_symbol` that **equals the security's own price
+   symbol**. That is the whole point of #141 — see §3.
+4. Assert `remaining` counts **securities**, not rows. Before #140 it reported `remaining: 0` on a
+   run the provider had refused with a 429.
+
+## 2. Corporate actions: what shipped, and what your Tiingo key bought
+
+**The key works, and the note that had blocked this for weeks was wrong.** `todos.md` recorded
+Tiingo free as "limited to the DOW 30" — measured against your token, it serves **93% of our US
+tickers**. First live run:
+
+```json
+{"resource":"security-corporate-actions","written":521,"none":5,"noTicker":0,"failed":1,
+ "lastError":"tiingo 429: You have run over your hourly request allocation","asked":60,"remaining":0}
+```
+
+**521 real rows — 23 splits and 498 dividends across 45 securities.** This is the first
+corporate-action data in the system; "splits are detected but never adjusted" has been an open item
+in this file since 2026-08-14.
+
+New surface: `market.corporate_action_kind` + `market.security_corporate_action` (migration 67),
+`market.pending_corporate_actions`, a `security-corporate-actions` resource, and
+`functions/market-refresh/tiingo.ts` with a typed `TiingoNoSuchTicker` so a 404 (this ticker does
+not exist) is never confused with a network failure.
+
+**The rate limit is on UNIQUE SYMBOLS, not requests** — re-asking about a symbol already fetched
+this hour is free. That shapes any future pacing work: batch by symbol coverage, not by call count.
+
+## 3. Two defects I found by verifying the output, not the diff
+
+Both were invisible to the type checker, to CI, and to the resource's own success report.
+
+**#140 — `remaining` was in the wrong unit.** `written` counts **rows** (521) and `wanted.length`
+counts **securities** (60), so `wanted.length - written` went negative and clamped to 0. The run
+above was **refused by the provider with a 429** and reported a drained backlog. The backoff itself
+was correct; only the arithmetic turned a refusal into "done". Fixed with a `covered` counter that
+counts distinct securities, and `logic-check.ts` now fails on a `remaining` computed from a row
+count.
+
+**#141 — the actions did not match the price series.** This is the serious one. The resource asks
+Tiingo by **US ticker**; prices are stored against the **primary listing**; and for **33 of the 45**
+securities those are different instruments:
+
+```
+asked SSNLF → priced 005930.KS      asked NONOF → priced NOVO-B.CO
+asked ASMLF → priced ASML.AS        asked BUDFF → priced ABI.BR
+```
+
+A cash dividend on Samsung's OTC line is quoted in **USD** against a **KRW** price series — wrong by
+three orders of magnitude. An ADR ratio change would *introduce* a discontinuity if applied to the
+local line, which is the exact defect corporate actions exist to remove.
+
+Migration 68 adds `observed_symbol` **NOT NULL** (without it the rows are unauditable — you cannot
+ask after the fact which listing an action came from, which is how this passed review), deletes the
+521, and restricts the backlog so the two symbols must agree:
+
+```sql
+join market.security_symbol sym
+  on sym.security_id = s.security_id and upper(sym.symbol) = upper(t.value)
+```
+
+Proven by mutation: removing the join makes the test report
+`pending_corporate_actions offers the wrong securities: T68 Local priced: offered, expected not offered`.
+
+**The cost is coverage, and it is the right trade.** Samsung gains no dividend record. That is
+honest: Tiingo carries no Korean data, and the OTC line's dividend is a different number about a
+different instrument. Same principle as the currency work earlier today — **a wrong number is worse
+than no number, because a wrong one is believed.**
+
+## 4. Provider keys — what each one is actually worth
+
+You pasted seven keys. Measured, so nobody re-tests them:
+
+| key | verdict |
+|---|---|
+| **TIINGO_TOKEN** | **WORKS and is now in use.** 93% of our US tickers; daily EOD carries `divCash`, `splitFactor`, `adjClose` per bar. US-listed only. Caps **unique symbols**, not requests. The variable name not ending in `_API_KEY` is fine — it is read as `TIINGO_TOKEN` throughout. |
+| **FMP_API_KEY** | **DEAD, twice over.** v3 answers `403 Legacy Endpoint` and openbb's fmp provider calls v3. The `stable` line works but gates per symbol so hard that **`ROST` and `TPR` return 402** alongside every foreign listing. Would need a paid plan *and* a client bypassing openbb, to buy what Tiingo gives free. |
+| **OPENFIGI_API_KEY** | In use — 250 req/min × 100 ids. |
+| ALPHA_VANTAGE / FRED / BIZTOC / FINRA | Not used by this pipeline. Alpha Vantage is US-only at 25 calls/day and returns empty for the local listings we care about. |
+
+**Do not re-derive this.** Twice now the answer to "which provider can serve X" has been "a response
+we were already fetching" (market cap, operating country, currency, and the cap again). Check what a
+payload CONTAINS before shopping for a key.
+
+## 5. Where ingestion actually stands (measured 14:45 UTC)
+
+```
+universe    27,629 securities · 12,350 equity · 99,811 listings · 3,057,307 price bars
+coverage    country 99.9%  symbol 97.3%  currency 94.0%  cap 93.7%  sector 90.5%  industry 62.4%
+health      market-verify GREEN (03:36 UTC today)
+```
+
+| backlog | count | reading |
+|---|---|---|
+| `pending_fundamentals` | **0** | drained |
+| `pending_industry` | **0** | drained — and correctly so; the chain reconciles with 0 unexplained (§6) |
+| `pending_profile` | 2 | drained |
+| `pending_local_symbol` | 283 | **permanent and FINE** — see the section above; 221 already have a symbol from a different resolver, 190 are offshore incorporations with no exchange to resolve against |
+| `pending_prices` | 2,940 | the 24h TTL cycling, not a stall |
+| `pending_performance` | 6,699 | the 24h TTL cycling, not a stall |
+| `pending_statements` | 4,194 | genuinely draining; provider-bound, days not hours |
+| `pending_corporate_actions` | 6,526 | new; will re-scope sharply downward once #141 deploys and the listing-agreement join applies |
+
+**`untracked_listing` is 84,651 and rising** (81,007 yesterday) because `exchange-listings` is on the
+cron now and still sweeping. That number is not a backlog and not a gap — it is the directory of
+things findable in search and promotable on demand via the Track button. Bulk-promoting them would
+3x the universe and flood the rate-limited backlogs for weeks; if it is ever wanted it is a
+`tracked_fund`-style control surface, not a code change.
+
+## 6. Things that look like bugs and are NOT — do not re-investigate
+
+Each cost real time to establish.
+
+- **`pending_industry` = 0 with industry at 62.4%.** Reconciles exactly, 0 unexplained: 7,700 have
+  one, 3,479 the provider answered without one, 837 have no profile at all, 331 have no symbol.
+- **`pending_local_symbol` = 283 for ever.** Venue-less jurisdictions. Recorded in full above.
+- **A high `figi_missing_at` rate is not a defect** — it records that OpenFIGI has no *US* line for
+  an ISIN, which is simply true for local listings (CN 96%, IN 99%, KR 97%), and nearly all of them
+  still have a working symbol.
+- **Statements are ~5 weeks deep BY DESIGN and must not be "fixed" by batching.** Measured:
+  `symbolsAsked 50, symbolsAnswered 0`. The endpoints do not accept multiple symbols. `security-refresh`
+  gives anything a user opens its statements on demand, which is what makes the depth tolerable.
+- **Do not raise a page size to drain faster.** The binding constraint is requests per unit TIME.
+  The only optimisation that works is fewer requests PER SECURITY.
+- **NESN.SW / SAP.DE drifting ~1% from Yahoo is a provisional last close**, not a defect — every
+  *settled* bar matches to 0.000%.
+- **`derive-classifications`, `instrument-profile`, `fund-holdings` looking stale** — their TTLs are
+  7 to 30 days.
+
+## 7. What is genuinely left
+
+**Ordinary work, unblocked, in rough priority order:**
+
+1. **Deploy #140/#141 and verify** (§1). Everything below assumes this is done.
+2. **Back-adjust stored prices using the splits we now hold.** This is the second half of corporate
+   actions and is now ordinary work rather than blocked on a feed. Today `firstComparableIndex`
+   *excludes* history before a >5x move rather than *correcting* it, so a split silently truncates a
+   series instead of fabricating a return. The guard stays either way — it also catches the Tel Aviv
+   ILA/agorot redenomination, which is not a corporate action and no splits feed will ever report.
+3. **Total return from `divCash`.** We now have dividends. Every number in the app is a *price*
+   return, which understates high-yield markets. This was on the "blocked on money" list and no
+   longer is — for US-listed securities.
+4. **Widen corporate-action coverage past US listings.** Tiingo is US-only, so #141's listing
+   agreement is what limits it. Non-US actions need another source.
+
+**Still blocked on money or a licence:** GICS proper, index membership, per-symbol fundamentals
+beyond keyless yfinance.
+
+**Still structurally impossible:** non-US UCITS funds file no N-PORT; commodity funds are trusts or
+pools filing 10-K (SLV, USO, DBC); MDY is a unit investment trust. None is reachable by adding a
+`tracked_fund` row.
+
+**Two open items needing a decision, not engineering:**
+
+- **The statement reporting currency.** The label is now *withheld* rather than wrong, which is
+  correct but is not the same as knowing. Needs `quoteSummary.financialCurrency`, which requires a
+  Yahoo crumb; my laptop test was rate-limited and is **INCONCLUSIVE, not failed** — worth one probe
+  from the node. Four other dead ends are recorded in `todos.md` so nobody retries them.
+- **Bulk promotion of the 84,651 untracked listings** — a product call, per §5.
+
+## 8. The pattern this session kept re-teaching
+
+**Every defect above was found by looking at the data the code produced, never by reading the code.**
+
+- `remaining: 0` on a run the provider had refused — a success report computed from the wrong unit.
+- 33 of 45 actions attributed to the wrong listing — a green suite, a clean diff, and rows that
+  could not be checked because nothing recorded where they came from.
+
+Both are the same shape as the whole preceding week: **a resource that reports success while doing
+the wrong thing is the default failure mode here, not the exception.** The counter-measure that
+keeps working is to make the output *self-describing* — `observed_symbol` exists so that the next
+person can ask "which listing did this come from" and get an answer instead of a guess. A row you
+cannot audit is a row you will eventually have to delete, which is exactly what migration 68 does to
+all 521.
+
+Corollary worth keeping: **when a fix is a deletion, deploy it promptly.** Those 521 rows are wrong
+*now*, and the longer they sit the more likely something starts reading them.
+
+---
+
+# HANDOVER — 2026-08-17: price ingestion had been stopped for three days
+
+Numbers measured against production on 2026-08-17, not estimated.
+
+## 0. THE BLOCKER, unchanged from 08-15 and now costing real data
+
+**Nothing has been deployed since 2026-08-15 12:21 UTC.** #140 and #141 were merged that afternoon
+and the deploy was never run; #144 now sits behind them. `Deploy to Oracle Cloud` is
+**`workflow_dispatch` only** — merging `muffin-deployment` does not deploy it. (The auto-CD in
+`MEMORY.md` is for the *build* repos, which dispatch after pushing an image; a deployment-repo
+change has no image and so no dispatcher.)
+
+```bash
+gh workflow run "Deploy to Oracle Cloud" --ref main    # in muffin-deployment
+```
+
+I attempted this on 08-15 and again today; both times the permission classifier blocked the call.
+**This is the only thing on the critical path.** Everything below is merged or in a green PR.
+
+## 1. `security-prices` had not run since 08-14, and every signal said it was healthy
+
+This is the most important thing in this file. The cron called it **eight times a day** throughout,
+and every single call answered:
+
+```json
+{"resource":"security-prices","skipped":true,"reason":"fresh or in flight"}
+```
+
+which the warm-up **correctly** counts as a success — a warm-up finding fresh data is the happy
+path. Green workflow, `ok: true` in `refresh_log`, no error anywhere, and price ingestion simply
+stopped.
+
+| | |
+|---|---|
+| newest stored price bar | frozen at **2026-08-14** |
+| `pending_prices` | 2,940 → **11,348** (92% of all 12,350 equities) |
+| `security_price` rows | 3,057,307 → 3,057,307, **identical to the digit** across three days |
+
+**Cause: a default TTL.** The TTL was a ternary chain ending in `: PROFILE_TTL_MINUTES` (7 days),
+kept *beside* a separate `EXTRA` array of known resources. The two drifted, and three resources were
+in the array and absent from the chain — `security-prices`, `security-yahoo-symbols`,
+`security-corporate-actions`. All three are **incremental backlogs**, exactly what the comment two
+lines above the chain warns must never get a completion-shaped TTL. The warning was correct, sitting
+directly on top of the code, and the fallback silently defeated it.
+
+**The fix is to delete the default, not add three branches.** Every resource declares its TTL in one
+map and `EXTRA` is *derived from that map's keys*. The two lists cannot drift because there is now
+only one list, and a resource added without a TTL is not "the default applies" — it is
+`unknown resource`, a loud 400 on the first call. (deployment#144)
+
+**What to check after the deploy:** `pending_prices` falls from 11,348, and `security_price` gains
+bars dated after 2026-08-14. No repair migration is needed — the stalled resources are already
+outside the new window and resume on the first cron pass.
+
+## 2. `remaining` was lying in four more resources
+
+#140 fixed this for corporate actions. The same unit confusion was live elsewhere, and two of them
+were reporting a **drained backlog on every run**:
+
+| resource | reported | truth |
+|---|---|---|
+| `security-statements` | `written: 276, remaining: 0` | 276 is ROWS (~12/security) against 60 asked; `pending_statements` **3,646** |
+| `security-performance` | `refreshed: 2751, remaining: 0` | 2,751 rows ≈ 306 securities; `pending_performance` **6,909** |
+| `security-prices` | `remaining: <page size>` | the same number whether the run priced everything or nothing |
+| `security-industries` / `-profiles` | over-counted | counted `writes` **before** `dedupeBy`, so a security in two sectors counted twice |
+
+`remaining` is subtracted from a count of SECURITIES. Subtract ROWS and it clamps to zero — the one
+number an operator reads to judge a backlog, failing in the believable direction.
+
+**The discriminator is the upsert's conflict key.** `security_fundamentals` is keyed on
+`security_id` alone, so counting its rows *is* counting securities and `written` is correct there —
+the only site where it is. `security_taxonomy` is keyed on `(security_id, node_id, source_code)` and
+`security_price` on `(security_id, date)`, so counting theirs is not.
+
+**The guard took three attempts and the first two passed while broken** — worth reading before
+writing another guard here:
+
+1. **Inferring** the unit by walking from `counter += arr.length` to the nearest `onConflict` cannot
+   tell whether that upsert wrote that array. Three false positives on correct code (`emptyIds`,
+   `deadIds`, `batch` are arrays of SECURITIES, so their `.length` *is* a security count). A guard
+   that cries wolf on correct code gets deleted.
+2. **A blacklist of counter names** cannot express "legal here, illegal there" — which is exactly
+   `written`'s situation. Mutation put `written` back into the statements expression and the guard
+   **passed**.
+3. **A per-resource whitelist** of the identifiers each `remaining` may mention, *plus* a rule that
+   it must actually subtract something — the page-size bug is the ABSENCE of a subtraction, which a
+   whitelist alone cannot see.
+
+Five mutations, each caught independently.
+
+## 3. The exchange directory contains no funds at all
+
+Of 102,390 rows in `exchange_listing`: **99,673 Common Stock, 2,717 Depositary Receipts, ZERO
+funds** — against **74** ETFs in the universe, every one hand-added to `tracked_fund`, none
+discovered.
+
+Nothing could report it: every coverage number is computed over `security_type_code = 'equity'`, so
+a missing asset class moves no metric. Backlogs drain, `market-verify` is green, and search simply
+never offers an ETF. **The failure is an ABSENCE, and absences do not raise** — same shape as
+`exchange-listings` being off the cron, and `untracked_listing` sitting wrong and unread for weeks.
+
+**Not just a third row, because OpenFIGI has two type vocabularies.** Measured against `/v3/filter`:
+
+```
+securityType2 = 'Mutual Fund'  US -> 44,119   FEUCX, WATFX, NPRTX  (open-end funds)
+securityType  = 'ETP'          US ->  6,664   DGP, UWM, EWH, ICLN, MDY  (actual ETFs)
+```
+
+SPY is `securityType: 'ETP'` **inside** `securityType2: 'Mutual Fund'`. The coarse bucket is both
+wrong and unusable — 44,119 is over the 15,000 paging ceiling and is overwhelmingly open-end mutual
+funds, which are not exchange-traded. `figi_field` on `exchange_sweep_type` records which of the two
+a type uses, so adding a fund class stays a row in Studio. (migration 69)
+
+**Scope, deliberately:** this CATALOGUES ETFs so they are searchable and promotable. It does not make
+them tracked funds — 6,664 N-PORT filings would swamp SEC's fair-access limit and every downstream
+backlog, and most are not US-registered and file no N-PORT at all. `tracked_fund` stays curated;
+this makes choosing the next one a query instead of a memory.
+
+Note the trap it is guarded against: **OpenFIGI ignores an unknown filter key and returns the venue
+UNFILTERED** rather than erroring — which is how "Samsung Electronics" once returned 8,725 rows that
+were nearly all options. A typo in `figi_field` would not fail, it would flood.
+
+## 4. `logic-check.ts` was never typechecked
+
+It is only ever `deno run`, which **strips** types rather than checking them — so the one file
+holding every guard in this pipeline was the one file nothing typechecked. Three errors were sitting
+on `main` (a missing `YahooHit` import, an optional chain returning `boolean | undefined`) and the
+suite passed green. CI now typechecks it.
+
+## 5. Do we have the whole universe? — the honest answer
+
+**Two different things are often conflated here, and only one of them is nearly complete.**
+
+| | count | state |
+|---|---|---|
+| **Catalogued** (searchable, promotable) | 102,390 listings / 59 venues | stocks + ADRs substantially complete outside the US; **US is at prefix B of 36**; **funds: 0 until #144 deploys** |
+| **Tracked** (priced, classified, fundamentals) | **12,350 equities** | the union of tracked-fund holdings + promoted listings — *not* the whole market, by design |
+| **Funds** | **74** | hand-picked for N-PORT holdings; ~6,664 US ETPs exist |
+| Bonds / derivatives / cash | 15,159 / 44 / 2 | typed from the filing, correctly excluded from equity views |
+
+Coverage of the 12,350 tracked equities: country 99.9%, symbol 97.3%, statements-attempted 97.7%,
+prices 94.6%, currency 94.0%, cap 93.7%, sector 90.5%, **industry 62.4%** (provider-limited; the
+chain reconciles with zero unexplained).
+
+**The gap between 102,390 catalogued and 12,350 tracked is deliberate**, not a backlog. Promoting
+everything would 3x the universe and flood rate-limited providers for weeks. The Track button
+promotes on demand; bulk promotion remains a product decision, and if wanted it is a
+`tracked_fund`-style control surface, not a code change.
+
+**The US directory sweep is the one genuine incompleteness in the catalogue.** It is
+letter-partitioned (A–Z then 0–9) because OpenFIGI stops paging at 15,000 while reporting ~20,107 US
+common stocks, and it advances one slice per cron pass, round-robin with 58 other venues. It will
+finish on its own; it is slow because the sweep is fair, not because it is stuck.
+
+## 6. What is left
+
+**Unblocked, in priority order:**
+
+1. **Deploy** (§0). Everything else assumes it.
+2. Verify #141: `security_corporate_action` → 0, then re-run and confirm every row carries an
+   `observed_symbol` matching the security's own price symbol.
+3. Verify #144: `pending_prices` falls, bars appear after 08-14, and the three stalled resources
+   show fresh `refresh_log` timestamps.
+4. Let the ETP sweep run, then decide which of the newly catalogued funds are worth *tracking*.
+5. **Back-adjust stored prices for splits** — we now hold 23 splits; this is ordinary work.
+6. **Total return from `divCash`** — we now hold 498 dividends. Was on the "blocked on money" list
+   and no longer is, for US listings.
+
+**Still blocked on money or a licence:** GICS proper, index membership, non-US corporate actions
+(Tiingo is US-only).
+
+**Still structurally impossible:** non-US UCITS funds file no N-PORT; commodity funds file 10-K.
+
+## 7. The pattern, stated once more because it recurred twice today
+
+**Both defects reported success while doing nothing.** `skipped: true` is a legitimate success that
+happened to mean "stopped for a week"; `remaining: 0` is a legitimate answer that happened to mean
+"I counted the wrong unit". Neither raised, neither moved a metric, and both were found by comparing
+a *reported* number against a *measured* one.
+
+The counter-measure that keeps working: **compare two populations, never watch one number.** The
+price-bar count being identical to the digit across three days is what exposed the TTL bug — not any
+error, not any check, just two measurements of the same thing on different days.
