@@ -828,10 +828,46 @@ EXCHANGE layer was not. Six PRs, each verified live:
       **THE FEED NOW EXISTS** (2026-08-15, deployment#139): `market.security_corporate_action`
       records splits and dividends from Tiingo for the ~6,645 US-tickered securities, verified
       against known history (NVDA 4-for-1 and 10-for-1, TSLA 3-for-1, GOOGL 20-for-1, WMT 3-for-1).
-      What remains is the SECOND half — a back-adjustment pass that applies those splits to stored
-      closes, and a total-return calculation from `divCash`. Both are now ordinary work rather than
-      blocked. Local foreign listings stay uncovered (Tiingo 404s them), so a Japanese split is
-      still invisible.
+      Local foreign listings stay uncovered (Tiingo 404s them), so a Japanese split is invisible.
+
+      ⚠️ **THE BACK-ADJUSTMENT HALF IS A NON-TASK, AND BUILDING IT AS WRITTEN WOULD HAVE CORRUPTED
+      THE DATA. Corrected 2026-08-17.** Everything above assumed stored closes are unadjusted.
+      **They are not — the provider already adjusts them.** OpenBB's yfinance provider takes
+      `adjustment {splits_and_dividends | unadjusted | splits_only}` and **defaults to
+      `splits_only`**, which is what `security-prices` has always been getting.
+
+      Verified against production rather than taken from the docs: **NFLX split 10-for-1 on
+      2025-11-17**, inside the ~400-day window, and its stored series is **completely smooth
+      across the ex-date** — ~$110 on both sides, where an unadjusted series would show a 10x
+      cliff. A discontinuity is *necessary* for unadjusted data, so its absence settles it without
+      needing an external price to compare against.
+
+      **A back-adjustment pass would therefore have divided already-adjusted closes a second
+      time**, turning NFLX's pre-split history into ~$11 and manufacturing exactly the fake
+      +900% the `firstComparableIndex` guard exists to prevent. The task read as obviously correct
+      and was the opposite.
+
+      What `firstComparableIndex` actually protects against is NOT splits, which is why it still
+      earns its place: **redenominations** (Tel Aviv moving quotes from shekels to agorot on
+      2026-05-18 — AMRM.TA and ISHO.TA both jump ~100x) and **OTC ratio changes**. No splits feed
+      fixes either; they are not corporate actions.
+
+      This is consistent with the earlier measurement that "the largest legitimate one-day move was
+      2.04x and the smallest illegitimate 6.0x, with nothing between" — if splits were unadjusted
+      the gap would have been full of them.
+- [ ] **Total return IS still real work, and there are two routes.** The `splits_only` default means
+      dividends are NOT reflected, so every number remains a PRICE return, as documented.
+      - **Route A — a second series.** Re-fetch with `adjustment=splits_and_dividends` and diff.
+        Simplest maths, provider's own adjustment, covers everything yfinance covers including
+        local foreign listings. Cost: **doubles requests per security**, against the hard rule that
+        the binding constraint here is requests per unit TIME.
+      - **Route B — `include_actions`.** yfinance's `equity/price/historical` accepts it and returns
+        `dividends` and `stock_splits` **as columns on the price response we already fetch** — one
+        call, no second series, no Tiingo dependency, and it works for non-US listings that Tiingo
+        404s. **Untested here**; if it holds it is strictly better than the Tiingo path for this
+        purpose. That would be the FIFTH time the answer was already inside a response we fetch
+        (market cap twice, operating country, currency).
+      Measure Route B before building either.
 - [ ] **Symbol changes** — the identifier model tolerates a rename, nothing detects one.
 - [ ] **Index membership** (S&P 500 etc.) — FMP premium; partially substitutable by fund holdings.
 - [ ] **The reporting currency of a STATEMENT is unknown for 376 securities** (audit 2026-08-15).

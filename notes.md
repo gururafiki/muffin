@@ -1415,9 +1415,19 @@ finish on its own; it is slow because the sweep is fair, not because it is stuck
 3. Verify #144: `pending_prices` falls, bars appear after 08-14, and the three stalled resources
    show fresh `refresh_log` timestamps.
 4. Let the ETP sweep run, then decide which of the newly catalogued funds are worth *tracking*.
-5. **Back-adjust stored prices for splits** — we now hold 23 splits; this is ordinary work.
-6. **Total return from `divCash`** — we now hold 498 dividends. Was on the "blocked on money" list
-   and no longer is, for US listings.
+5. ~~**Back-adjust stored prices for splits**~~ — **NON-TASK, and building it would have corrupted
+   the data.** Verified 2026-08-17: the provider already adjusts. OpenBB's yfinance provider
+   defaults to `adjustment=splits_only`, and NFLX's stored series is **smooth across its 10-for-1
+   split on 2025-11-17** (~$110 both sides) where unadjusted data would show a 10x cliff. A
+   back-adjustment pass would have divided already-adjusted closes again. `firstComparableIndex`
+   still earns its keep, but for **redenominations** (Tel Aviv shekels→agorot) and OTC ratio
+   changes — which are not corporate actions and no splits feed fixes.
+6. **Total return** — still real work, since `splits_only` excludes dividends. Two routes, and
+   **measure the second first**: (A) re-fetch with `adjustment=splits_and_dividends`, simple but
+   doubles requests per security against the binding constraint; (B) `include_actions`, which
+   yfinance returns as columns **on the price response we already fetch** — one call, covers the
+   non-US listings Tiingo 404s. If (B) holds it is the fifth time the answer was already in a
+   response we were fetching.
 
 **Still blocked on money or a licence:** GICS proper, index membership, non-US corporate actions
 (Tiingo is US-only).
