@@ -333,6 +333,26 @@ change, unless noted. Free/paid marked where a provider is involved.
       (`changePct > 15 ? 'growth'`). Needs a real factor source.
 - [ ] **Size bands, factor exposures, ESG, credit ratings, per-fund currency exposure.**
 
+**ETFs not CATALOGUED — different problem from "not tracked", and it was total (found 2026-08-17)**
+- [x] **The exchange directory contained ZERO funds** (deployment#144, migration 69). Of 102,390
+      rows in `exchange_listing`: 99,673 Common Stock, 2,717 Depositary Receipts, **0 funds** —
+      against the 74 ETFs the universe held, every one hand-added. Nothing could report it: every
+      coverage number is computed over `security_type_code = 'equity'`, so an entire missing asset
+      class moves no metric. **The failure was an ABSENCE, and absences do not raise.**
+      The trap, worth not rediscovering: OpenFIGI has TWO type vocabularies and only the fine one
+      works here. `securityType2: 'Mutual Fund'` returns **44,119** for the US (FEUCX, WATFX —
+      open-end funds, not exchange-traded, and over the 15,000 paging ceiling), while
+      `securityType: 'ETP'` returns **6,664** actual ETFs. SPY is `securityType: 'ETP'` INSIDE
+      `securityType2: 'Mutual Fund'`. `exchange_sweep_type.figi_field` now records which field a
+      type uses. A typo there does NOT error — **OpenFIGI ignores an unknown filter key and returns
+      the venue unfiltered**, which is how "Samsung Electronics" once returned 8,725 mostly options.
+- [ ] **Decide which newly-catalogued funds to TRACK.** Cataloguing makes ~6,664 US ETPs searchable
+      and promotable; it deliberately does NOT ingest their holdings. Tracking all of them would
+      mean 6,664 N-PORT filings against SEC's ~10 req/s fair-access limit and would swamp every
+      downstream backlog — and most are not US-registered so they file no N-PORT at all.
+      `tracked_fund` stays curated; this just makes choosing the next one a query instead of a
+      memory. **Blocked on a product call, not on engineering.**
+
 **ETFs not tracked** (a row in `market.tracked_fund` each)
 - [x] **Style/size and thematic ADDED 2026-08-13** (migration 48): IWF, IWD, IWM, RSP, SMH, ICLN.
       IWM alone brought 1,922 small caps no other tracked fund holds. **MDY was REJECTED** — it is
