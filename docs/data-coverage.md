@@ -105,7 +105,7 @@ MSCI/FTSE/World Bank lens, and a full classification tree.
 
 | Gap | State |
 |---|---|
-| **Total return / dividend-adjusted performance** | **Dividends are now CAPTURED** (deployment#149) — `include_actions` defaults to `true` in openbb's yfinance provider, so they were arriving on the price response all along and `barFrom` discarded them. Verified live: 15 of the first 24 captured are NON-US (Tel Aviv, Saudi, Toronto, Lima), which closes the "corporate actions are US-only" gap Tiingo could not. **Computing the return is what remains.** |
+| ~~**Total return**~~ **DONE 2026-08-18** (deployment#149 + #153) | Dividends were arriving on the price response all along — `include_actions` defaults to `true` in openbb's yfinance provider and `barFrom` discarded them. `performance.total_return_pct` now carries a **daily-reinvested** total return beside the price return. Verified live: of 79 one-year rows, **55 show total > price, 24 show total = price exactly, and 0 show total < price** (which would be impossible). Implied yields: median **1.75%**, p90 5.37%, max 8.13%, **none above 25%** — and the top of the distribution is REITs (Gecina, Landsec, Kite Realty), which is where a domain expert would predict it. |
 | **ETFs as tracked funds** | 74 tracked against ~6,664 US ETPs. Cataloguing is now live; deciding which to *track* is a product call |
 | **The US directory sweep** | letter-partitioned A–Z + 0–9 and still early. It completes on its own |
 | **Reporting currency of statements** | unknown, so the label is **withheld rather than guessed**. Five sources checked; none supplies it. Needs `quoteSummary.financialCurrency` (blocked on a Yahoo crumb) |
@@ -214,7 +214,11 @@ industry, prices current daily, statements and fundamentals broadly present.
 100% maturity coverage on 2026-08-18, from filings we were already parsing. What is left there is
 credit rating (licensed) and yield (derivable, not yet built).
 
-**The largest remaining correctness gap is total return.** The dividends are now in the database;
-until the computation lands, every return in the app is a price return and understates high-yield
-markets. That is a number that is quietly WRONG rather than merely absent, which makes it worth more
-than anything else on this list.
+**The largest correctness gap — total return — is closed as of 2026-08-18.** `performance` now
+carries a daily-reinvested `total_return_pct` beside `change_pct`, verified against 79 one-year rows
+with zero impossible values and a median implied yield of 1.75%.
+
+**What is left is mostly product decisions and licensed data**, not engineering: which catalogued
+ETFs to track, whether to bulk-promote the untracked directory, and the licensed sets (GICS, index
+membership, ratings, estimates). The one free item still worth doing is **FX rates** — without them
+market cap cannot be compared across markets, which is why the mega-cap canary is US-only.
