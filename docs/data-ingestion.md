@@ -412,6 +412,35 @@ no default — omitting it makes the resource `unknown`), a name in `market-warm
 
 ---
 
+## 9b. Measured freshness — what the TTLs actually achieve
+
+`stale_after` is a REQUEST, not a guarantee, and the gap is worth knowing before reading it as one.
+Measured 2026-08-18 across 81,474 `performance` rows:
+
+| age | share |
+|---|---|
+| older than 1 day | 52.0% |
+| older than 3 days | 46.5% |
+| older than 7 days | **0.2%** |
+| older than 14 days | **0** |
+
+So the full cycle completes in about a week and nothing is older than 8 days, while every row
+declares a **24-hour** TTL. The difference is throughput: `security-performance` covers ~360–640
+securities per run against ~12,350 equities, and the binding constraint is the provider's rate
+limit rather than the schedule.
+
+**Every period carries the SAME 24h TTL**, so a `1d` return can be three days old — it is the daily
+move *as of* its `as_of`, not as of now. That is disclosed rather than hidden: the UI's `Freshness`
+component renders the true age (`"3d ago · yfinance"`) beside the number.
+
+It is deliberately not "fixed" by refreshing short periods more often. One fetch produces every
+period from the same series, so splitting them by period would multiply provider calls — against the
+one constraint that actually binds — to buy freshness on the periods that matter least in a system
+whose charts are already drawn from `security_price`.
+
+Prices themselves are current: spot-checked across AAPL, 7203.T, 005930.KS, NESN.SW, BHP.AX and
+PETR4.SA, the newest bar is the last trading day in every market.
+
 ## 10. Known gaps in the *pipeline*
 
 For gaps in the *data*, see [data-coverage.md](data-coverage.md).
