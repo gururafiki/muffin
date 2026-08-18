@@ -1513,6 +1513,56 @@ US-registered funds hold (via N-PORT) plus promoted listings. Growing tracked no
 adding country/regional ETFs to `tracked_fund`, or bulk promotion — a product decision, not an
 engineering gap.
 
+## 6d. The catalogue sweep: three defects in one budget, and only one guard shape caught the last
+
+Shipped 2026-08-17/18 as deployment#146, #147 and #148. The end state is verified — two consecutive
+runs, `stoppedBecause: request budget`, `requestsUsed: 18`, no venue throttled, ~1,750 listings
+written per run — but the route there is the useful part.
+
+**#146 — the sweep did one venue per invocation.** 59 venues x 3 instrument types plus 36
+letter-partitions x 3 for the one venue over the paging ceiling = **282 slices** at 8 cron runs a
+day = a **35-day** full catalogue pass, with Portugal's 50 listings costing the same slot as a
+4,000-listing venue. Neither binding limit was ever per-invocation, so the loop now budgets wall
+clock and requests explicitly.
+
+**#147 — the budget counted PAGES, not requests.** `pages` is incremented by the for-update clause,
+so a venue answering in ONE request and breaking out reports `pages: 0`. Measured on the first
+multi-venue run: nine of ten venues reported `pages: 0` while writing rows, and the run counted 11
+requests against ~21 made.
+
+**#148 — the budget was sized against a DIFFERENT ENDPOINT's limit.** The widely-quoted "250
+requests/minute with an API key" is `/v3/mapping`. The sweep calls `/v3/filter`. Measured against
+our key after letting the bucket reset: **20 consecutive 200s, first 429 on request 21** — which
+matches the sweep exactly, since it reported `requestsUsed: 21` and stopped throttled. A budget of
+150 against a real ceiling of 20 could never bind before the provider did.
+
+**The lesson is about GUARD SHAPE, and it is worth more than the fix.** Each layer looked correct in
+isolation and two guards passed throughout:
+
+| guard | kind | caught |
+|---|---|---|
+| "is the counter incremented" | SHAPE | not #147 — it was incremented, by the wrong thing |
+| "is the reserve in the while condition" | SHAPE | not #148 — the condition was fine |
+| "`REQUEST_BUDGET` <= the MEASURED ceiling" | **VALUE** | **#148**, and mutations to 150 and 21 both fail |
+
+A guard that asserts the shape of the code cannot see a wrong quantity. Only one asserting a value
+against a measurement can. The measured ceiling now lives in `logic-check.ts` next to the
+assertion, so changing `REQUEST_BUDGET` means reckoning with a number someone measured rather than
+one someone remembered.
+
+**Also settled, and it removes a standing worry:** `/v3/mapping` and `/v3/filter` are **separate
+buckets** — mapping returns 200 while filter returns 429 — so `security-tickers` and
+`security-local-symbols` are never affected by the sweep being throttled.
+
+**And a mistake of mine that had real consequences.** A coverage probe I launched to enumerate all
+1,042 unswept OpenFIGI venues ran for **14.5 hours against a 14-minute estimate** — its backoff was
+up to 200s per venue on a 429, so it thrashed rather than finished — while spending the PRODUCTION
+key's quota the whole time. That is what caused the `openfigi throttled` I first saw and correctly
+declined to interpret. It was killed; the definitive list of unswept venues carrying real companies
+is still **unmeasured**. Low priority: 59 venues across 46 countries are swept and symbol
+resolution is healthy at 0-5% missing everywhere. If it is re-run, it needs sane backoff and its own
+key.
+
 ## 7. The pattern, stated once more because it recurred twice today
 
 **Both defects reported success while doing nothing.** `skipped: true` is a legitimate success that
