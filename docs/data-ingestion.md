@@ -152,7 +152,8 @@ The app should never join five tables on a phone.
 | **openbb-api** (internal service, same image as `openbb-mcp`) | `http://openbb-api:6900/api/v1/...` | none (private overlay) | provider-dependent | most resources |
 | ↳ **yfinance** (through openbb) | keyless | — | throttles by **200-with-no-rows** | prices, performance, profiles, industries, fundamentals, statements |
 | ↳ **finviz** (through openbb) | keyless | — | US-listed only | sector performance |
-| **OpenFIGI** | `api.openfigi.com/v3/{filter,mapping}` | `OPENFIGI_API_KEY` | **250 req/min** keyed (25×10 anon) | exchange sweep, ticker + local-symbol resolution |
+| **OpenFIGI** `/v3/mapping` | `api.openfigi.com/v3/mapping` | `OPENFIGI_API_KEY` | **250 req/min** keyed (25×10 anon) | ticker + local-symbol resolution |
+| **OpenFIGI** `/v3/filter` | `api.openfigi.com/v3/filter` | `OPENFIGI_API_KEY` | **20 req/min** keyed — MEASURED, a separate bucket | exchange sweep |
 | **SEC EDGAR** | `data.sec.gov`, `efts.sec.gov`, `www.sec.gov` | descriptive User-Agent (mandatory) | ~10 req/s fair access | fund holdings (N-PORT) |
 | **Tiingo** | `api.tiingo.com/tiingo/daily/<sym>/prices` | `TIINGO_TOKEN` | hourly allocation, caps **unique symbols** | corporate actions |
 | **Yahoo search** | `query2.finance.yahoo.com/v1/finance/search` | keyless | — | ISIN → home-market symbol |
@@ -181,6 +182,12 @@ equity/compare/groups        finviz sector performance (US only)
   erroring — a typo in a filter field floods rather than fails.
 - **OpenFIGI stops paging at 15,000** while reporting the true total. Venues above it are swept in
   36 ticker-prefix partitions, triggered off the reported `total`, not a hardcoded list.
+- **`/v3/filter` and `/v3/mapping` have DIFFERENT limits and separate buckets.** The widely-quoted
+  "250 requests/minute with an API key" is `/v3/mapping`. `/v3/filter` was measured 2026-08-18 at
+  **20/min keyed** — 20 consecutive 200s, first 429 on request 21. Sizing the sweep's budget
+  against the mapping figure made it 7.5x too large, so it could never bind before the provider
+  did. Verified separate: `/v3/mapping` returns 200 while `/v3/filter` is returning 429, so
+  throttling the sweep does not affect ticker resolution.
 - **FMP is unusable here**: v3 answers `403 Legacy Endpoint` (and openbb's provider calls v3); the
   `stable` line gates per symbol so hard that `ROST` and `TPR` return 402.
 - **Symbols are not URL-safe.** `BRK/B` 400s its whole batch; `PE&OLES*.MX` **truncates the symbol
