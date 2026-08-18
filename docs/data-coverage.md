@@ -98,14 +98,14 @@ MSCI/FTSE/World Bank lens, and a full classification tree.
 | **Non-US UCITS funds** (most European ETFs) | they file **no N-PORT** — there is no equivalent public holdings disclosure |
 | **Commodity funds** (SLV, USO, DBC) | trusts and pools filing **10-K**, not N-PORT |
 | **Unit investment trusts** (MDY) | file no N-PORT |
-| **Non-US corporate actions** | Tiingo is US-listed only; a Japanese split is invisible to us |
+| **Non-US corporate actions** | ~~Tiingo is US-listed only~~ — **DIVIDENDS SOLVED** 2026-08-18 via the yfinance price response (deployment#149), which covers every market yfinance does. **Splits are still US-only**: `stock_splits` rides on the same response and is not yet captured. Low urgency, because bars arrive already split-adjusted, so a missing split corrupts nothing — it is only an absent fact. |
 | **Local-listing fundamentals for some venues** | keyless yfinance does not cover e.g. Philippines (`ICT.PS`) or UAE (`FAB.AE`) — confirmed by driving them directly |
 
 ### 3.3 Built but not finished
 
 | Gap | State |
 |---|---|
-| **Total return / dividend-adjusted performance** | every number is a **price** return. Bars arrive `splits_only`-adjusted. We now hold dividends for US listings, so this is ordinary work — but **measure `include_actions` first**, since it may return dividends as columns on the price response we already fetch |
+| **Total return / dividend-adjusted performance** | **Dividends are now CAPTURED** (deployment#149) — `include_actions` defaults to `true` in openbb's yfinance provider, so they were arriving on the price response all along and `barFrom` discarded them. Verified live: 15 of the first 24 captured are NON-US (Tel Aviv, Saudi, Toronto, Lima), which closes the "corporate actions are US-only" gap Tiingo could not. **Computing the return is what remains.** |
 | **ETFs as tracked funds** | 74 tracked against ~6,664 US ETPs. Cataloguing is now live; deciding which to *track* is a product call |
 | **The US directory sweep** | letter-partitioned A–Z + 0–9 and still early. It completes on its own |
 | **Reporting currency of statements** | unknown, so the label is **withheld rather than guessed**. Five sources checked; none supplies it. Needs `quoteSummary.financialCurrency` (blocked on a Yahoo crumb) |
@@ -132,10 +132,24 @@ now a *query* rather than a memory: the catalogue can tell you which funds exist
 small-cap or emerging-market fund brings thousands of securities no current fund holds. **IWM alone
 once brought 1,922 small caps.** Cheap, no code.
 
-**3. Bond reference data.** 15,159 bonds — the largest single slice of the universe — carry
-essentially nothing: no coupon, no maturity, no rating, no yield. They arrive from AGG/LQD/HYG
-holdings and then sit there. N-PORT itself carries maturity and coupon in fields we currently
-discard, so **the first increment needs no new provider at all**.
+**3. ~~Bond reference data.~~ DONE 2026-08-18 (deployment#150).** The first increment needed no new
+provider, exactly as predicted: N-PORT's `<debtSec>` block was in filings we already download and
+`parseHoldings` read around it. Measured after deploying and re-ingesting the five bond funds:
+
+| | before | after |
+|---|---|---|
+| bonds with a maturity date | **0** | **15,159 (100%)** |
+| zero-coupon bonds identified | — | 13 |
+| bonds flagged **in default** | — | 10 |
+| coupon kinds (learned, not seeded) | — | Fixed · Variable · Floating · None |
+
+The maturity spread is now queryable: 14 maturing before 2027, 3,006 before 2030, 12,137 before
+2050. The longest are university **century bonds** maturing 2122 — a real instrument class, checked
+rather than assumed to be a parse error.
+
+Still missing for bonds: **credit rating** (licensed — S&P/Moody's/Fitch) and **yield to maturity**,
+which needs a bond price we do not have; N-PORT gives `valUSD` and `balance`, from which a price can
+be derived, but that is a separate piece of work.
 
 **4. Finish the ETF catalogue and pick the tracking rule.** Cataloguing is live; ~6,664 US ETPs
 exist. A defensible rule ("track any ETF above $1bn AUM", "track any fund a user opens") turns a
@@ -196,5 +210,11 @@ industry, prices current daily, statements and fundamentals broadly present.
 3. **Market cap is denominated in each security's own currency** and cannot be compared across
    markets until FX lands.
 
-**The largest untapped asset is the bond slice** — 15,159 securities, the majority of the universe,
-carrying almost no attributes, with the first improvement available from filings we already parse.
+**The bond slice is no longer the largest untapped asset** — it went from no attributes at all to
+100% maturity coverage on 2026-08-18, from filings we were already parsing. What is left there is
+credit rating (licensed) and yield (derivable, not yet built).
+
+**The largest remaining correctness gap is total return.** The dividends are now in the database;
+until the computation lands, every return in the app is a price return and understates high-yield
+markets. That is a number that is quietly WRONG rather than merely absent, which makes it worth more
+than anything else on this list.
