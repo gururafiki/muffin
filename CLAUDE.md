@@ -1087,6 +1087,20 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   liquidity tier" cannot be gated on liquidity: you must promote a security to learn its cap, which
   is the chicken-and-egg the venue tier exists to sidestep. A cap floor can only PRUNE after
   promotion, never gate before it. Do not design a promotion order that assumes otherwise.
+- **KILLING THE CLIENT DOES NOT KILL THE QUERY — I STALLED A PRODUCTION DEPLOY FOR 22 MINUTES THIS
+  WAY.** An exploratory analysis over `untracked_listing` hit the 2-minute tool timeout, which
+  killed `ssh`/`psql` and looked like the query had been abandoned. The SERVER kept executing it.
+  It held locks for **1,375 seconds**, and the deploy that started 20 minutes later sat behind it:
+  `insert into market.identifier_kind` blocked 567s, `create view market.security_current` 308s.
+  The run showed only "Terraform apply, in progress" — nothing in CI says "blocked on a lock", so
+  it read as a slow deploy. **Diagnose a slow deploy with `pg_blocking_pids`, not by waiting**, and
+  set `statement_timeout` on any exploratory query against the node — a client timeout is not a
+  server timeout.
+  Two smaller traps in the cleanup: `pg_terminate_backend` filtered by `query like '%...%'` matches
+  **its own text**, so without `pid <> pg_backend_pid()` the killer terminates itself and the target
+  survives (measured — the first attempt died with `terminating connection due to administrator
+  command` and the blocker lived). And one logical query occupied **two** backends, so the fix is to
+  terminate the matched SET rather than a single pid.
 - **A DEAD APT MIRROR LOOKS LIKE A FLAKY NETWORK AND IS PERMANENT.** Two deploys failed with
   `Failed to update apt cache after 5 retries: ` — no cause in the message, and "after 5 retries"
   reads as transient, so the second deploy was run purely on that assumption. Oracle's cloud-init
