@@ -965,6 +965,52 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   percentiled over the calibration set while the view percentiles universe-wide. The header's
   confusion matrix was real, honest, and described nothing that existed. Re-derive the metric by
   running the SHIPPED expression, not the notebook's.
+- **THE ANON TIMEOUT BITES ON THE CONJUNCTION, NOT ON ANY SINGLE PREDICATE — and that is why a view
+  can pass every probe and still be broken.** `security_facets` answered anon in 0.72s filtered by
+  country, 0.33s by sector and 0.58s by tier, and returned
+  `57014 canceling statement due to statement timeout` for **tier AND sector together**: two filters
+  collapse the planner's row estimate to 1, it switches to nested loops, and `security_current`'s
+  per-row sector lookup runs **59,076 times** behind a `Seq Scan on security` costed at 538,553.
+  Second occurrence of this shape after `fund_sector_weight`. **Probe the CONJUNCTIONS, not one
+  filter at a time** — and note the plan was not what I predicted (I blamed `security_style`'s
+  `percent_rank`, which costs real time but was not the binding constraint; the lens pivot I also
+  suspected costs 21). Fixed by MATERIALISING the spine (migration 80): the failing query went
+  2993ms → 0.47ms, a 3-way filter to 0.6ms, and — the actual point — the cost became BOUNDED for any
+  combination, which plan-tuning one query never is.
+- **`IF EXISTS` DOES NOT PROTECT AGAINST A RELKIND MISMATCH.** Measured: `drop view if exists` on a
+  materialized view raises `"x" is not a view`, and `drop materialized view if exists` on a plain
+  view raises `"x" is not a materialized view` — so **neither ordering of the two is safe** and the
+  object survives both. Any migration that may meet either form needs a `relkind`-aware `do` block.
+  Migration 13's `pg_depend` loop needed the same fix: a matview HAS a `pg_rewrite` entry, so it is
+  discovered as a dependent and the plain `drop view` fails the deploy on pass 2. The four-pass test
+  passed before that fix **only because migration 13 happened to run first and remove it** —
+  accidental safety, and exactly the kind that stops being true when files are reordered.
+- **`information_schema` OMITS MATERIALIZED VIEWS ENTIRELY** — it reports **0 columns** for one, so
+  any check written against `information_schema.columns` fails for a reason unrelated to what it
+  tests. Use `pg_attribute`. (Cost one false "the column is missing" while it was plainly there.)
+- **A MATERIALIZED VIEW MAKES EVERY FIXTURE-BASED TEST A SNAPSHOT TEST.** Rows inserted in the test
+  transaction are invisible until the view is rebuilt, so three existing tests began failing for a
+  reason that had nothing to do with their subject. They now `refresh materialized view` after
+  inserting — the **non-concurrent** form deliberately, because `refresh … concurrently` cannot run
+  inside a transaction block and a test that cannot roll back is not a test.
+- **COVERAGE AND CONCENTRATION ARE DIFFERENT QUESTIONS, AND A HIGH COVERAGE ACTIVELY IMPLIES THE
+  WRONG ANSWER TO THE SECOND.** `aggregate_performance` returned developed/large-cap/value
+  information technology at **+327.40%** with `constituents 77/80` and `weight_covered 0.98` — every
+  completeness guard satisfied, the arithmetic correct, and **240 of those 327 points from two
+  companies** (MU +670.8% at $1,088.7bn; SNDK +3,471.6% at $185.6bn). The returns were REAL, which
+  was checked rather than assumed: MU has 276 smooth bars, largest single-bar move ×1.19, SNDK
+  ×1.28 — far under this pipeline's ×6-in-one-bar corruption threshold. **Weight share alone does
+  not detect it**: MU is 19% of the bucket by cap and SNDK only 3.2%, yet SNDK supplies a third of
+  the answer. Concentration in a weighted mean lives in `weight × return`, so the measure is the
+  largest single **|w·r|** over the summed **|w·r|**, absolute so a big faller cannot hide behind
+  the risers. The 2.5× gap between the cap-weighted and equal-weighted means was the first hint —
+  which is why both are returned.
+- **A FIXTURE WHERE TWO RANKINGS AGREE CANNOT TELL THEM APART, AND THE MUTATION WILL PASS CLEAN.**
+  The concentration test's top contributor was also its largest holding, so "rank by market cap" and
+  "rank by influence" produced the same answer and a mutation swapping them was undetectable. The
+  replacement makes all three plausible rankings pick **different** securities — WHALE ($100bn, +1%)
+  by weight, RISER (+300) by signed contribution, CRASH (−1,000) by absolute influence. When a guard
+  distinguishes between candidate rules, the fixture has to make those rules disagree.
 - **A DEAD APT MIRROR LOOKS LIKE A FLAKY NETWORK AND IS PERMANENT.** Two deploys failed with
   `Failed to update apt cache after 5 retries: ` — no cause in the message, and "after 5 retries"
   reads as transient, so the second deploy was run purely on that assumption. Oracle's cloud-init
