@@ -1101,6 +1101,32 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   survives (measured — the first attempt died with `terminating connection due to administrator
   command` and the blocker lived). And one logical query occupied **two** backends, so the fix is to
   terminate the matched SET rather than a single pid.
+- **"DOES IT RETURN ROWS" IS NOT "IS IT STILL PUBLISHED" — a series can answer and be a year
+  stale.** Migration 83 drove all 42 FRED candidates before seeding, precisely so a retired id could
+  not ship blind, and still shipped three defects that only the FIRST REAL RUN exposed. Ten CPI
+  series (`CPALTT01*M659N`) end at **2025-04-01**: the probe used `start_date=2025-01-01`, saw 4
+  rows and `latest 2.311289`, and that was read as current when it was April 2025. The resource's
+  400-day window starts after the last observation, so it correctly got zero.
+  `us-unemployment-fred` was worse — it ANSWERED, with data eleven months old, beside a current
+  OECD series. **Check the DATE of the newest observation, not the row count.**
+- **TWO SERIES FOR ONE FACT IS WORSE THAN NONE.** The FRED seed duplicated what migration 82 already
+  had (US and German CPI, US unemployment), so a country panel would show two rows labelled the
+  same thing, disagreeing, with no way to tell which to believe. Guarded by
+  `one-fact-one-series.sql` on (country, category) — but NOT for `rates`, where a 10y yield, EFFR,
+  SOFR and a yield curve are four INSTRUMENTS rather than four answers.
+- **A UNIT IS A MEASUREMENT, NOT A GUESS.** `us-gdp-real` was catalogued `index`; OECD's
+  `gdp/real` actually returns **25,575,729,500,000** (and `gdp/nominal` 32,475,210,000,000) — USD
+  LEVELS at the right magnitude for US GDP. The panel prints a value it cannot name as a bare
+  number, so the deployed US page read `25575729500000`. `macro_indicator.unit` now holds a
+  THREE-LETTER CURRENCY CODE where the value is money, because OECD returns GDP in each country's
+  NATIONAL currency — a boolean "is money" cannot carry that, and defaulting to dollars is how the
+  currency bug started.
+- **A TERM STRUCTURE IS ONE FACT, NOT ELEVEN ROWS.** `us-yield-curve` returns a point per maturity,
+  so the first country panel rendered the US with **18 rows, 11 of them the curve**, against 2-3 for
+  every other country. Anything rendering `macro_current` must collapse per SERIES, not per
+  observation. Guarded offline in `macro-format.ts` + `scripts/macro-panel-check.ts` — the panel
+  component itself imports react-native, which `tsx` cannot transform, so testable logic has to
+  live outside it (the same split `money.ts` uses).
 - **A DEAD APT MIRROR LOOKS LIKE A FLAKY NETWORK AND IS PERMANENT.** Two deploys failed with
   `Failed to update apt cache after 5 retries: ` — no cause in the message, and "after 5 retries"
   reads as transient, so the second deploy was run purely on that assumption. Oracle's cloud-init
