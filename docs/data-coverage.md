@@ -1,6 +1,6 @@
 # Market data coverage — what we have, what we don't, what's worth adding
 
-**Measured against production 2026-08-18.** Every number here was counted, not estimated. How the
+**Measured against production 2026-08-19.** Every number here was counted, not estimated. How the
 pipeline works is a separate document: [data-ingestion.md](data-ingestion.md).
 
 ---
@@ -11,15 +11,44 @@ Two different things get called "the universe", and only one of them is nearly c
 
 | | count | what it means |
 |---|---|---|
-| **Catalogued** | **107,985 listings** / 59 venues / 46 countries | findable in search, promotable on demand. Name, ticker, FIGI, venue. **No price, no sector, no fundamentals.** |
+| **Catalogued** | **108,217 listings** / 59 venues / 46 countries | findable in search, promotable on demand. Name, ticker, FIGI, venue. **No price, no sector, no fundamentals.** |
 | **Tracked** | **27,629 securities** (12,350 equity) | fully ingested — priced, classified, fundamentals, statements |
-| **Untracked** | **92,728 listings** | catalogued but not tracked |
+| **Untracked** | **92,938 listings** | catalogued but not tracked |
 
 **The gap is deliberate, not a backlog.** The tracked universe is the union of what US-registered
-funds hold (via SEC N-PORT) plus listings someone promoted. Promoting all 92,728 would roughly
+funds hold (via SEC N-PORT) plus listings someone promoted. Promoting all 92,938 would roughly
 quadruple the universe and flood rate-limited providers for weeks, for companies nobody has asked
-for. The Track button promotes on demand; bulk promotion is a product decision and would be a
-`tracked_fund`-style control surface, not a code change.
+for.
+
+**The control surface for bulk promotion now exists** (2026-08-19), and it is opt-in per venue —
+`market.exchange.promotion_tier` / `.promotion_enabled`, drained by the `promote-wave` resource.
+It does **nothing** until an operator enables a venue, which is the correct default: every promoted
+security becomes work for five rate-limited backlogs, so promoting faster than they drain starves
+the securities people are already looking at.
+
+**The order is the feature, and the obvious order is wrong.** Ranking venues by untracked count puts
+Frankfurt first (15,711, ahead of the US at 10,160). Measured on a 400-listing sample per venue,
+matched by name against securities already held:
+
+| venue | sampled | already in universe | % |
+|---|---|---|---|
+| **GR** Frankfurt | 400 | 73 | **18.3** |
+| IB India | 400 | 24 | 6.0 |
+| LN London | 400 | 21 | 5.3 |
+| HK | 400 | 19 | 4.8 |
+| US | 400 | 2 | 0.5 |
+| JP | 400 | 1 | 0.3 |
+
+Nearly a fifth of Frankfurt's untracked listings are **cross-listings of companies already tracked**.
+`untracked_listing` cannot see this because it excludes by composite FIGI, and `composite_figi` is
+per **country of listing**, not per company — so the listing is genuinely untracked while the company
+is not. Promoting it mints a duplicate that consumes profile, price and statement calls of its own.
+18.3% is a LOWER BOUND: exact name matches only. Hence `promotion_tier` ranks home markets first, and
+`pending_promotion` dedupes by name against what we hold.
+
+**`exchange_listing` carries no liquidity or market-cap signal at all** — only identity. So "promote
+by liquidity" cannot be gated on liquidity: you must promote a security to learn its cap. A cap floor
+can only PRUNE after promotion, never gate before it.
 
 ---
 
@@ -35,8 +64,8 @@ for. The Track button promotes on demand; bulk promotion is a product decision a
 | ├ ETF | 74 |
 | ├ derivative | 44 |
 | └ cash | 2 |
-| catalogued listings | 107,985 |
-| tracked funds (ETFs we ingest holdings from) | 74 |
+| catalogued listings | 108,217 |
+| tracked funds (ETFs we ingest holdings from) | 79 |
 | fund holdings | 39,886 |
 | price bars | ~3.06 M |
 | taxonomy nodes (sectors + industries) | 162 |
@@ -75,6 +104,63 @@ all, ~331 have no symbol to ask about.
 Sector and country performance, fund sector/country weights (the Markets donut), sector
 constituents ranked by the weight the fund actually reports in its SEC filing, country tiers by
 MSCI/FTSE/World Bank lens, and a full classification tree.
+
+### 2.5 Filters and recomputed aggregates (2026-08-19)
+
+`market.security_facets` is one row per security carrying **every dimension a list can filter by** —
+region, MSCI/FTSE tier, World Bank income group, sector, industry code, cap band, style, currency,
+and bond maturity/coupon. Region, tier and income group had been seeded for 181–221 countries and
+joined to *nothing* until this view; bonds (15,159 of 27,629) could not be filtered at all.
+
+**It is MATERIALISED, and that is not an optimisation.** As a plain view, filtering by
+`msci_tier` AND `sector_id` together returned `57014 canceling statement due to statement timeout`
+to anon — each predicate was survivable alone (0.3–0.7s) and the conjunction was not, because the
+planner's estimate collapses and a per-row sector lookup runs 59,076 times. Materialised: **0.35s**,
+and bounded — eight combinations up to a 5-way conjunction all land between 0.26s and 0.38s.
+Refreshed by `facets-refresh` (60-minute TTL); `refreshed_at` carries the snapshot's age.
+
+`market.aggregate_performance(period, group_by, …12 filters)` recomputes a weighted mean over any
+filtered slice, grouped by any facet. Cap-weighted **and** equal-weighted, because one mega-cap can
+carry a sector while its median name falls.
+
+**It returns concentration, not just coverage — they are different questions.** Developed large-cap
+value information technology reported **+327.40%** with `constituents 77/80` and `weight_covered
+0.98`: every completeness guard satisfied, the arithmetic correct, and **240 of those 327 points from
+two companies** (MU +670.8%, SNDK +3,471.6%). The returns were real — checked, because a number that
+large is usually a broken series: MU has 276 smooth bars, largest single-bar move ×1.19, against this
+pipeline's ×6-in-one-bar corruption threshold. So `top_contributor` / `top_contributor_share` ship
+alongside. Weight share alone would miss it: SNDK is 3.2% of the bucket by cap and supplies a third
+of the answer.
+
+### 2.6 Style — growth/value (2026-08-19)
+
+`market.security_style` fits book-to-price against **Russell 1000 Growth/Value membership**
+(IWF/IWD are tracked funds), rather than inventing a rule. Measured accuracy **0.678** against a
+0.629 base rate, **2.5% outright swaps**; per-class recall value 0.84, growth 0.48.
+
+**Ranked WITHIN a (tier × cap band) peer group, which is the whole design.** Ranked globally, the
+median Russell 1000 name sits at the **0.299 percentile of the world** — 70% of global equities are
+cheaper than the median US large cap — so a threshold that splits the Russell sensibly labelled
+**89% of all securities "value"**. Accuracy was flat at ~0.71 across every candidate cohort and could
+not detect this, because the calibration set is 63% one class. Growth recall (0.55 → 0.70) and
+cohort-centredness (0.299 → 0.430) could.
+
+The shipped thresholds are **not** the most accurate ones: matching Russell's own name proportions
+halves outright growth↔value swaps (4.5% → 2.5%) while scoring lower, and a swap is the only error a
+user sees. `style_source` distinguishes an index fact from a 0.678 model; 98.2% of scoreable
+equities land in one of 7 cohorts, and the rest get **no style** rather than one computed against
+strangers.
+
+### 2.7 Macro (2026-08-19)
+
+`market.macro_indicator` is a control table — adding a series is a row, never a migration — with
+`market.macro_observation` and the `macro_current` serving view. **49 series across 14 countries**:
+OECD CPI/GDP/unemployment, federal_reserve yield curve/EFFR/SOFR, FRED 10y yields and unemployment,
+and yfinance gold/WTI/BTC/S&P 500. Driven by `macro-indicators` (6-hour TTL); **2,137 observations**
+on the first production run.
+
+Observations key on **(indicator, date, dimension)** because a yield curve is a term structure —
+flattening it would make the "curve" whichever maturity was written last.
 
 ---
 
@@ -167,10 +253,15 @@ signal for the agent's analysis, not just the UI.
 **7. Corporate filings / news.** The agent does deep research; having filings indexed against
 `security_id` would make that grounded rather than searched.
 
-**8. FX rates.** With 337 of 1,000 sampled securities non-USD, cross-market comparison is currently
-impossible — you cannot rank a JPY market cap against a USD one. ECB publishes daily reference rates
-free. **This unlocks the market-cap lens that is US-only today**, which is also why the
-`market-verify` mega-cap canary has three blind spots.
+**8. ~~FX rates.~~ DONE 2026-08-18 (deployment#152).** `market.fx_rate` covers **41 currencies**
+with subunit handling derived rather than authored, and `security_market_cap_usd` is the comparable
+figure. It unlocked exactly what was predicted: `security_facets.cap_band` bands on the USD value and
+is **NULL when no rate is known** — a cap with no FX rate is unbanded, never guessed, because banding
+a ₩1,802tn Korean company off its native figure puts it three orders of magnitude wrong.
+
+The `market-verify` mega-cap canary is still US-only, and that constraint is real rather than
+oversight: `security.market_cap` is denominated in each security's own currency, so the canary
+checks by **fund weight** instead — a percentage is free of currency, cap and country.
 
 ### Tier 3 — worth doing once the above lands
 
@@ -205,10 +296,15 @@ industry, prices current daily, statements and fundamentals broadly present.
 
 **Three things I would want a user to know before trusting a number:**
 
-1. **All returns are price returns.** No dividends. High-yield markets are understated.
-2. **Industry is 62% covered**, and the missing 38% is the provider's limit, not a queue.
-3. **Market cap is denominated in each security's own currency** and cannot be compared across
-   markets until FX lands.
+1. **Industry is 62% covered**, and the missing 38% is the provider's limit, not a queue.
+2. **A filtered aggregate can be well-covered and still be two companies.** `weight_covered`
+   answers completeness, not concentration — read `top_contributor_share` beside it.
+3. **Style is a model, not a fact, outside the ~1,000 index-labelled names.** `style_source` says
+   which you are looking at; growth recall is 0.48.
+
+*(The first two entries here previously read "all returns are price returns" and "market cap cannot
+be compared until FX lands". Both were already false when written — total return shipped 2026-08-18
+and FX the same day — which is exactly the failure mode this document exists to prevent.)*
 
 **The bond slice is no longer the largest untapped asset** — it went from no attributes at all to
 100% maturity coverage on 2026-08-18, from filings we were already parsing. What is left there is
@@ -219,6 +315,9 @@ carries a daily-reinvested `total_return_pct` beside `change_pct`, verified agai
 with zero impossible values and a median implied yield of 1.75%.
 
 **What is left is mostly product decisions and licensed data**, not engineering: which catalogued
-ETFs to track, whether to bulk-promote the untracked directory, and the licensed sets (GICS, index
-membership, ratings, estimates). The one free item still worth doing is **FX rates** — without them
-market cap cannot be compared across markets, which is why the mega-cap canary is US-only.
+ETFs to track, which venues to opt into promotion, and the licensed sets (GICS, index membership,
+ratings, estimates). The free engineering items that were outstanding — total return, FX, bond
+reference data, filters, style, macro — all landed on 2026-08-18/19.
+
+**The free items still worth doing are 13F institutional holdings and Form 4 insider transactions**
+(§4 Tier 2): public, free, and the same shape as the N-PORT pipeline that already works.

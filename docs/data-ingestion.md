@@ -1,6 +1,6 @@
 # Market data ingestion — how it works
 
-**Status: current as of 2026-08-18.** Numbers are measured against production, not estimated.
+**Status: current as of 2026-08-19.** Numbers are measured against production, not estimated.
 
 This describes the whole ingestion pipeline: the data model, every external call, every scheduled
 resource, where each field comes from, and what is missing. Coverage — what data we *have* versus
@@ -141,6 +141,10 @@ The app should never join five tables on a phone.
 | `fund_sector_weight` / `fund_country_weight` | the Markets donut | restricted to **equity holdings + level-1 nodes** — see §8 |
 | `security_statement_current` | latest statements | ~12 rows per security; **a row count reads as 12× coverage** |
 | `untracked_listing` | directory rows not in the tracked universe | excludes on figi **or** provider_symbol **or** ticker |
+| `pending_promotion` | listings eligible for promotion | opt-in per venue, home markets first, **name-deduped** against what we hold |
+| **`security_facets`** | the filter spine — every dimension a list filters by | **MATERIALIZED**, 15 indexes. As a plain view a two-filter conjunction hit anon's 3s timeout (`57014`); see §8 |
+| `security_style` | growth/value, ranked within a (tier × cap band) cohort | a plain view — a pure function of `security_fundamentals`, with nothing extra to keep fresh |
+| `macro_current` | latest value per macro series, unit-converted | the fraction→percent conversion lives HERE so no reader has to know which provider sent which |
 | `pending_*` (9 views) | the backlogs that drive each resource | see §5 |
 
 ---
@@ -157,6 +161,8 @@ The app should never join five tables on a phone.
 | **SEC EDGAR** | `data.sec.gov`, `efts.sec.gov`, `www.sec.gov` | descriptive User-Agent (mandatory) | ~10 req/s fair access | fund holdings (N-PORT) |
 | **Tiingo** | `api.tiingo.com/tiingo/daily/<sym>/prices` | `TIINGO_TOKEN` | hourly allocation, caps **unique symbols** | corporate actions |
 | **Yahoo search** | `query2.finance.yahoo.com/v1/finance/search` | keyless | — | ISIN → home-market symbol |
+| ↳ **FRED** (through openbb) | `FRED_API_KEY` (already configured) | — | international macro by explicit series id | `macro-indicators` |
+| ↳ **OECD / federal_reserve** (through openbb) | keyless | — | CPI, GDP, unemployment, yield curve, EFFR, SOFR | `macro-indicators` |
 
 ### openbb routes actually used
 
@@ -258,7 +264,7 @@ watching — which is why the Track button requires `promoted === true`.
 
 ## 5. The resources
 
-Seventeen on-demand/backlog resources plus four declarative ones. **Every resource declares its TTL
+Twenty on-demand/backlog resources plus four declarative ones. **Every resource declares its TTL
 explicitly; there is no default** — a fallback default once left three resources on a 7-day TTL and
 stopped price ingestion for three days while every signal said "healthy".
 
@@ -278,6 +284,9 @@ stopped price ingestion for three days while every signal said "healthy".
 | `security-performance` | 10 min | yfinance | `pending_performance` | `performance` |
 | `security-corporate-actions` | 10 min | Tiingo | `pending_corporate_actions` | `security_corporate_action` |
 | `promote-listing` | 10 min | OpenFIGI | `exchange_listing` | `security` + identifiers |
+| `promote-wave` | 10 min | — (pure SQL) | `pending_promotion` | `security` + identifiers, **≤100/run** |
+| `macro-indicators` | 6 h | openbb (oecd/fed/fred/yfinance) | `macro_indicator` | `macro_observation` |
+| `facets-refresh` | 60 min | — (pure SQL) | — | refreshes `security_facets` **concurrently** |
 | `security-refresh` | 10 min | yfinance | one symbol | performance, cap, fundamentals, statements |
 | `instrument-prices` | 24 h | yfinance | `instruments` | `prices` |
 | `instrument-profile` | 7 d | yfinance | `instruments` | `instruments` |
@@ -355,7 +364,7 @@ guards check behaviour and shape rather than exceptions.
 | Where | What |
 |---|---|
 | `quality.yml` → `migrations` | applies every migration **twice** against a throwaway Postgres, `--single-transaction` per file (mirrors production) |
-| `quality.yml` → behaviour tests | 15 `.sql` tests; several seed the *production shape* then `\i` the real migration, because "applies to an empty database" proves nothing about a backfill |
+| `quality.yml` → behaviour tests | 27 `.sql` tests; several seed the *production shape* then `\i` the real migration, because "applies to an empty database" proves nothing about a backfill |
 | `quality.yml` → `functions` | `deno check` on `index.ts` **and** `logic-check.ts`, plus a network-free `logic-check.ts` run |
 | `market-verify.yml` | daily, 39 assertions against production **as anon** — role matters: anon has a **3-second statement timeout** and `service_role` does not |
 | `check_significant_holdings.py` | canary by **fund weight**, not market cap — a percentage is free of currency, cap and country |
@@ -385,6 +394,31 @@ incremented by the right quantity.
   is a fraction again. One shared `pct()` rendered NVIDIA at a 46% dividend yield.
 - **Money must carry its currency**, and the symbol comes from `Intl` with a **pinned locale**.
   A hardcoded `$` rendered Alibaba's CNY revenue as "$1.02T".
+- **The anon timeout bites on the CONJUNCTION, not on any single predicate.** `security_facets`
+  answered anon in 0.72s filtered by country, 0.33s by sector and 0.58s by tier — and `57014` for
+  tier AND sector together. Probe the combinations, not one filter at a time. (Fixed by
+  materialising; the same shape as `fund_sector_weight` before it.)
+- **`IF EXISTS` does not protect against a relkind mismatch.** `drop view if exists` on a
+  materialized view raises `is not a view`, and `drop materialized view if exists` on a plain view
+  raises the converse — **neither ordering is safe**, and the object survives both. Any migration
+  that may meet either form needs a `relkind`-aware `do` block, and migration 13's `pg_depend` loop
+  needs one too, because a matview has a `pg_rewrite` entry and is discovered as a dependent.
+- **`information_schema` omits materialized views entirely** — it reports **0 columns** for one, so a
+  check written against `information_schema.columns` fails for a reason unrelated to what it tests.
+  Use `pg_attribute`.
+- **Killing the client does not kill the query.** A 2-minute tool timeout killed `ssh`/`psql` and
+  left the backend running **1,375 seconds**, holding locks; the deploy 20 minutes later blocked
+  behind it (`create view security_current` 308s) and eventually failed when Ansible's shared SSH
+  connection dropped. CI showed only "Terraform apply, in progress" — nothing says "blocked on a
+  lock". Diagnose a slow deploy with `pg_blocking_pids`, and set `statement_timeout` on anything
+  exploratory. Note `pg_terminate_backend` filtered by `query like '%…%'` matches **its own text**:
+  without `pid <> pg_backend_pid()` the killer terminates itself and the blocker survives.
+- **`economy/available_indicators?provider=imf` OOM-kills openbb-api** — the container `Exited (137)`
+  against its 1 GB limit and every request got `Connection refused` until Swarm restarted it. It is a
+  SHARED production service; probe unfamiliar catalogue endpoints with a bounded query or locally.
+- **"Does it return rows" is not "is it still published".** Ten FRED CPI series answered a
+  `start_date=2025-01-01` probe with 4 rows and end at **2025-04-01**; the resource's 400-day window
+  starts after that, so it correctly gets zero. Check the DATE of the newest observation.
 - **A discontinuity in a price series is not a market move** — but it is usually **not a split**
   either, since bars arrive split-adjusted. Tel Aviv's shekel→agorot redenomination and OTC ratio
   changes are the real causes, and no splits feed fixes them.
@@ -409,6 +443,18 @@ including `figi_field` — `securityType2` for stocks and receipts, `securityTyp
 **Add a new resource** (deploy): a handler in `index.ts`, an entry in `EXTRA_TTL_MINUTES` (there is
 no default — omitting it makes the resource `unknown`), a name in `market-warmup.yml`, and a
 `pending_*` view with a negative cache. `logic-check.ts` enforces all of these.
+
+**Add a macro series** (no deploy): a row in `market.macro_indicator` — route, provider, params and
+`unit`. The `macro-indicators` resource drives whatever it finds; there is no list in code.
+**Drive the id first and check the DATE of the newest observation**, not just that rows come back:
+FRED retires series, and a retired id is indistinguishable from a live one until you ask.
+`unit` holds `percent`, `index`, or a **three-letter currency code** where the value is money —
+OECD returns GDP in each country's national currency, so it cannot be a boolean and must not default
+to dollars.
+
+**Opt a venue into promotion** (no deploy): set `promotion_enabled` on `market.exchange`. Check
+`pending_promotion` first — it is already ordered home-markets-first and name-deduped, and the count
+tells you what a wave will actually cost.
 
 ---
 
@@ -445,9 +491,12 @@ PETR4.SA, the newest bar is the last trading day in every market.
 
 For gaps in the *data*, see [data-coverage.md](data-coverage.md).
 
-- **Total return is not computed.** Bars are split-adjusted but not dividend-adjusted. Two routes
-  exist and the cheaper one is unmeasured: `include_actions` may return dividends as columns on the
-  price response we already fetch.
+- ~~**Total return is not computed.**~~ **DONE 2026-08-18** (deployment#149 + #153). The cheap route
+  was the right one: `include_actions` defaults to `true` in openbb's yfinance provider and `barFrom`
+  was discarding the dividends. `performance.total_return_pct` now carries a daily-reinvested total
+  return beside the price return, at **no additional provider calls**. This entry said "not computed"
+  for a day after it shipped, while [data-coverage.md](data-coverage.md) said DONE — two documents
+  disagreeing about the same fact is the thing to watch for here.
 - **Corporate actions are US-only** (Tiingo 404s local foreign listings), so a Japanese split is
   invisible.
 - **`security-performance` runs at ~89s of its 90s worker limit.** Its deadline gates whether to
