@@ -1011,8 +1011,9 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   replacement makes all three plausible rankings pick **different** securities — WHALE ($100bn, +1%)
   by weight, RISER (+300) by signed contribution, CRASH (−1,000) by absolute influence. When a guard
   distinguishes between candidate rules, the fixture has to make those rules disagree.
-- **ECONDB'S 4,506-INDICATOR CATALOGUE IS FREE AND ITS DATA IS NOT — a catalogue endpoint answering
-  200 says nothing about the series behind it.** Measured 2026-08-19 against the deployed
+- **ECONDB IS FREE, AND THE 204 IS ONE IP-BLOCKED ENDPOINT — not a paywall. I asserted the paywall
+  from a 204 and was wrong; the correction came from reading the provider rather than the status
+  code.** Measured 2026-08-19 against the deployed
   openbb-api: `economy/available_indicators?provider=econdb` returns **4,506 rows** (172 distinct
   indicator types, with `symbol_root`, `country`, `iso`, `frequency`, `scale`, `first_date`,
   `last_date`), while `economy/indicators` returns **204 NO CONTENT for every symbol tried** — with
@@ -1020,6 +1021,23 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   container. An earlier session recorded "4,506 indicators / 192 countries / 174 types — all
   keyless and working" in the plan; what had been verified was the CATALOGUE. The same trap as
   probing an endpoint with symbols you expect to succeed.
+  **What is actually happening** (traced 2026-08-19): `openbb_econdb` declares an `econdb_api_key`
+  credential but SELF-PROVISIONS when none is set — `helpers.create_token()` fetches a free
+  temporary token (24h, no account) from `econdb.com/user/create_token/`. From the Oracle node that
+  call returns **403 on every User-Agent**, `create_token` swallows the failure and returns an
+  EMPTY string, the data request then goes out with `token=`, and the whole thing surfaces as a
+  bare 204. Measured from a different IP the same endpoint returns
+  `{"api_key": "...", "expires": "<24h>"}` — HTTP 200.
+  **The block is one ENDPOINT, not the domain, and not the data.** From the node:
+  `econdb.com/` → 200, `/user/create_token/` → **403**, and
+  `api/series/?token=<a token minted elsewhere>` → **200 with `count: 5170`**. So supplying
+  `ECONDB_API_KEY` unblocks the full catalogue — the node can talk to econdb perfectly well, it
+  just cannot mint its own credential. A free econdb account yields a permanent key; the temporary
+  token works but expires daily and is not a deployment strategy.
+  **The lesson is the inference, not econdb.** A 204 plus "no key configured" is not evidence of a
+  paywall — it was two hypotheses stacked (needs a key, and the catalogue's 200 proves the data is
+  free) and both were wrong. A UA workaround was tried next and also wrong. Reading the provider's
+  own code answered it in one step.
   Two parameter facts worth not re-deriving: the query takes **`symbol_root` + `country`**, not the
   composite `symbol` (`RGDPUS` 400s with *"No valid combination of indicator symbols and countries
   were supplied"* — a genuinely informative error, unlike the 204), and `country` is the
@@ -1031,8 +1049,27 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   federal_reserve (11 maturities) · `fixedincome/rate/effr` and `/sofr` (400+ rows) ·
   `derivatives/futures/historical` yfinance (`GC=F`, `CL=F`) · `crypto/price/historical` yfinance ·
   `index/price/historical` yfinance (`^GSPC`). **Confirmed NOT working:** econdb indicator data,
-  and `yield_curve?provider=ecb` (500). A macro layer is therefore buildable on OECD + the Fed +
-  yfinance, but **not** on econdb's indicator catalogue — do not scope it that way.
+  and `yield_curve?provider=ecb` (500). A macro layer is buildable on OECD + the Fed + yfinance
+  TODAY with no credential at all, and gains econdb's 4,506 indicators the moment `ECONDB_API_KEY`
+  is set — those are two increments, not two designs.
+- **`economy/available_indicators?provider=imf` OOM-KILLS openbb-api — I took the service down with
+  one probe.** Measured 2026-08-19: the container `Exited (137)` (SIGKILL, i.e. OOM) against its
+  **1 GB** limit, and every subsequent request got `Connection refused` until Swarm restarted it
+  ~15s later. The IMF provider materialises its whole dataflow catalogue in memory. openbb-api is
+  a SHARED production service — the agent's market tools and every `market-refresh` resource use
+  it — so an exploratory call is not free. Probe unfamiliar catalogue endpoints with a bounded
+  query (`?query=`/`limit=`) or against a local container, never bare against the node.
+- **ECONDB HAS NO FREE PROGRAMMATIC TIER, so the token endpoint is not the way in.** The provider
+  self-provisions a free 24h token, which is why the block looks like a bug — but a permanent key
+  is paid, and the 403 from this node is a deliberate signal even if it is blanket cloud-IP
+  blocking. Do not route around it. **FRED is the replacement and the key is ALREADY CONFIGURED**
+  on openbb-api (`FRED_API_KEY`, verified set): `economy/fred_series` serves international macro by
+  explicit series id — `LRHUTTTTDEM156S` (Germany harmonised unemployment) returns 42 rows, latest
+  3.9 for 2026-06; `IRLTLT01DEM156N` (Germany long rate) 2.97. **`economy/fred_search` returns 204
+  here**, so there is no working auto-discovery — a FRED catalogue must be CURATED series by
+  series, which is precisely what `market.macro_indicator` being a control table makes cheap. Note
+  FRED retires series: `JPNCPIALLMINMEI` returns 0 rows and is discontinued, so a seeded id needs
+  its coverage checked rather than assumed.
 - **A DEAD APT MIRROR LOOKS LIKE A FLAKY NETWORK AND IS PERMANENT.** Two deploys failed with
   `Failed to update apt cache after 5 retries: ` — no cause in the message, and "after 5 retries"
   reads as transient, so the second deploy was run purely on that assumption. Oracle's cloud-init
