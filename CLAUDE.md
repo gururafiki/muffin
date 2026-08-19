@@ -930,6 +930,50 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   HTTP 200. Both guard types were proven by injecting the failure (one all-zero CUSIP → exit 1;
   deleting 6,000 securities → three floors breached). Keep it that way: a guard that cannot fail
   reads as protection without being it.
+- **`create or replace function` PRESERVES THE EXISTING ACL, so a grant in a re-run migration can
+  only ever ADD a privilege.** A line tightening permissions applies cleanly, reports success, and
+  changes nothing. Measured 2026-08-19 on `aggregate_performance`: with the anon grant deleted the
+  function still showed `anon=X/postgres` and `has_function_privilege('anon', …)` still returned
+  true, because an earlier apply had granted it. Functions are therefore **drop-then-create**, for
+  the same reason `03-security.sql` re-applies its revokes — that is what makes them self-healing.
+  The same measurement showed the grant was **decorative anyway**: Postgres grants `execute` to
+  PUBLIC by default and `03-security.sql` revokes only TABLES in `public`, so every role could
+  already execute it. An explicit `revoke … from public` is what makes the grant load-bearing.
+- **A MUTATION HARNESS CAN BE CONTAMINATED BY THE STATE IT MUTATES.** Seven guards on migration 78
+  reported `MISSED` in one run: applying that migration alone fails at its own first `drop view`
+  because `security_facets` depends on `security_style`, so the mutated file never applied and
+  every "miss" was a no-op. This is the third form of "verify the mutation applied" (after `sed`
+  mis-escaping and a pattern with the wrong indentation) — assert the mutated artifact actually
+  reached the database, not just that the file changed.
+- **A MUTATION THAT CHANGES NO BEHAVIOUR IS NOT AN UNPROVEN GUARD — measure before believing
+  either.** Turning an `inner join` into a `left join` looked like a missed guard until the row
+  counts were compared under both: identical, because the `where … > 0` predicate rejects the NULL
+  the left join admits. The predicate is the guard and it *is* proven. But the first comparison ran
+  against an EMPTY database and returned `0|0|0` for both — a vacuous measurement that would have
+  "proved" anything.
+- **A PERCENTILE IS MEANINGLESS WITHOUT A PEER GROUP, AND ACCURACY CANNOT TELL YOU SO.** The first
+  `security_style` ranked book-to-price globally; the median Russell 1000 name sat at the **0.299**
+  percentile of the world, because 70% of global equities are cheaper than the median US large cap
+  — so a threshold that splits the Russell 1000 sensibly labelled **89% of all securities "value"**.
+  Every candidate cohort scored ~0.71 accuracy, because the calibration set is 63% one class and
+  accuracy is saturated by it. What discriminated was growth recall (0.55 → 0.70) and whether the
+  labelled set sat mid-cohort (0.299 → 0.430). **When one class dominates, optimise for the error a
+  user actually sees** — here matching the index's own proportions halved outright growth↔value
+  swaps (4.5% → 2.5%) while *lowering* accuracy, and that is the version that shipped.
+- **A CALIBRATION MEASURED ON A DIFFERENT SCALE THAN THE CODE COMPUTES IS FICTION.** The shipped
+  thresholds scored 0.658, not the 0.709 written in the migration header, because the fit had
+  percentiled over the calibration set while the view percentiles universe-wide. The header's
+  confusion matrix was real, honest, and described nothing that existed. Re-derive the metric by
+  running the SHIPPED expression, not the notebook's.
+- **A DEAD APT MIRROR LOOKS LIKE A FLAKY NETWORK AND IS PERMANENT.** Two deploys failed with
+  `Failed to update apt cache after 5 retries: ` — no cause in the message, and "after 5 retries"
+  reads as transient, so the second deploy was run purely on that assumption. Oracle's cloud-init
+  pins a REGIONAL Ubuntu mirror and Canonical retired those names: `uk-london-1-ad-3.clouds.ports.
+  ubuntu.com` and the bare `uk-london-1.clouds.ports.ubuntu.com` both NXDOMAIN while
+  `ports.ubuntu.com` resolves. **DNS itself was fine** (`download.docker.com` resolved from the same
+  box), so no connectivity test could find it — only reading what apt said on the node. Repaired in
+  `muffin_stack.yml`'s `pre_tasks`, keyed on "does the configured mirror resolve" rather than on the
+  one hostname we know about, so a node replacement and the next retirement are both covered.
 
 Note on hardening: **`gh pr merge` merged a workflow-only PR fine** (muffin-deployment#24,
 2026-08-10). The "OAuth App … without `workflow` scope" dead end recorded above did not reproduce —
