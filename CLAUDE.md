@@ -1011,6 +1011,28 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   replacement makes all three plausible rankings pick **different** securities — WHALE ($100bn, +1%)
   by weight, RISER (+300) by signed contribution, CRASH (−1,000) by absolute influence. When a guard
   distinguishes between candidate rules, the fixture has to make those rules disagree.
+- **ECONDB'S 4,506-INDICATOR CATALOGUE IS FREE AND ITS DATA IS NOT — a catalogue endpoint answering
+  200 says nothing about the series behind it.** Measured 2026-08-19 against the deployed
+  openbb-api: `economy/available_indicators?provider=econdb` returns **4,506 rows** (172 distinct
+  indicator types, with `symbol_root`, `country`, `iso`, `frequency`, `scale`, `first_date`,
+  `last_date`), while `economy/indicators` returns **204 NO CONTENT for every symbol tried** — with
+  and without a date range, single- and multi-country, and with no `ECONDB` key configured on the
+  container. An earlier session recorded "4,506 indicators / 192 countries / 174 types — all
+  keyless and working" in the plan; what had been verified was the CATALOGUE. The same trap as
+  probing an endpoint with symbols you expect to succeed.
+  Two parameter facts worth not re-deriving: the query takes **`symbol_root` + `country`**, not the
+  composite `symbol` (`RGDPUS` 400s with *"No valid combination of indicator symbols and countries
+  were supplied"* — a genuinely informative error, unlike the 204), and `country` is the
+  **lower-underscore** form (`united_states`), so passing the catalogue's own `"United States"`
+  produces an unencoded space and curl fails before the request leaves.
+  **What IS keyless, measured the same hour** (rows returned, not just a 200):
+  `economy/cpi` oecd (multi-country works — 84 rows for 4 countries) · `economy/gdp/real` ·
+  `economy/gdp/nominal` · `economy/unemployment` oecd · `fixedincome/government/yield_curve`
+  federal_reserve (11 maturities) · `fixedincome/rate/effr` and `/sofr` (400+ rows) ·
+  `derivatives/futures/historical` yfinance (`GC=F`, `CL=F`) · `crypto/price/historical` yfinance ·
+  `index/price/historical` yfinance (`^GSPC`). **Confirmed NOT working:** econdb indicator data,
+  and `yield_curve?provider=ecb` (500). A macro layer is therefore buildable on OECD + the Fed +
+  yfinance, but **not** on econdb's indicator catalogue — do not scope it that way.
 - **A DEAD APT MIRROR LOOKS LIKE A FLAKY NETWORK AND IS PERMANENT.** Two deploys failed with
   `Failed to update apt cache after 5 retries: ` — no cause in the message, and "after 5 retries"
   reads as transient, so the second deploy was run purely on that assumption. Oracle's cloud-init
