@@ -1070,6 +1070,23 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   series, which is precisely what `market.macro_indicator` being a control table makes cheap. Note
   FRED retires series: `JPNCPIALLMINMEI` returns 0 rows and is discontinued, so a seeded id needs
   its coverage checked rather than assumed.
+- **PROMOTING BY POOL SIZE SPENDS A FIFTH OF THE BUDGET ON COMPANIES ALREADY HELD.** 92,826 of
+  108,105 exchange listings are untracked across 59 venues, and every downstream backlog shares one
+  rate-limited provider budget — so promotion is not "add securities", it is "decide what the next
+  month of a fixed API budget buys", and the ORDER is the feature. Ranking by untracked count puts
+  Frankfurt first (15,711, ahead of the US at 10,160). Measured 2026-08-19, 400 listings per venue
+  matched by name against securities already held: **GR 18.3%**, IB 6.0%, LN 5.3%, HK 4.8%,
+  **US 0.5%, JP 0.3%**. `untracked_listing` cannot see it because it excludes by composite FIGI and
+  **`composite_figi` is per COUNTRY OF LISTING, not per company** — so the listing is genuinely
+  untracked while the COMPANY is not, and promoting it mints a duplicate that then consumes profile,
+  price and statement calls of its own. 18.3% is a LOWER BOUND (exact name matches only). Hence
+  `market.exchange.promotion_tier` ranks home markets first, the name dedupe lives in the VIEW (a
+  resource that fetched a listing and discarded it has already spent the call), and
+  `promotion_enabled` is FALSE for every venue so a deploy can never start spending on its own.
+- **`exchange_listing` CARRIES NO LIQUIDITY OR CAP SIGNAL — only identity.** So "promote by
+  liquidity tier" cannot be gated on liquidity: you must promote a security to learn its cap, which
+  is the chicken-and-egg the venue tier exists to sidestep. A cap floor can only PRUNE after
+  promotion, never gate before it. Do not design a promotion order that assumes otherwise.
 - **A DEAD APT MIRROR LOOKS LIKE A FLAKY NETWORK AND IS PERMANENT.** Two deploys failed with
   `Failed to update apt cache after 5 retries: ` — no cause in the message, and "after 5 retries"
   reads as transient, so the second deploy was run purely on that assumption. Oracle's cloud-init
