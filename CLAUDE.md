@@ -1275,6 +1275,27 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   mutations unscoping them passed clean. Adding cash and balance rows is what made the two rules
   disagree. The pattern across all five: **before believing a guard, ask which fixture row would
   behave differently if the rule were wrong** — if the answer is "none", the guard is decorative.
+- **ADDING A FILTER TO A VIEW CHANGES ITS PLAN, AND I BROKE THE CHART THIS WAY — third occurrence
+  of the anon-timeout shape.** Migration 94 gave `price_series` a `grain` column so the app could
+  ask for one resolution. Measured as ANON immediately after deploying: `symbol=eq.AAPL` **696 ms**,
+  `symbol=eq.AAPL & grain=eq.daily` **57014 statement timeout**. The chart was broken by the filter
+  it had just been given, and only for anon — every service-role probe was healthy.
+  `EXPLAIN` named it: with `grain` fixed to a constant it folds out of the `distinct on` sort key,
+  the row estimate changes, and the planner flips from hash-joining `security_symbol` ONCE to a
+  nested loop evaluating that view's laterals **per row** — `Nested Loop Left Join (actual
+  rows=3056435)` to answer a question about one symbol. **The fix is `with … as materialized`**,
+  which forces the symbol resolution to be evaluated a single time: 3,056,435 → 27,629 rows,
+  timeout → **258 ms**, row-identical. Reordering the `distinct on` was tried FIRST and changed
+  nothing — "the filter changed the sort key" is the obvious story and is not the cause. Guarded by
+  `check_anon_read_latency.py` (market-verify check 10), which times the CONJUNCTIONS the app
+  actually sends, as anon, against a 2,000 ms budget rather than the 3,000 ms ceiling — a query
+  that has crept to 2.9s is already broken for a user, and a guard that fires only at the ceiling
+  reports an outage instead of a regression.
+- **SEQUENCE A SCHEMA CHANGE AND ITS READER SO NEITHER HALF CAN BE ALONE AND BROKEN.** The backend
+  (`grain` + the column) shipped BEFORE the app that filters on it, deliberately: until the app
+  deploys, every bar is `daily` and the old query is unaffected. That ordering is what kept the
+  above from being a user-visible outage — the regression existed in production for the length of
+  one deploy and was found by probing as anon rather than by a user finding it.
 
 Note on hardening: **`gh pr merge` merged a workflow-only PR fine** (muffin-deployment#24,
 2026-08-10). The "OAuth App … without `workflow` scope" dead end recorded above did not reproduce —
