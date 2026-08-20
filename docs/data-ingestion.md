@@ -72,6 +72,11 @@ erDiagram
     security ||--o{ security_metric : "metric history"
     metric   ||--o{ security_metric : "catalogue"
     metric   ||--o{ metric_source_field : "provider spelling"
+    metric   ||--o{ xbrl_concept : "XBRL concepts, per taxonomy"
+    security ||--o{ security_share_stats : "float, ownership, short interest"
+    security ||--o{ security_estimate : "analyst consensus"
+    security ||--o{ news_security : "articles"
+    news_article ||--o{ news_security : "shared between securities"
     security ||--o{ security_corporate_action : "has actions"
     security ||--o{ listing : "is listed on"
     security }o--|| security_type : "is a"
@@ -146,6 +151,7 @@ The app should never join five tables on a phone.
 | `untracked_listing` | directory rows not in the tracked universe | excludes on figi **or** provider_symbol **or** ticker |
 | `pending_promotion` | listings eligible for promotion | opt-in per venue, home markets first, **name-deduped** against what we hold |
 | **`security_facets`** | the filter spine — every dimension a list filters by | **MATERIALIZED**, 15 indexes. As a plain view a two-filter conjunction hit anon's 3s timeout (`57014`); see §8 |
+| **`symbol_security`** | symbol → security_id | **MATERIALIZED**, indexed on the symbol. `security_symbol` is a view over two LATERAL subqueries, so resolving ONE symbol through it scans all 27,629 securities — measured, that was most of a daily chart's 260 ms and 1,382 ms of a weekly one, which timed out for anon. Refreshed by `facets-refresh` alongside the spine |
 | `security_style` | growth/value, ranked within a (tier × cap band) cohort | a plain view — a pure function of `security_fundamentals`, with nothing extra to keep fresh |
 | `macro_current` | latest value per macro series, unit-converted | the fraction→percent conversion lives HERE so no reader has to know which provider sent which |
 | `pending_*` (9 views) | the backlogs that drive each resource | see §5 |
@@ -284,13 +290,21 @@ stopped price ingestion for three days while every signal said "healthy".
 | `security-fundamentals` | 10 min | yfinance | `pending_fundamentals` | `security_fundamentals`, `security.currency_code` |
 | `security-statements` | 10 min | **sec**, yfinance fallback | `pending_statements` | `security_statement` (+ `currency`, `period_type`) |
 | `security-metrics` | 10 min | **none — SQL only** | `pending_metrics` (a drift counter, not a queue) | `security_metric` |
+| `sec-cik-map` | 30 days | SEC `company_tickers.json` | — (one file, applied in one statement) | `security.cik` |
+| `security-xbrl` | 10 min | **SEC XBRL direct**, not openbb | `pending_xbrl` | `security_metric` (`sec-xbrl`) |
+| `security-price-history` | 10 min | yfinance `interval=1W` | `pending_price_history` | `security_price` (`grain = 'weekly'`) |
+| `security-share-stats` | 10 min | yfinance | `pending_share_stats` (drives BOTH endpoints) | `security_share_stats`, `security_estimate` |
+| `security-news` | 10 min | yfinance | `pending_news` | `news_article`, `news_security` |
+| `security-symbol-repair` | 10 min | yfinance (one probe per candidate) | `pending_symbol_repair` | `security_provider_symbol` |
+| `security-dividends` | 10 min | yfinance | `pending_dividends` | `security_corporate_action` |
+| `fx-rates` | 1 day | yfinance | — | `fx_rate` |
 | `security-prices` | 10 min | yfinance | `pending_prices` | `security_price` |
 | `security-performance` | 10 min | yfinance | `pending_performance` | `performance` |
 | `security-corporate-actions` | 10 min | Tiingo | `pending_corporate_actions` | `security_corporate_action` |
 | `promote-listing` | 10 min | OpenFIGI | `exchange_listing` | `security` + identifiers |
 | `promote-wave` | 10 min | — (pure SQL) | `pending_promotion` | `security` + identifiers, **≤100/run** |
 | `macro-indicators` | 6 h | openbb (oecd/fed/fred/yfinance) | `macro_indicator` | `macro_observation` |
-| `facets-refresh` | 60 min | — (pure SQL) | — | refreshes `security_facets` **concurrently** |
+| `facets-refresh` | 60 min | — (pure SQL) | — | refreshes `symbol_security` **and** `security_facets`, both **concurrently** |
 | `security-refresh` | 10 min | yfinance | one symbol | performance, cap, fundamentals, statements |
 | `instrument-prices` | 24 h | yfinance | `instruments` | `prices` |
 | `instrument-profile` | 7 d | yfinance | `instruments` | `instruments` |
@@ -354,7 +368,11 @@ flowchart TD
 | `security_statement.data` | income/balance/cash, one jsonb per period | ~52 line items |
 | `security_statement.currency` | `reported_currency`, **SEC only** | yfinance sends none. Use `security_statement_current.reporting_currency`, which applies the whole precedence once |
 | `security_metric.value` | derived in SQL from `security_statement` | joins `metric_source_field` on the statement's own `source_code` — it never names a provider field |
-| `security_metric.currency_code` | `security_statement.currency` and nothing else | null for every yfinance period; a guessed currency is how CNY revenue rendered as `$` |
+| `security_metric.currency_code` | `security_statement.currency`, or the XBRL **unit key** | the unit key IS the reporting currency — Novo Nordisk's facts sit under `DKK`, Nokia's under `EUR`, TSMC's under `TWD` *and* `USD` |
+| `security_price.grain` | `daily` from `security-prices`, `weekly` from `security-price-history` | the two OVERLAP by design, so a reader must filter; the prune is grain-qualified or it eats the history |
+| `security_share_stats.*_ownership` | `equity/ownership/share_statistics` | **FRACTIONS** — 0.66482 is 66.482%; converted at display, never on write |
+| `security_estimate.recommendation_mean` | `equity/estimates/consensus` | a **1..5 scale where LOWER IS MORE BULLISH** — 2.11 beside "buy" |
+| `security.cik` | SEC `company_tickers.json`, matched on the US ticker | **not unique** — share classes share a filer (GOOG and GOOGL are both 1652044) |
 | `security_corporate_action` | Tiingo daily `divCash` / `splitFactor` | US-listed only; `observed_symbol` records the listing it was seen on |
 | `fund_holding.weight` | N-PORT `pctVal` | **does not sum to 100** — EWT's own filing sums to 110.38 |
 | `exchange_listing.security_type` | OpenFIGI `securityType2` (coarse) | an ETF reads `Mutual Fund` here |

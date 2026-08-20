@@ -67,8 +67,14 @@ can only PRUNE after promotion, never gate before it.
 | catalogued listings | 108,217 |
 | tracked funds (ETFs we ingest holdings from) | 79 |
 | fund holdings | 39,886 |
-| price bars | ~3.06 M |
+| price bars | **6.50 M** — 3.06 M daily (rolling ~400 days) + **3.44 M weekly back to 2006** |
+| company metrics (`security_metric`) | **2.09 M** — of which **1.42 M from SEC XBRL** and **1.01 M quarterly** |
 | taxonomy nodes (sectors + industries) | 162 |
+
+Measured 2026-08-21. The metric and weekly-price rows did not exist the previous day; both backlogs
+are still draining, so these grow. `security_price` now carries a `grain`: the daily series is a
+rolling window and the weekly one is the full history, and they OVERLAP on purpose — a weekly
+series that stopped where the daily window begins would make a 20Y chart end two years ago.
 
 ### 2.2 Per-equity coverage (of 12,350)
 
@@ -83,6 +89,24 @@ can only PRUNE after promotion, never gate before it.
 | fundamentals | **93.2%** | `equity/fundamental/metrics` |
 | sector | **90.5%** | filing (via fund) + yfinance |
 | **industry** | **62.4%** | `equity/profile.industry_category` |
+
+### 2.3 What was added 2026-08-20/21
+
+Everything here is free and was measured across a US mega-cap, a German, a Japanese, a Korean and a
+Brazilian ADR before being built — the discipline that stopped `revenue_per_geography` becoming a
+table nobody could fill.
+
+| | state | note |
+|---|---|---|
+| **company metrics, charted** | 2.09 M rows | up to 22 annual periods and 17 years of QUARTERS. Derived in SQL from statements, and read straight from SEC XBRL where the filer publishes it |
+| **SEC XBRL** | 1.42 M rows, 3,516 filers mapped | one request per filer at 0.17s against 5.58s for three openbb calls. **Half the filers report under `ifrs-full` with no `us-gaap` node at all** — AB InBev, Novo Nordisk, TSMC, Nokia, Santander |
+| **20-year weekly prices** | 3.44 M bars | `interval=1W`, works for every market tried, batches 12 symbols |
+| **statement reporting currency** | 1,125 rows | was **0 of 104,972**. Genuinely multi-currency: USD, EUR, DKK, PEN, TWD |
+| **dividends** | 2,550 yfinance rows | global — Korea, Spain, Finland, Taiwan, Indonesia. Tiingo remains US-only and is now splits-only |
+| **share statistics** | 1,653 rows | float, shares outstanding, ownership, **and short interest for every market** (FINRA's route is US-only by construction) |
+| **analyst estimates** | 1,559 rows | targets in EUR, MXN, MYR, ZAC, IDR, AUD, PLN — the doc previously called these "all premium" |
+| **company news** | 1,216 articles | stored once and shared: 11% are returned for more than one security. 90-day retention, pruned every run |
+| **symbol repair** | live | `ATCOA.ST` → `ATCO-A.ST`, `6.HK` → `0006.HK`, `BRK/B` → `BRK-B`. Candidates are VERIFIED against the provider, never pattern-matched and rewritten |
 
 **Industry at 62.4% is provider-limited, not a stalled backlog.** The chain reconciles with **zero
 unexplained**: 7,701 have one, ~3,479 the provider answered without one, ~837 have no profile at
