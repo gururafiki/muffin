@@ -1182,6 +1182,41 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   schema change, mutation proves nothing"; and a "10 or more spellings differ" floor could not see a
   SINGLE spelling being tidied into agreement — which is the realistic regression. Both were only
   visible because the harness reports a no-op mutation as loudly as a missed one.
+- **THE FALSY-NULL GATE HAS A SQL TWIN: `x <> 'US'` IS *NULL*, NOT TRUE, WHEN `x` IS NULL.** The
+  currency-labelling rule failed open once in the caller (`USD AND country !== 'US'`, and BABA's
+  filed country is NULL, so it declined to fire on the security it was built for). Moving it into
+  `security_statement_current.reporting_currency` would have reproduced the bug exactly if written
+  as the same negation — a security with no country at all falls through `currency_code = 'USD' and
+  country <> 'US'` because the conjunction is NULL rather than true, and gets labelled USD. Write
+  such a rule in the POSITIVE form (`<> 'USD' → label`, `= 'US' → label`, `else null`) so an unknown
+  country falls through to WITHHELD. And put the rule in the view: one expression, using the same
+  EFFECTIVE country `security_current` answers with, is what stops a caller re-deriving it wrongly.
+- **DERIVING NEEDS NO PROVIDER, so it is SQL — and that changes what the backlog MEANS.**
+  `market.derive_security_metrics` turns 105,927 statement periods into a metric series in one
+  statement: no worker limit, no rate limit, no batching, no negative cache, because it has none of
+  those problems. Consequently `pending_metrics` is a DRIFT COUNTER (statement periods that produced
+  no metric — i.e. the catalogue's field names no longer matching the provider), not a work queue:
+  the function re-derives everything every run, so a queue would always be empty and say nothing.
+  Expected non-zero and stable; the TREND is the signal.
+- **CAPEX SIGN DIFFERS BY PROVIDER, and the wrong sign is not obviously wrong.** yfinance sends
+  capital expenditure NEGATIVE (a cash outflow), SEC POSITIVE (a purchase). Free cash flow must use
+  `abs()`: subtracting a negative ADDS the capex and reports free cash flow ABOVE operating cash
+  flow — impossible, and it reads as merely optimistic. Likewise **a computed row must say so**:
+  derived rows carry `source_code = 'derived'`, because `metric.is_derived` cannot answer the
+  per-row question (free cash flow is REPORTED by yfinance and COMPUTED for SEC), and without a
+  distinguishable marker a re-run cannot tell its own output from a provider's figure and replaces
+  the provider's answer with arithmetic.
+- **A FIXTURE WHERE THE CANDIDATE RULES AGREE CANNOT TELL THEM APART — THREE TIMES IN ONE DAY.**
+  Every one was caught only because the harness reports a mutation that changes nothing as loudly
+  as one that is missed. (1) Dropping `abs()` from the free-cash-flow derivation passed clean: the
+  SEC fixture's capex was positive and the yfinance fixture reported its own FCF, so both agreed
+  under either rule — a third period (yfinance spellings, negative capex, no reported figure) was
+  needed. (2) Swapping the EFFECTIVE country for the FILED one passed clean, because no fixture row
+  had them differ — a promoted American company (filed NULL, operating US) was needed. (3) A "10 or
+  more spellings differ" floor could not see a SINGLE spelling being tidied into agreement, which is
+  the realistic regression. **When a guard distinguishes between candidate rules, the fixture has to
+  make those rules disagree** — and the fingerprint has to cover what the mutation changes, or the
+  no-op is silently certified.
 
 Note on hardening: **`gh pr merge` merged a workflow-only PR fine** (muffin-deployment#24,
 2026-08-10). The "OAuth App … without `workflow` scope" dead end recorded above did not reproduce —
