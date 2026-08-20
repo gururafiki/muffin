@@ -1217,6 +1217,36 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   the realistic regression. **When a guard distinguishes between candidate rules, the fixture has to
   make those rules disagree** — and the fingerprint has to cover what the mutation changes, or the
   no-op is silently certified.
+- **A `LIMIT` WITHOUT AN ANTI-JOIN IS NOT A PAGE — I SHIPPED THIS FILE'S OWN HEADLINE BUG.**
+  `derive_security_metrics(p_limit)` selected `order by security_id, period_ending desc limit N`,
+  which is the SAME first N rows on every call. Two production invocations returned byte-identical
+  results (`written: 7386, remaining: 104925`), i.e. thousands of rows of "progress" and the same
+  work for ever — exactly what `pending_industry` did for months. **The tell is a `written` that
+  looks like throughput and never moves**, and the fix is that a page's source set must be an
+  anti-join over what is already done, not an ordering. Note the ordering was the part that LOOKED
+  deliberate. Unlimited was no better: 105,927 statements exceeded the statement timeout on the role
+  PostgREST uses, so it correctly reported `ok: false` and did nothing. Guarded by
+  `tests/a-page-must-advance.sql`, whose fixture uses three securities and a page of ONE so a
+  non-advancing select is arithmetically unable to finish.
+- **A DERIVATION'S BACKLOG MUST BE "NOT DONE **OR** RE-FETCHED SINCE", AS ONE PREDICATE SHARED WITH
+  THE WORK.** `pending_metrics` first asked "has no metric at all", which would call a re-fetched
+  statement done and keep the number derived from the old one — live risk, since
+  `security-statements` is rewriting rows across the universe as SEC supersedes yfinance. The
+  condition that covers both halves is "no metric for that (security, period) whose `fetched_at` is
+  at least as new as the statement", and the VIEW and the FUNCTION now share it rather than being
+  two descriptions free to disagree.
+- **`now()` IS TRANSACTION TIME, so a test that writes and then "re-fetches" inside one transaction
+  cannot tell them apart** — both get the same timestamp and the row reads as already processed for
+  a reason unrelated to the rule under test. Say so explicitly in the fixture (`now() + interval
+  '1 second'`) rather than reaching for `clock_timestamp()`, which makes the difference look like an
+  accident of timing rather than the point.
+- **A GUARD ANCHORED ON "THE FIRST MATCH IN THE FILE" IS ANCHORED ON NOTHING.** logic-check's sweep
+  deadline guard matched the first `while (Date.now()...)` in `index.ts` — the sweep's only by
+  accident of ordering. Adding a paged loop to an earlier resource made it read the wrong loop and
+  fail for a reason unrelated to what it tests. Slice to the owning handler
+  (`index.slice(index.indexOf('resource === X_RESOURCE'))`) first, the way the per-resource guards
+  do. Its own comment already warned about this one level down, which is the point: the fix for
+  "the pattern matched somewhere else" is not a better pattern.
 
 Note on hardening: **`gh pr merge` merged a workflow-only PR fine** (muffin-deployment#24,
 2026-08-10). The "OAuth App … without `workflow` scope" dead end recorded above did not reproduce —
