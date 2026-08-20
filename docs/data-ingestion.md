@@ -279,7 +279,7 @@ stopped price ingestion for three days while every signal said "healthy".
 | `security-profiles` | 10 min | yfinance | `pending_profile` | `security_taxonomy`, `security.market_cap`, `provider_country_iso2` |
 | `security-industries` | 10 min | yfinance | `pending_industry` | `security_taxonomy` (level 2) |
 | `security-fundamentals` | 10 min | yfinance | `pending_fundamentals` | `security_fundamentals`, `security.currency_code` |
-| `security-statements` | 10 min | yfinance | `pending_statements` | `security_statement` |
+| `security-statements` | 10 min | **sec**, yfinance fallback | `pending_statements` | `security_statement` (+ `currency`, `period_type`) |
 | `security-prices` | 10 min | yfinance | `pending_prices` | `security_price` |
 | `security-performance` | 10 min | yfinance | `pending_performance` | `performance` |
 | `security-corporate-actions` | 10 min | Tiingo | `pending_corporate_actions` | `security_corporate_action` |
@@ -347,7 +347,8 @@ flowchart TD
 | `security_price.close` | `equity/price/historical` | **already split-adjusted** (`adjustment` defaults to `splits_only`); dividends are **not** applied |
 | `performance.*` | computed from daily bars | **price** returns, dividends excluded |
 | `security_fundamentals.*` | `equity/fundamental/metrics` | **units are mixed within one response** — see §8 |
-| `security_statement.data` | income/balance/cash, one jsonb per period | ~52 line items; no currency field, so the label comes from `security.currency_code` |
+| `security_statement.data` | income/balance/cash, one jsonb per period | ~52 line items |
+| `security_statement.currency` | `reported_currency`, **SEC only** | yfinance sends none; where SEC cannot answer the label still comes from `security.currency_code` |
 | `security_corporate_action` | Tiingo daily `divCash` / `splitFactor` | US-listed only; `observed_symbol` records the listing it was seen on |
 | `fund_holding.weight` | N-PORT `pctVal` | **does not sum to 100** — EWT's own filing sums to 110.38 |
 | `exchange_listing.security_type` | OpenFIGI `securityType2` (coarse) | an ETF reads `Mutual Fund` here |
@@ -504,5 +505,11 @@ For gaps in the *data*, see [data-coverage.md](data-coverage.md).
 - **A deploy briefly breaks readers.** Migrations are `--single-transaction` *per file*, so between
   the file that drops dependent views and the one that recreates them there is a real window where a
   reader 404s.
-- **The reporting currency of statements is unknown**, so the label is withheld rather than guessed.
-  Five sources were checked and none supplies it.
+- ~~**The reporting currency of statements is unknown**~~ — **solved 2026-08-20 by asking a sixth
+  source.** `equity/fundamental/{income,balance,cash}?provider=sec` returns `reported_currency`, and
+  18 annual periods against yfinance's 4. The five sources checked were all price-side providers;
+  the filing itself was never asked. **The blocker was not the provider, though** — `currency` had
+  been 0 of 104,972 rows with the column and the code to fill it both present since migration 29,
+  because `pending_statements` exited on "has no statements at all" and the 8,559 securities holding
+  four currency-less periods were permanently out of the queue. A correct fetch reaches nothing if
+  the backlog cannot ask for it.
