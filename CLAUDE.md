@@ -1136,6 +1136,52 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   box), so no connectivity test could find it — only reading what apt said on the node. Repaired in
   `muffin_stack.yml`'s `pre_tasks`, keyed on "does the configured mirror resolve" rather than on the
   one hostname we know about, so a node replacement and the next retirement are both covered.
+- **A RESOURCE THAT WRITES A NEW `source_code` MUST SEED IT IN THE SAME MIGRATION, AND NOTHING
+  DOWNSTREAM CAN CATCH THE OMISSION.** Migration 88 made `security-statements` write
+  `source_code: 'sec'` and never created the row — only `sec-nport` existed, which is a different
+  filing (fund holdings, not company accounts). `security_statement.source_code` is a foreign key,
+  so the FIRST REAL RUN in production died with `violates foreign key constraint
+  "security_statement_source_code_fkey"` and took the whole resource with it, **including the
+  yfinance rows batched alongside**. The migration tests apply to a database where no resource ever
+  runs, so the constraint is never exercised and all four passes were green; `deno check` and every
+  behaviour test passed too. Migration 67 had done it right for Tiingo a year earlier — seeding the
+  source beside the resource — so this was a habit, not a rule. It is a rule now: `logic-check.ts`
+  fails on any `source_code: '<x>'` literal in the functions that no migration seeds. (CLAUDE.md
+  previously said `data_source` rows are "LEARNED by the ingest at runtime". They are **not** —
+  nothing in the edge functions inserts one; migrations 10, 13 and 67 seed them all.)
+- **THE TWO STATEMENT PROVIDERS SHARE ALMOST NO FIELD NAMES, so a metric's provider spelling is
+  DATA.** Measured 2026-08-20 on the deployed openbb-api (AAPL, annual): `sec` and `yfinance`
+  income statements share **4 of 40** field names and one of the four is `period_ending`, which is
+  not data. Balance sheets share 14 of 52/70, cash flows 8 of 45/54. Pre-tax income is
+  `total_pretax_income` on one and `total_pre_tax_income` on the other — **one character**, so it
+  reads as a typo and "correcting" it silently empties the series for that provider. SEC reports no
+  free cash flow line and no total debt at all; both are derived. Since migration 88 made SEC the
+  preferred provider, `security_statement.data` genuinely holds two vocabularies, and
+  `data->>'free_cash_flow'` returns null for every SEC period — **the better half of the data** —
+  with no error. Hence `market.metric` + `market.metric_source_field` (migration 89): the metric and
+  each provider's spelling are rows, so a third provider is a row. Every seeded field name was
+  verified present in the measured wire response; none was transcribed from memory.
+- **`remaining` MUST MEAN THE SAME THING IN EVERY RESOURCE, AND PAGE-SCOPED IS THE WRONG ONE.**
+  `security-statements` reported `remaining: 0` on a run that had asked 20 of **8,633** — correct
+  as "what is left of this page", indistinguishable from a drained backlog, and a different unit
+  from `security-industries`' `remaining`, so comparing two runs was misleading by construction.
+  Now counted with `Prefer: count=exact` + `head: true` (never a page — a limit above
+  `PGRST_DB_MAX_ROWS` silently returns 1,000), with the page-scoped number kept as `unanswered`.
+  The existing units guard was **extended, not weakened**: the exemption matches only
+  `backlogSize(market, 'pending_*')`, and both a different helper and a bare page size still fail it.
+- **SEC's STATEMENTS ARE GENUINELY MULTI-CURRENCY, which is why the label could never be guessed.**
+  Of the first 522 rows: USD 333, **EUR 111, DKK 30, PEN 24, TWD 24** — foreign private issuers
+  file 20-F in their own currency. 36% would have been wrong under a USD default. Depth landed as
+  measured too: **2008-12-31 .. 2026-01-25**, 13.4 periods per security (min 8, max 18) against
+  yfinance's 4. Note `security_statement_current` exposes the new `currency` only via `st.*`; the
+  app still labels from `security.currency_code` (the QUOTE currency), so the view needs an
+  effective `reporting_currency` before the UI can use it — correct data nothing consumes.
+- **A MUTATION HARNESS'S FINGERPRINT MUST COVER WHAT THE MUTATION CHANGES.** Two of migration 89's
+  guards were certified vacuous by my own harness: the fingerprint hashed `metric_source_field` and
+  `security_metric`'s columns but not `metric.is_derived`, so flipping that flag registered as "no
+  schema change, mutation proves nothing"; and a "10 or more spellings differ" floor could not see a
+  SINGLE spelling being tidied into agreement — which is the realistic regression. Both were only
+  visible because the harness reports a no-op mutation as loudly as a missed one.
 
 Note on hardening: **`gh pr merge` merged a workflow-only PR fine** (muffin-deployment#24,
 2026-08-10). The "OAuth App … without `workflow` scope" dead end recorded above did not reproduce —
