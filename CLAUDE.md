@@ -1247,6 +1247,34 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   (`index.slice(index.indexOf('resource === X_RESOURCE'))`) first, the way the per-resource guards
   do. Its own comment already warned about this one level down, which is the point: the fix for
   "the pattern matched somewhere else" is not a better pattern.
+- **A TIME WINDOW IS NOT A SCOPE — right after a drain, EVERYTHING is inside it.** The derived
+  passes (free cash flow, total debt) were scoped `where fetched_at > now() - interval '10 minutes'`
+  to stop them walking the whole table. Measured in production the moment the backlog settled:
+  `{"written":576828,"pages":21,"remaining":28}` — 576,828 upserts with **28** statements left to
+  derive, because the previous run had written those ~750,000 rows minutes earlier. On a 10-minute
+  cron that is ~600k upserts and the matching WAL every ten minutes for ever, on one Always-Free
+  node, while `written` and `pages` both read as throughput. **A pass that follows another must be
+  scoped to what that one TOUCHED** — capture the keys with `returning` into a temp table and join
+  them. Exact, no clock, and it cannot drift with how often the resource runs.
+- **AN ANTI-JOIN MUST BE KEYED AT THE GRAIN OF THE WORK, NOT THE GRAIN OF THE ENTITY.**
+  `derive_security_metrics` asked "does this security have any metric for this period" — and all
+  three of a period's statements (income, balance, cash) share that key, so deriving the income
+  statement marked the other two done **for ever**. Production did not show it, by luck: the first
+  drain ran against an empty table so all three kinds sat in one page and were derived together. It
+  bites at every PAGE BOUNDARY and whenever `security-statements` rewrites only some of a period's
+  rows — which is precisely what SEC superseding yfinance does. Ask the question through the table
+  that defines the grain (`metric_source_field` says which metrics a statement kind can produce)
+  rather than inventing a key.
+- **TIED SORT KEYS MAKE A PAGED TEST FLAKY, AND A FLAKY TEST IS WORSE THAN NO TEST.** The fixture
+  gave several statements the same `as_of`, and the function pages with `order by st.as_of limit N`
+  — so which rows a page of ONE picks is an arbitrary tie-break. Two identical mutation runs
+  disagreed about which guard caught which mutation, which reads as a real difference and is noise.
+  Make the ordering TOTAL in any fixture that exercises paging.
+- **A FIXTURE MUST REACH EVERY BRANCH THE MUTATIONS TARGET — fifth instance.** The same fixture had
+  only income statements, so the free-cash-flow and total-debt passes had nothing to compute and
+  mutations unscoping them passed clean. Adding cash and balance rows is what made the two rules
+  disagree. The pattern across all five: **before believing a guard, ask which fixture row would
+  behave differently if the rule were wrong** — if the answer is "none", the guard is decorative.
 
 Note on hardening: **`gh pr merge` merged a workflow-only PR fine** (muffin-deployment#24,
 2026-08-10). The "OAuth App … without `workflow` scope" dead end recorded above did not reproduce —
