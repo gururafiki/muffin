@@ -76,7 +76,7 @@ can only PRUNE after promotion, never gate before it.
 |---|---|---|
 | country | **99.9%** | N-PORT filing + yfinance operating country |
 | symbol | **97.3%** | OpenFIGI + Yahoo search |
-| statements attempted | **97.6%** | yfinance income/balance/cash |
+| statements attempted | **97.6%** | **sec** where a US ticker exists (18 annual periods, with a reporting currency), yfinance otherwise (4 periods, none) |
 | price series | **94.6%** | yfinance daily bars |
 | currency | **94.0%** | N-PORT `curCd` + metrics |
 | market cap | **93.7%** | profile + promoted from metrics jsonb |

@@ -69,6 +69,9 @@ erDiagram
     security ||--o{ security_price : "has bars"
     security ||--o{ security_statement : "files"
     security ||--o| security_fundamentals : "has metrics"
+    security ||--o{ security_metric : "metric history"
+    metric   ||--o{ security_metric : "catalogue"
+    metric   ||--o{ metric_source_field : "provider spelling"
     security ||--o{ security_corporate_action : "has actions"
     security ||--o{ listing : "is listed on"
     security }o--|| security_type : "is a"
@@ -280,6 +283,7 @@ stopped price ingestion for three days while every signal said "healthy".
 | `security-industries` | 10 min | yfinance | `pending_industry` | `security_taxonomy` (level 2) |
 | `security-fundamentals` | 10 min | yfinance | `pending_fundamentals` | `security_fundamentals`, `security.currency_code` |
 | `security-statements` | 10 min | **sec**, yfinance fallback | `pending_statements` | `security_statement` (+ `currency`, `period_type`) |
+| `security-metrics` | 10 min | **none — SQL only** | `pending_metrics` (a drift counter, not a queue) | `security_metric` |
 | `security-prices` | 10 min | yfinance | `pending_prices` | `security_price` |
 | `security-performance` | 10 min | yfinance | `pending_performance` | `performance` |
 | `security-corporate-actions` | 10 min | Tiingo | `pending_corporate_actions` | `security_corporate_action` |
@@ -348,7 +352,9 @@ flowchart TD
 | `performance.*` | computed from daily bars | **price** returns, dividends excluded |
 | `security_fundamentals.*` | `equity/fundamental/metrics` | **units are mixed within one response** — see §8 |
 | `security_statement.data` | income/balance/cash, one jsonb per period | ~52 line items |
-| `security_statement.currency` | `reported_currency`, **SEC only** | yfinance sends none; where SEC cannot answer the label still comes from `security.currency_code` |
+| `security_statement.currency` | `reported_currency`, **SEC only** | yfinance sends none. Use `security_statement_current.reporting_currency`, which applies the whole precedence once |
+| `security_metric.value` | derived in SQL from `security_statement` | joins `metric_source_field` on the statement's own `source_code` — it never names a provider field |
+| `security_metric.currency_code` | `security_statement.currency` and nothing else | null for every yfinance period; a guessed currency is how CNY revenue rendered as `$` |
 | `security_corporate_action` | Tiingo daily `divCash` / `splitFactor` | US-listed only; `observed_symbol` records the listing it was seen on |
 | `fund_holding.weight` | N-PORT `pctVal` | **does not sum to 100** — EWT's own filing sums to 110.38 |
 | `exchange_listing.security_type` | OpenFIGI `securityType2` (coarse) | an ETF reads `Mutual Fund` here |
@@ -505,6 +511,23 @@ For gaps in the *data*, see [data-coverage.md](data-coverage.md).
 - **A deploy briefly breaks readers.** Migrations are `--single-transaction` *per file*, so between
   the file that drops dependent views and the one that recreates them there is a real window where a
   reader 404s.
+- **A METRIC IS A ROW, AND SO IS EACH PROVIDER'S SPELLING FOR IT.** Measured 2026-08-20, `sec` and
+  `yfinance` income statements share **4 of 40** field names and one of the four is `period_ending`.
+  Pre-tax income is `total_pretax_income` on one and `total_pre_tax_income` on the other. So
+  `market.metric` + `market.metric_source_field` carry the catalogue and the per-provider field
+  name, and `market.derive_security_metrics` joins on the statement's own `source_code` rather than
+  naming a field. Adding a provider is rows, not a branch.
+- **DERIVING METRICS NEEDS NO PROVIDER CALL, so it is a SQL function rather than an edge function.**
+  It inherits no 90-second worker limit, no rate limit, no batching and no negative cache, because
+  it has none of those problems. `pending_metrics` is therefore a DRIFT COUNTER — statement periods
+  that produced no metric — not a work queue: the function re-derives everything every run, so a
+  queue would always be empty and tell nobody anything.
+- **CAPEX SIGN DIFFERS BY PROVIDER** — yfinance negative (an outflow), SEC positive (a purchase) —
+  so free cash flow uses `abs()`. Subtracting a negative ADDS the capex and reports free cash flow
+  above operating cash flow, which is impossible and looks merely optimistic.
+- **A COMPUTED ROW SAYS SO**: derived rows carry `source_code = 'derived'`, because
+  `metric.is_derived` cannot answer the per-row question — free cash flow is REPORTED by yfinance
+  and COMPUTED for SEC. It is also what makes the derivation idempotent.
 - ~~**The reporting currency of statements is unknown**~~ — **solved 2026-08-20 by asking a sixth
   source.** `equity/fundamental/{income,balance,cash}?provider=sec` returns `reported_currency`, and
   18 annual periods against yfinance's 4. The five sources checked were all price-side providers;
