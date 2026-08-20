@@ -172,10 +172,14 @@ flattening it would make the "curve" whichever maturity was written last.
 |---|---|---|
 | **GICS proper** | licensed taxonomy | an MSCI/S&P licence. We use yfinance's taxonomy as a proxy, which is why `provider_sector` sits beside the curated `sector_id` |
 | **Index membership** (S&P 500, FTSE 100…) | FMP premium; index constituents gated on every free provider | a paid provider — or approximate from fund holdings, which is what we do today |
-| **Analyst estimates, price targets, ratings** | all premium | paid provider |
-| **Institutional / insider holdings** | 13F and Form 4 are public but a separate pipeline | SEC ingestion work, not a purchase |
+| ~~**Analyst estimates, price targets, ratings**~~ **WRONG — measured 2026-08-20** | `equity/estimates/consensus` (yfinance) answers for **all six** probe symbols including SAP.DE, 7203.T and 005930.KS; `equity/estimates/price_target` (finviz) returns 20 rows for US-listed names and **HTTP 400** for local foreign symbols. So consensus is universal and free, price targets are a US-only tier. Not premium |
+| **Institutional holdings (13F)** | `equity/ownership/form_13f` returns **204**; FMP's `institutional`/`major_holders` **402** | genuinely unavailable free |
+| ~~**Insider holdings**~~ **needs no separate pipeline** | `equity/ownership/insider_trading?provider=sec` returns Form 4 rows through the API we already call | ordinary resource work |
 | **Intraday / real-time prices** | free tiers are EOD | paid feed. Also a different storage shape |
-| **Options chains, short interest, borrow** | premium or exchange-licensed | paid feed |
+| **Options chains, borrow** | premium or exchange-licensed | paid feed |
+| ~~**Short interest**~~ **free, US only** | `equity/shorts/short_interest?provider=finra` returns 120 rows for US-listed names and **0** for local foreign symbols — FINRA is a US SRO, so that is the dataset's real shape, not a gap | ordinary resource work |
+| **Revenue by geography / operating markets** | `equity/fundamental/revenue_per_geography` (fmp) is **per-symbol gated**: AAPL/MSFT/KO/NKE answer, MLM and SAP.DE return `402 Premium Query Parameter: this value set for 'symbol' is not available under your current subscription`. Measured 2026-08-20 — the same free-tier shape that got the fundamentals feature reverted | a paid key, or another source. Do NOT build `security_revenue_segment` on this |
+| **Peer groups** | `equity/compare/peers` (fmp) is free and answers for every symbol tried, but it is **sector + market-cap proximity, not a curated peer set**: SAP.DE returns Micron, SK hynix and ASML (all German-listed semiconductors). US names are good — KO to PG/PEP/BUD/UL, JPM to BAC/HSBC/RY/WFC. Usable if labelled as what it is | ordinary resource work, with honest labelling |
 
 ### 3.2 Structurally impossible with the current sources
 
