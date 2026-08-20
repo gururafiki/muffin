@@ -1296,6 +1296,56 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   deploys, every bar is `daily` and the old query is unaffected. That ordering is what kept the
   above from being a user-visible outage — the regression existed in production for the length of
   one deploy and was found by probing as anon rather than by a user finding it.
+- **HALF THE SEC FILERS REPORT IN IFRS, AND `companyfacts` PUTS THEM UNDER A DIFFERENT TAXONOMY.**
+  The first real `security-xbrl` run returned `noFacts: 10` of 20 — every one a foreign private
+  issuer (AB InBev, Ryanair, Equinor, Santander, Novo Nordisk, TSMC, BHP, Nokia). They file 20-F
+  under IFRS, and AB InBev's taxonomies are exactly `['dei', 'ifrs-full']` — **no `us-gaap` node at
+  all**. Reading one taxonomy marked ten good filers absent for 30 days with no error while the
+  resource reported success. Concept names differ per taxonomy (`Revenue` vs
+  `RevenueFromContractWithCustomer…`, `Equity` vs `StockholdersEquity`), measured across five
+  filers at 14-15 of 15 metrics each. **AND THE UNIT KEY IS THE REPORTING CURRENCY** — Novo
+  Nordisk's facts sit under `DKK`, Nokia's under `EUR`, TSMC's under `TWD` *and* `USD` (a
+  convenience translation). So the currency arrives free and per filer; where several exist the one
+  with the MOST data points wins, because picking USD by habit relabels kroner as dollars. Verified
+  live: Banco Santander revenue €66,088,000,000, annual and quarterly.
+- **A WRONG NAME IS NOT A MISSING SECURITY, AND ONLY THE PROVIDER CAN TELL YOU WHICH.** Measured:
+  `ATCOA.ST`, `6.HK`, `BRK/B`, `WALMEX*.MX` and `RR/.L` all return ZERO bars while `ATCO-A.ST`,
+  `0006.HK`, `BRK-B`, `WALMEX.MX` and `RR.L` return 190 — an empty response and a wrong spelling
+  are indistinguishable from the caller, so the negative cache hides an ordinary company for 30
+  days. `security-symbol-repair` generates candidates and **verifies each against the provider
+  before adopting it**, because pattern-matching alone rewrites WORKING symbols: the Nordic rule
+  matches `SAND.ST` (Sandvik), `ALFA.ST` (Alfa Laval) and `TELIA.ST`, which are complete company
+  names ending in a letter the rule reads as a share class. `SAND.ST` therefore does generate
+  `SAN-D.ST`; the provider refuses it and nothing is written. Never pattern-match and rewrite.
+- **A WEIGHT-ORDERED BACKLOG STALLS ON ITS OWN HEAD IF A BATCH IS NOT ISOLATED — fourth instance.**
+  `security-share-stats` reported `stats: 0, estimates: 0, remaining: 11136` on eight consecutive
+  runs. One symbol: `openbb 400 on /equity/estimates/consensus?symbol=HUMANSFT.KW,ROST,…` took all
+  40 with it, and because the backlog orders by fund weight the SAME poisoned head returned every
+  run. "One dead symbol kills a batched provider call" was already recorded three times
+  (`group-performance`, `security-profiles`, `security-industries`) and `fetchWithIsolation` exists
+  for exactly this — I wrote a new batched resource without it. **Any new batched resource uses
+  `fetchWithIsolation`, and a symbol the provider rejects ALONE gets marked so the head can advance.**
+- **RESOLVING A SYMBOL THROUGH `security_symbol` COSTS A SCAN OF THE WHOLE UNIVERSE.** It is a view
+  over two LATERAL subqueries per security, so a query filtered to ONE symbol still evaluates all
+  27,629 — `Seq Scan on security (actual rows=27629)` with a `Limit` subplan per row. Measured after
+  the weekly backfill: daily chart 260 ms, weekly **1,382 ms**, and anon timed out under ordinary
+  load. `market.symbol_security` is the materialised map with an index on the symbol, refreshed
+  inside `refresh_facets` beside the spine — a matview with no scheduled refresh is a stale view
+  nobody notices. Note this is the SECOND fix to the same view: migration 096 removed the per-ROW
+  cost, 102 the per-QUERY one.
+- **`cmd | head` REPORTS HEAD'S EXIT CODE, AND I BELIEVED IT TWICE IN ONE DAY.**
+  `npx tsc --noEmit 2>&1 | head -4; echo "tsc=$?"` always prints 0, so a genuine type error read as
+  clean and CI caught what I had called verified. The same shape in a mutation harness —
+  `echo "$(basename $f) exit=$?"`, where the command substitution runs first and resets `$?` —
+  briefly convinced me a working guard was broken. **Redirect to a file and test the command's own
+  status**, never a pipeline's tail.
+- **A GUARD CAN FIRE ON ITS OWN BLIND SPOT, AND THAT IS NOT DRIFT.** `check_derived_metrics` began
+  reporting `compared 0 values` the day `security-xbrl` started: it samples `security_metric` by
+  recency, the newest rows were all `sec-xbrl`, and those are written straight from company facts
+  with no `security_statement` to compare against. Failing loudly was correct — a check that
+  verified nothing must never read as one that passed — but the fix is to scope the sample to what
+  the check is ABOUT, and to derive that scope from the mapping table rather than "everything except
+  X", so the next non-statement source cannot silently empty it again.
 
 Note on hardening: **`gh pr merge` merged a workflow-only PR fine** (muffin-deployment#24,
 2026-08-10). The "OAuth App … without `workflow` scope" dead end recorded above did not reproduce —
