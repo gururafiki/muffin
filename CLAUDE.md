@@ -1351,6 +1351,16 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   "comparable" and "made comparable" are different facts. Subunits (ILA, ZAC, KWF) get history
   derived from the parent in the SAME pass, or a subunit whose parent has ten years and which has
   three days silently falls back to spot for every historical bar.
+- **SEC ONLY KNOWS US REGISTRANTS, SO ASK IT BY THE US TICKER — the mirror of migration 39.**
+  `equity/ownership/insider_trading` requires `symbol` and rejects a CIK outright (`cik=` answers
+  *Field required: symbol*, `symbol=<cik>` answers *CIK not found*), so the CIK this schema holds
+  cannot be passed to the thing that needs it. And the DISPLAY symbol is wrong here: Bunge's primary
+  listing is `BG.VI`, SEC has no CIK for a Vienna line, and the first real run failed 12 of 26 on
+  exactly that while `BG` works. `security_identifier`'s `ticker` is OpenFIGI's US lookup — the
+  WRONG symbol for prices (migration 39: a thin OTC foreign-ordinary line for 365 of 900 sampled
+  securities) and the RIGHT one for SEC. **Same company, two correct answers, different questions**,
+  which is why neither can be "the symbol". Found by reading `failed: 12` beside `written: 586`,
+  not by the counts.
 - **`PGRST_DB_MAX_ROWS` HAS NOW COST THREE DEFECTS, SO IT IS A GUARD RATHER THAN A THIRD FIX.**
   The earnings resource loaded `symbol_security` (12,090 rows) in ONE select, got 1,000, and matched
   **22 of 753** companies with NVDA and CRM unresolved — `matched: 22` reading as a fact about
