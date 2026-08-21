@@ -1351,6 +1351,18 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   "comparable" and "made comparable" are different facts. Subunits (ILA, ZAC, KWF) get history
   derived from the parent in the SAME pass, or a subunit whose parent has ten years and which has
   three days silently falls back to spot for every historical bar.
+- **A CURRENCY WITH NO HISTORY MUST NOT BE RE-ASKED — fifth instance of the negative-cache rule.**
+  Yahoo carries exactly ONE bar for `GELUSD=X`, so the FX history backfill SUCCEEDS, writes a single
+  recent row, and "has a rate older than 90 days" stays false: the lari was re-fetched eight times a
+  day for ever. Nothing errored and no count showed it — the tell was the same currency appearing in
+  `historyFor` on consecutive runs. `market.currency.history_missing_at`, 30 days not never, because
+  a pair not quoted today may be quoted next quarter. Report "the provider has none" separately from
+  "we could not fetch": only the second suggests something is broken.
+- **`pg_isready` AND `psql -c 'select 1'` ARE BOTH USELESS AS READINESS CHECKS for a postgres
+  container** — it runs a TEMPORARY server on the same socket during init, so both succeed before
+  the real server is up. The symptom is the entire behaviour suite failing with
+  `relation "market.security" does not exist`, which reads as a catastrophic migration break and is
+  a container race. Retry the thing you actually need (creating the roles) until it sticks.
 - **A BACKLOG PROBE MUST NOT BE A PAGE — I shipped this file's own headline bug again, one day
   later.** The FX history backlog asked "which currencies have a row older than 90 days" by
   SELECTING those rows; `PGRST_DB_MAX_ROWS` caps that at 1,000 and the backfill writes ~520 rows per
