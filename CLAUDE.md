@@ -1351,6 +1351,14 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   "comparable" and "made comparable" are different facts. Subunits (ILA, ZAC, KWF) get history
   derived from the parent in the SAME pass, or a subunit whose parent has ten years and which has
   three days silently falls back to spot for every historical bar.
+- **`PGRST_DB_MAX_ROWS` HAS NOW COST THREE DEFECTS, SO IT IS A GUARD RATHER THAN A THIRD FIX.**
+  The earnings resource loaded `symbol_security` (12,090 rows) in ONE select, got 1,000, and matched
+  **22 of 753** companies with NVDA and CRM unresolved — `matched: 22` reading as a fact about
+  coverage rather than about paging. `logic-check` now fails on any SELECT from a large table left
+  unnarrowed by `.in(`, `.eq(`, `.limit(`, a range filter or a `head: true` count. **The first
+  version matched any `.from(` and reported eight offenders, all upserts** — a guard that cries wolf
+  on writes is a guard someone deletes, so it requires `.select(` in the statement. Proven by
+  reintroducing the defect, not by reading it.
 - **A NET SHARE FIGURE MISREPRESENTS INSIDER ACTIVITY, AND THE ARITHMETIC IS RIGHT.** One officer
   exercising a large option grant outweighs a dozen colleagues buying, so a summary reporting only
   net shares says "insiders sold" about a company four of them were buying.
