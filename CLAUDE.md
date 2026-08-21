@@ -1351,6 +1351,21 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   "comparable" and "made comparable" are different facts. Subunits (ILA, ZAC, KWF) get history
   derived from the parent in the SAME pass, or a subunit whose parent has ten years and which has
   three days silently falls back to spot for every historical bar.
+- **A 400 THAT NAMES THE ABSENCE IS AN ANSWER — read the message, not the status.**
+  `No Form 4 data was returned for BBVXF` arrives as HTTP 400; BBVXF is a thin OTC
+  foreign-ordinary line whose company is not a US registrant, so there is no Form 4 and never will
+  be. Counting it as a failure left the cursor unadvanced and brought the same securities back every
+  run — 8 of 30 on the run that surfaced it. The TRANSPORT branch is deliberately kept separate: a
+  deploy restarted openbb-api and every call returned `client error (Connect): tcp connection
+  refused` for about a minute, and advancing on that would make a thirty-second restart cost a week
+  of staleness. Three outcomes, not two: answered with data, answered with nothing, and did not
+  answer.
+- **`not-supplied` IS AN ABSENCE WEARING A VALUE.** nasdaq sends it in `reporting_time` for
+  companies that have not said which side of the bell they report on, and rendering "26 Aug 2026 ·
+  not supplied" is worse than the missing field it actually is — a missing field gets dropped
+  silently, this one looks like information. Found by reading live rows, not the fixture. Proving
+  the guard needed BOTH halves mutated: changing only the fixture turned a different assertion red
+  and said nothing about this one.
 - **SEC ONLY KNOWS US REGISTRANTS, SO ASK IT BY THE US TICKER — the mirror of migration 39.**
   `equity/ownership/insider_trading` requires `symbol` and rejects a CIK outright (`cik=` answers
   *Field required: symbol*, `symbol=<cik>` answers *CIK not found*), so the CIK this schema holds
