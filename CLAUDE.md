@@ -1339,6 +1339,33 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   `echo "$(basename $f) exit=$?"`, where the command substitution runs first and resets `$?` —
   briefly convinced me a working guard was broken. **Redirect to a file and test the command's own
   status**, never a pipeline's tail.
+- **THE REPORTING CURRENCY WAS ALREADY FETCHED AND STORED — fifth instance of "the answer is
+  already in a response you fetch".** Quarterly statements for foreign filers produced metrics and
+  TTM and STILL no P/E, because the income/balance/cash endpoints carry no currency field, so every
+  yfinance-derived metric has `currency_code` null and the gate correctly declined to divide.
+  Samsung showed a net margin of 21.46% beside an empty P/E. `equity/fundamental/metrics` carries
+  it and `security_fundamentals.raw->>'currency'` had held it all along. **It is the REPORTING
+  currency, not the quote currency, and that was settled by probing the securities expected to
+  DISAGREE**: BHP.AX quotes AUD and answers **USD**, SHEL.L quotes GBP and answers **USD**, while
+  005930.KS and 7203.T answer their own KRW and JPY. Had it been the quote currency, using it would
+  have made every ratio pass the gate that exists to stop dividing dollars by kroner. It is a
+  FALLBACK and never an override — a metric that states its own currency states it from the filing.
+- **A `\i` PATH RESOLVES AGAINST THE CLIENT'S WORKING DIRECTORY.** A test that runs a real
+  migration with `\i /repo/stack/...` passes in the local container (repo mounted at `/repo`) and
+  fails in CI, which runs psql from the checkout root. Use a repo-relative path — an absolute one
+  fails only in the one place you cannot iterate quickly.
+- **A MUTATION HARNESS THAT PIPES SQL THROUGH STDIN CANNOT REACH A TEST THAT READS THE FILE.**
+  `a-promoted-currency-must-be-a-currency.sql` runs the migration with `\i`, so every mutation of
+  the promotion statement was certified as guarded while the clean file was what actually ran. Write
+  the mutated file to disk. Fifth form of "verify the mutation reached the thing under test", after
+  `sed` mis-escaping, wrong indentation, a migration that never applied, and a fingerprint that
+  returned an empty string.
+- **THE PostgREST ROLE'S STATEMENT TIMEOUT IS EIGHT SECONDS, and it is a THIRD limit distinct from
+  the 90s worker budget and the 3s anon ceiling.** Measured 2026-08-21 on `derive_ttm`: 100
+  securities 2.7s, 200 4.1s, **400 8.1s and cancelled**. The cost is SUB-LINEAR (a fixed ~1.2s plus
+  ~0.015s per security), so a bigger page looks tempting right up to the cliff. Size a page against
+  the timeout that actually applies, and LOOP it to the worker deadline rather than enlarging it —
+  looping drains more per run and cannot fall off the cliff as the data grows.
 - **A PRICE-BASED RATIO WAS A US-ONLY FEATURE AND NOTHING SAID SO.** Measured 2026-08-21 against
   the deployed `security_ratio_series`: AAPL/MSFT/NVDA return a P/E; **SAP.DE, 7203.T, 005930.KS,
   ASML.AS, TSM and BABA return NO ROWS AT ALL**. SAP.DE has price bars and statements back to 2016
