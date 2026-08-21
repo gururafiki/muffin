@@ -1339,6 +1339,54 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   `echo "$(basename $f) exit=$?"`, where the command substitution runs first and resets `$?` —
   briefly convinced me a working guard was broken. **Redirect to a file and test the command's own
   status**, never a pipeline's tail.
+- **A PRICE-BASED RATIO WAS A US-ONLY FEATURE AND NOTHING SAID SO.** Measured 2026-08-21 against
+  the deployed `security_ratio_series`: AAPL/MSFT/NVDA return a P/E; **SAP.DE, 7203.T, 005930.KS,
+  ASML.AS, TSM and BABA return NO ROWS AT ALL**. SAP.DE has price bars and statements back to 2016
+  and only ANNUAL metrics — `derive_ttm` needs four consecutive quarters, and quarters came only
+  from SEC XBRL `companyfacts`, which needs a CIK. **3,516 securities have one against 12,350
+  equities**, so 72% of the universe could not show a valuation ratio and the section simply did
+  not render. The fix was one parameter: `equity/fundamental/{income,balance,cash}
+  ?provider=yfinance&period=quarter` returns 5 quarterly periods for all of them (Nestlé excepted —
+  Swiss issuers report SEMI-ANNUALLY, a fact, not a failure). **The SEC path is annual-only
+  (`period=quarter` answers 422) and the yfinance statement call passed `limit=4` with no `period`
+  at all**, so nobody had checked what fraction of the universe the feature could serve. Ask that
+  question of any feature built on a provider-specific key.
+- **QUARTERLY DOES NOT BATCH — two symbols in one request return ZERO rows**, which is the same
+  reason `STMT_BATCH` is already 1. Three calls per security against a rate-limited provider makes
+  `security-quarters` the most expensive backlog per security in the system, hence a scoped
+  `pending_quarters`: SEC filers excluded (paying to overwrite a 17-year record with a 5-quarter
+  one), securities with no annual statements excluded (nothing shows the provider answers for that
+  symbol), ordered by FUND WEIGHT rather than market cap.
+- **A FISCAL-YEAR END IS BOTH AN ANNUAL PERIOD AND A FOURTH-QUARTER ONE.** `security_statement` was
+  keyed `(security_id, statement, period_ending)`, so SAP's 2025-12-31 arriving twice would have
+  silently replaced the annual revenue with three months of it — **wrong by a factor of four, in
+  the right units, with no error and an identical row count**. `period_type` had to join the key,
+  and with it BOTH writers' `onConflict` **and both dedupe keys**: a stale dedupe key drops the
+  quarterly row as a duplicate of the annual one before the upsert ever sees it.
+- **A WHOLE-UNIVERSE PASS IS NOT A STATEMENT, AND IT PASSES UNTIL THE DATA GROWS.**
+  `derive_ttm(null)` recomputed everything in one statement: 83,247 rows in ~14s when
+  `security_metric` held 55,390 quarterly rows. The XBRL rebuild took that to **1,390,700** and
+  every call began returning `canceling statement due to statement timeout` — and because
+  `security-metrics` calls it last, the whole resource reported `ok: false` and the metric layer
+  stopped. Found by driving the new resource and READING THE RESPONSE (`written: 103, ttm: 0`
+  beside a timeout), not by a row count. I blamed the primary-key change from the previous PR
+  first; the counts disproved it, and `security_statement` answered reads in 95ms throughout, so
+  nothing was lock-blocked. **The input grew; the statement did not change.**
+- **A PAGE OVER AN ANTI-JOIN ADVANCES HOWEVER IT IS ORDERED, WHICH MAKES THE OBVIOUS MUTATION
+  USELESS.** Mutating `derive_ttm`'s page to `order by security_id limit 1` still PASSED — a
+  derived security leaves `pending_ttm`, so any ordering terminates. The defect being guarded is a
+  source set that never SHRINKS, so the mutation has to select straight from the metrics table.
+  A mutation that changes the code without changing the behaviour certifies the guard falsely.
+- **A FINGERPRINT READ THROUGH `psql -c` INSIDE A SHELL STRING RETURNED EMPTY, AND CERTIFIED FIVE
+  MUTATIONS AS NO-OPS.** Every comparison was `'' == ''`. Read the fingerprint from a FILE
+  (`psql -tAf`) and assert its length before using it — a fingerprint that cannot fail certifies
+  everything. Fourth form of "verify the mutation actually reached the database", after `sed`
+  mis-escaping, a pattern with the wrong indentation, and a migration that never applied.
+- **`create or replace view` MEANS THE LAST FILE WINS OUTRIGHT — copy the CURRENT definition, not
+  the one that introduced it.** Migration 106 rebuilt `symbol_cache_classification` from migration
+  **050**'s nine entries, silently deleting the eight added by 059/067/087/088/094/095/097.
+  `tests/negative-caches-are-classified.sql` named all eight; without it every negative cache added
+  in three weeks would have stopped being cleared by a corrected symbol, invisibly.
 - **A RATIO IS COMPUTED PER BAR, AND MIXING PERIOD TYPES IN ONE SPAN PARTITION IS A BUG THAT
   TYPE-CHECKS.** financecharts stores `ADJ close` + `DILUTED EPS TTM` and divides; storing P/E
   would be a row per security per day per ratio, all stale the moment a restatement lands. So
