@@ -1351,6 +1351,23 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   "comparable" and "made comparable" are different facts. Subunits (ILA, ZAC, KWF) get history
   derived from the parent in the SAME pass, or a subunit whose parent has ten years and which has
   three days silently falls back to spot for every historical bar.
+- **TWO ENDPOINTS FROM THE SAME PROVIDER CAN HAVE OPPOSITE CONTRACTS.**
+  `equity/fundamental/filings` accepts `cik` directly; `equity/ownership/insider_trading` REQUIRES
+  `symbol` and rejects a CIK. So the filings resource needs no symbol resolution at all while the
+  insider one needed the US ticker and failed 12 of 26 on the display symbol. Check the parameter
+  list (`/openapi.json`) rather than assuming a provider is consistent with itself.
+- **`form_type` FILTERS AND `form_group` DOES NOT.** Unfiltered, `filings` is dominated by Form 4s
+  and 144s. `form_type=10-K,10-Q` returns exactly those two (comma separated, measured).
+  `form_group=annual` returns Form 4s regardless — a no-op that reads as a working filter returning
+  honest results, which is the worst kind of wrong.
+- **A FOREIGN PRIVATE ISSUER FILES 20-F AND 6-K *INSTEAD OF* 10-K AND 10-Q**, never as well — BABA
+  returns twelve 6-Ks and no 10-Q. Any rule classifying filings must know both vocabularies, or
+  every foreign annual report is labelled an "event": the same shape as the binary-conditional-over-
+  three-values bug already recorded here.
+- **THE SPLIT IS THE FEATURE IN A FILING LIST.** A company files dozens of 8-Ks a year and one
+  annual report, so a date-ordered list buries the 10-K under press releases. The fixture proves it
+  by making the 10-K the OLDEST row — a panel that merely sorts by date puts it last, and flattening
+  the groups fails both the ordering and the grouping check.
 - **A 400 THAT NAMES THE ABSENCE IS AN ANSWER — read the message, not the status.**
   `No Form 4 data was returned for BBVXF` arrives as HTTP 400; BBVXF is a thin OTC
   foreign-ordinary line whose company is not a US registrant, so there is no Form 4 and never will
