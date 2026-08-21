@@ -1339,6 +1339,37 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   `echo "$(basename $f) exit=$?"`, where the command substitution runs first and resets `$?` —
   briefly convinced me a working guard was broken. **Redirect to a file and test the command's own
   status**, never a pipeline's tail.
+- **A RATIO ACROSS CURRENCIES NEEDS A RATE PER BAR, AND `fx_rate` HELD THREE DAYS.** BHP and Shell
+  report in USD and trade in AUD and GBP, so they had no P/E at all — correct, but not the last
+  word: the conversion is arithmetic and the rates are free. Spot is enough to reprice a market cap
+  TODAY and useless for a SERIES, because converting a 2021 bar with today's rate is wrong by every
+  intervening move and looks ordinary. `fx-rates` now backfills ten years of WEEKLY rates (Yahoo's
+  chart endpoint, `range=10y&interval=1wk`, ~520 bars) and the view joins each bar to the most
+  recent rate AT OR BEFORE it — nothing interpolated, because a rate we did not observe is not a
+  rate. It converts the METRIC, not the price: re-denominating the price would make this view
+  disagree with `price_series` about what a share costs. `fx_converted` is its own column because
+  "comparable" and "made comparable" are different facts. Subunits (ILA, ZAC, KWF) get history
+  derived from the parent in the SAME pass, or a subunit whose parent has ten years and which has
+  three days silently falls back to spot for every historical bar.
+- **A BACKLOG PROBE MUST NOT BE A PAGE — I shipped this file's own headline bug again, one day
+  later.** The FX history backlog asked "which currencies have a row older than 90 days" by
+  SELECTING those rows; `PGRST_DB_MAX_ROWS` caps that at 1,000 and the backfill writes ~520 rows per
+  currency, so after two currencies the probe could not see past its own page and re-fetched the
+  same four for ever. Three consecutive production runs returned an identical `historyFor` with no
+  failures, which reads as throughput. Every other backlog here is a VIEW for exactly this reason.
+  A count (`Prefer: count=exact` + `Range: 0-0`) would also have been sound but needs one request
+  per entity; the anti-join is one request total.
+- **`pending_%` IS A LOAD-BEARING NAMING CONVENTION.** `every-table-is-reachable` classifies a view
+  as a service-role work queue by that prefix and requires anon to read everything else, so naming a
+  backlog `fx_pending_history` fails CI as an unreadable serving view. Name it `pending_fx_history`.
+- **`market.currency` IS POPULATED BY THE INGEST AT RUNTIME, NOT BY A MIGRATION.** So USD does not
+  exist on a fresh database, and a test asserting "USD is never queued for its own exchange rate"
+  passes for the wrong reason — certifying an exclusion that may not be there. Seed it in the
+  fixture. Same family as `data_source` and `asset_category`.
+- **`pg_isready` REPORTS TRUE DURING POSTGRES INIT**, before the server accepts real connections. A
+  local harness that waits on it races the container: role creation fails, and the entire suite then
+  fails with `relation "market.security" does not exist`, which looks like a catastrophic migration
+  break. Wait on an actual query (`psql -tAc 'select 1'`).
 - **THE REPORTING CURRENCY WAS ALREADY FETCHED AND STORED — fifth instance of "the answer is
   already in a response you fetch".** Quarterly statements for foreign filers produced metrics and
   TTM and STILL no P/E, because the income/balance/cash endpoints carry no currency field, so every
