@@ -271,12 +271,20 @@ one-off decision into a policy.
 
 ### Tier 2 — needs a new source, but a free one
 
-**5. Institutional holdings from 13F.** Public, free, quarterly, and the same shape as the N-PORT
-pipeline we already have — the ingest, identity resolution and snapshot model all carry over.
-"Which funds own this?" is one of the most asked questions about a stock.
+**5. ~~Institutional holdings from 13F.~~ NOT AVAILABLE FREE — this section contradicted its own
+table.** §3.1 records the measurement: `equity/ownership/form_13f` returns **204** and FMP's
+`institutional` / `major_holders` return **402**. The filings themselves are public, so "public and
+free" reads as true and is the wrong test — what matters is whether a source in THIS stack serves
+them, and none does. Building it would mean parsing 13F from EDGAR directly, which is a new
+ingest rather than a resource. Do not list it as a free item again without a measurement showing
+rows.
 
-**6. Insider transactions from Form 4.** Same argument: public, free, and a genuinely differentiated
-signal for the agent's analysis, not just the UI.
+**6. Insider transactions from Form 4 — NEEDS NO NEW SOURCE, so it does not belong in this tier.**
+`equity/ownership/insider_trading?provider=sec` serves Form 4 through the openbb-api this stack
+already calls, which makes it ordinary resource work (a backlog, a negative cache, a table) rather
+than a new pipeline. It stays on the list because the SIGNAL is differentiated — insider buying is
+one of the few things a persona can reason about that a price series cannot show — not because it
+is hard.
 
 **7. Corporate filings / news.** The agent does deep research; having filings indexed against
 `security_id` would make that grounded rather than searched.
@@ -347,5 +355,8 @@ ETFs to track, which venues to opt into promotion, and the licensed sets (GICS, 
 ratings, estimates). The free engineering items that were outstanding — total return, FX, bond
 reference data, filters, style, macro — all landed on 2026-08-18/19.
 
-**The free items still worth doing are 13F institutional holdings and Form 4 insider transactions**
-(§4 Tier 2): public, free, and the same shape as the N-PORT pipeline that already works.
+**The free item still worth doing is Form 4 insider transactions** (§4 Tier 2) — served by
+`equity/ownership/insider_trading?provider=sec` through the openbb-api already deployed, so it is a
+resource, not a pipeline. **13F is NOT one of them**: `form_13f` answers 204 and FMP's equivalents
+402. This summary previously named both as free, contradicting §3.1's own measurement two hundred
+lines above it — the filings being public is not the same as a configured provider serving them.
