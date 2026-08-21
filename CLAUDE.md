@@ -1351,6 +1351,29 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   "comparable" and "made comparable" are different facts. Subunits (ILA, ZAC, KWF) get history
   derived from the parent in the SAME pass, or a subunit whose parent has ten years and which has
   three days silently falls back to spot for every historical bar.
+- **WHEN A COST IS FLAT IN THE PAGE SIZE, THE PAGE IS NOT WHAT YOU ARE PAYING FOR — and I ignored
+  that for three attempts.** `derive_security_metrics` measured 8.13s at `p_limit` 25 (timeout),
+  6.86s at 50, 6.17s at 100 and 6.12s at 200. A page of 25 costing MORE than a page of 200 can only
+  mean the page is irrelevant, and that was in the very first table. I tuned the page twice
+  (2,000 → 200) and then added an index on `security_statement (as_of)` reasoning that a LIMIT after
+  a SORT pays for the whole sort — true in general, and **it changed nothing** (8.67/6.68/6.60/6.10).
+  The real cause: **97 statements of 107,784 qualify**, found by a `NOT EXISTS` against 3.29M metric
+  rows, so nearly the whole table is scanned to find 25 needles. `security_statement.derived_at`
+  turns it into an indexed `is null` lookup. **An index is a hypothesis until the number moves** —
+  re-time the same calls before and after, and believe the second table.
+- **AN INVARIANT THAT EVERY WRITER MUST REMEMBER IS A TRIGGER.** `derived_at` has to be cleared when
+  a statement is re-fetched. "Every upsert nulls it" is three call sites today and the next resource
+  forgets — the same shape as `fetchWithIsolation`'s outage rule living in a comment at one handler.
+  A `BEFORE UPDATE` trigger on `security_statement` re-queues any row whose `data` or `as_of`
+  changes; `a-page-must-advance.sql` then passes UNCHANGED, and it FAILED while the rule lived in
+  the writers. When a test that simulates the real event fails, the invariant is in the wrong place.
+- **`equity/profile` CARRIES A COMPANY'S WHOLE IDENTITY AND `security-profiles` DISCARDED IT** —
+  `long_description`, `employees`, `company_url`, `hq_address_*`, `beta`. Sixth instance of "the
+  answer is already in a response you fetch". But it is **NOT "zero new calls"**: `pending_profile`
+  asks about the SECTOR and is drained, so widening that handler fetches nothing and the columns sit
+  empty — migration 56's exact failure. A new field filled by an existing resource needs its own
+  backlog. It goes in `market.security_profile`, not on `security`: a description is a paragraph and
+  that table is joined by the spine matview and every serving view.
 - **A CURRENCY WITH NO HISTORY MUST NOT BE RE-ASKED — fifth instance of the negative-cache rule.**
   Yahoo carries exactly ONE bar for `GELUSD=X`, so the FX history backfill SUCCEEDS, writes a single
   recent row, and "has a rate older than 90 days" stays false: the lari was re-fetched eight times a
