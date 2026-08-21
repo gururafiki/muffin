@@ -1351,6 +1351,26 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   "comparable" and "made comparable" are different facts. Subunits (ILA, ZAC, KWF) get history
   derived from the parent in the SAME pass, or a subunit whose parent has ten years and which has
   three days silently falls back to spot for every historical bar.
+- **A NET SHARE FIGURE MISREPRESENTS INSIDER ACTIVITY, AND THE ARITHMETIC IS RIGHT.** One officer
+  exercising a large option grant outweighs a dozen colleagues buying, so a summary reporting only
+  net shares says "insiders sold" about a company four of them were buying.
+  `security_insider_summary` therefore counts distinct PEOPLE on each side as well, and the UI leads
+  with the people. The fixture has to make the two DISAGREE — four buyers against one much larger
+  seller — and must give one buyer TWO trades, or `count(*)` and `count(distinct owner)` return the
+  same number and dropping the people count passes clean. It did, until that was fixed.
+  **No buy/sell verdict is offered**: selling is often a scheduled 10b5-1 plan, tax withholding on
+  vesting or diversification, and only buying carries a conventional signal — a bullish/bearish
+  badge would be an interpretation the data does not support. Asserted both ways.
+- **`insider_fetched_at` IS A CURSOR AND IS DELIBERATELY NOT NAMED `%_missing_at`.** Insiders keep
+  trading, so "no Form 4 this week" is never a permanent fact about a company — a negative cache
+  here would be a claim about the future. The cursor is also NOT advanced when a fetch fails: a
+  security we could not ask about must come back next run, not wait a week because the attempt
+  errored. Contrast every `%_missing_at` column, which records a settled absence.
+- **NEITHER `management` NOR `insider_trading` BATCHES** (two symbols return zero rows), so both are
+  one call per security — and the choice between them is WHOSE BUDGET. `management` is yfinance,
+  the provider every other backlog is queued behind, where 12,350 equities is ~50 days of the shared
+  limit. Insider trading is SEC: 10 req/s documented, ~0.17s each, scoped to the 3,516 securities
+  with a CIK. When two endpoints cost the same per call, pick the uncontended provider.
 - **A RUN-LEVEL TALLY STACKED ON TOP OF PER-BATCH EVIDENCE IS STRICTLY WORSE THAN THE EVIDENCE.**
   `fetchWithIsolation` only populates `dead` after asking each symbol ALONE and then proving the
   provider is up with a CONTROL symbol — on a throttle or an outage it returns an empty `dead` by
