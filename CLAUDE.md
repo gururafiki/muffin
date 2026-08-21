@@ -1339,6 +1339,37 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   `echo "$(basename $f) exit=$?"`, where the command substitution runs first and resets `$?` —
   briefly convinced me a working guard was broken. **Redirect to a file and test the command's own
   status**, never a pipeline's tail.
+- **A RATIO IS COMPUTED PER BAR, AND MIXING PERIOD TYPES IN ONE SPAN PARTITION IS A BUG THAT
+  TYPE-CHECKS.** financecharts stores `ADJ close` + `DILUTED EPS TTM` and divides; storing P/E
+  would be a row per security per day per ratio, all stale the moment a restatement lands. So
+  `market.security_ratio_series` joins each metric to the bars in the range it governs
+  (`[as_of, next as_of)`) — a metric is STEPWISE, and a P/E that drifted between reports would be
+  market movement that never happened. The trap: selecting `ttm` AND `quarter` for one metric puts
+  both in the same `lead()` partition, so they cut each other's spans into fragments and the
+  pivot's `max()` silently takes whichever number is BIGGER — a P/E four times off, on a chart,
+  with nothing to indicate it. A **flow** takes `ttm` and a **stock** takes the latest `quarter`,
+  selected by joining `metric.is_flow` (the same column `derive_ttm` sums on) rather than by a
+  local list that can drift from it. Two further rules the mutations forced out: **EPS must FALL
+  across reports in the fixture**, because with a rising series an unbounded span still yields the
+  newer value through `max()` and the bug is invisible; and **two unknown currencies are not a
+  match** — `null = null` is not true, but writing the test as `is distinct from` makes them equal
+  and a metric of unknown currency gets divided into a price of unknown currency.
+- **`security-xbrl` IS BOUNDED BY MEMORY, NOT BY THE 90s BUDGET, AND THE PRESSURE IS CUMULATIVE.**
+  Measured 2026-08-21: 40 filers = 13s of the 90s budget and 0 failures; 100 filers is killed by
+  the supervisor at 15s (`WorkerRequestCancelled`) — companyfacts payloads are 3-7MB each, so the
+  page is a memory budget wearing a time budget's clothes. Raising it is the obvious optimisation
+  and it is the wrong one. Worse, three runs 31s apart AT the safe page still got the third worker
+  killed, so the GAP between runs is as load-bearing as the page size (45s holds). And a killed
+  worker never calls `finish_refresh`, so it holds the in-flight lock for ~2 minutes — hammering
+  through that costs more than waiting it out, and the `skipped: fresh or in flight` it returns
+  reads as a TTL skip rather than as the wreckage of the previous call.
+- **A ONE-OFF TIMEOUT RIGHT AFTER A DEPLOY IS CONTENTION, NOT A PAGE SIZE — RE-MEASURE BEFORE
+  FIXING.** `security-metrics` answered `canceling statement due to statement timeout` on its
+  first post-deploy call at the default 4,000-row page, which reads exactly like the documented
+  "unlimited exceeded the statement timeout" failure, and I reported it as a defect that would
+  leave TTM permanently underived. Three subsequent runs at 4,000 and 2,000 completed in ~12s. The
+  first call was competing with the deploy's own tail (matview refresh, PostgREST reload). One
+  observation of a timeout is a measurement of that moment, not of the page.
 - **A GUARD CAN FIRE ON ITS OWN BLIND SPOT, AND THAT IS NOT DRIFT.** `check_derived_metrics` began
   reporting `compared 0 values` the day `security-xbrl` started: it samples `security_metric` by
   recency, the newest rows were all `sec-xbrl`, and those are written straight from company facts
