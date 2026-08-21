@@ -1351,6 +1351,30 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   "comparable" and "made comparable" are different facts. Subunits (ILA, ZAC, KWF) get history
   derived from the parent in the SAME pass, or a subunit whose parent has ten years and which has
   three days silently falls back to spot for every historical bar.
+- **A RUN-LEVEL TALLY STACKED ON TOP OF PER-BATCH EVIDENCE IS STRICTLY WORSE THAN THE EVIDENCE.**
+  `fetchWithIsolation` only populates `dead` after asking each symbol ALONE and then proving the
+  provider is up with a CONTROL symbol — on a throttle or an outage it returns an empty `dead` by
+  construction. `security-profile-detail` required `anyAnswer && iso.dead.length > 0` on top of
+  that, which looks safer and guarantees a stall: once a weight-ordered backlog drains its
+  answerable head, EVERY batch in a page is uncovered, no batch returns rows, the tally never
+  becomes true and the page can never be marked. Measured 2026-08-21 —
+  `written: 0, batchesFailed: 15, remaining: 10894`, identical five runs running, on Philippine,
+  Emirati and Vietnamese listings that answer **204 NO CONTENT** individually. Diagnosed by ruling
+  out the obvious: I had over-driven the resource, so a rate limit was the natural explanation, and
+  a two-minute pause with a page of 40 failing identically disproved it. **When a mechanism already
+  carries evidence, do not add a tally in front of it.**
+- **`equity/calendar/earnings` TAKES A DATE RANGE, NOT A SYMBOL** — one three-day window returns
+  ~116 companies with `report_date`, `eps_consensus`, `eps_previous` and `reporting_time`, making it
+  the cheapest thing in this pipeline per fact delivered. A FIVE-day window times out, so the chunk
+  size is part of the contract. It is also **not a backlog**: the horizon moves and dates are
+  rescheduled, so each run re-reads the whole forward window and the newest answer wins — a
+  `pending_*` view here would freeze a date that later changed. `security_next_earnings` therefore
+  has to CHOOSE (next scheduled, else most recent past) and say which via `upcoming`, because a page
+  rendering "reports 26 Aug" for a date that has passed is worse than showing nothing.
+- **`equity/fundamental/management` WORKS GLOBALLY** (SAP, Samsung, BHP all return 10 officers),
+  while `filings?provider=sec` needs a CIK and errors `CIK not found` for a non-filer like SAP.DE —
+  so it is scoped to the 3,516 securities that have one. Probe both kinds before assuming an
+  endpoint's reach.
 - **WHEN A COST IS FLAT IN THE PAGE SIZE, THE PAGE IS NOT WHAT YOU ARE PAYING FOR — and I ignored
   that for three attempts.** `derive_security_metrics` measured 8.13s at `p_limit` 25 (timeout),
   6.86s at 50, 6.17s at 100 and 6.12s at 200. A page of 25 costing MORE than a page of 200 can only
