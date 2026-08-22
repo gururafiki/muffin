@@ -1359,6 +1359,15 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   false. The DECISION was still right, for a better reason: FMP's peers for AAPL run from NVDA at
   $5.20T down to **Algorhythm Holdings at $852,000**, so it is a sector grab-bag rather than a
   size-proximate set. **Check the endpoint you are actually calling.**
+- **alpha_vantage SERVES US LISTINGS, AND A SUFFIXED SYMBOL HANGS RATHER THAN ERRORING.**
+  `historical_eps?symbol=ASML.AS` produced `error sending request` after the 20s timeout while
+  `security-management` wrote 30 officers in the same minute — which is what ruled out the service
+  and pointed at the symbol. On a 25-call-a-day budget a timeout is not slowness, it is the whole
+  day's quota. The backlog therefore takes the **US ticker** (not `coalesce(provider_symbol,
+  ticker)`) and requires **no exchange suffix** — a dot is how every venue is spelled here, a US
+  listing never has one, and an ADR like TSM has a bare ticker BECAUSE it is a US listing, which is
+  why the test is on the symbol rather than the company's country. **Fourth time provider-symbol
+  versus US-ticker has decided a resource.**
 - **`historical_eps` HAS EXACTLY ONE WORKING PROVIDER AND IT ALLOWS 25 CALLS A DAY.** alpha_vantage
   returns 122 quarters of actual/estimate/surprise; FMP's copy of the same endpoint is **402 premium
   even for AAPL**, so there is no second source and no way to widen it. That makes it a TRICKLE, not
