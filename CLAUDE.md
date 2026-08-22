@@ -1351,6 +1351,34 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   "comparable" and "made comparable" are different facts. Subunits (ILA, ZAC, KWF) get history
   derived from the parent in the SAME pass, or a subunit whose parent has ten years and which has
   three days silently falls back to spot for every historical bar.
+- **TWO OF THE PLAN'S THREE REMAINING FETCHES WERE BETTER COMPUTED THAN BOUGHT.**
+  `equity/compare/peers` (FMP) returns SECTOR PLUS MARKET-CAP PROXIMITY — SAP.DE beside Micron and
+  SK hynix — which is a computation this schema can do from `security_current.sector_id` and
+  `security_market_cap_usd`. FMP's free tier is per-SYMBOL (402s on NEE, PLD, BHP, SAP), so a bought
+  peer list could not serve most of the universe anyway. And
+  `equity/fundamental/historical_eps` (alpha_vantage, **25 calls a DAY**, US only) asks for a
+  surprise both halves of which are already stored — 98,333 quarterly `eps_diluted` actuals and
+  `earnings_calendar.eps_consensus`. **Before building a fetch, check whether the vendor is selling
+  a join over data you hold.**
+- **A MARKET CAP IS IN THE COMPANY'S OWN CURRENCY, so ranking on it is not ranking by size.**
+  `security_peers` uses `security_market_cap_usd` (migration 73); the raw column would put a
+  ¥3,000,000,000,000 company beside a $3,000,000,000 one. The fixture makes the two rankings
+  DISAGREE — a ¥1.5tn company is ~$10.05bn against a $10bn subject, so converted it is the NEAREST
+  peer and raw it ranks last. Distance is a LOG RATIO: a $40bn gap means one thing between two
+  $50bn companies and nothing between two $2tn ones.
+- **A COMPANY EXPECTED TO LOSE 0.10 THAT LOSES 0.05 HAS BEATEN THE ESTIMATE.** Dividing a surprise
+  by the SIGNED consensus rather than its magnitude reports that as -50% and flips the sign for
+  every loss-making security. And `earnings_calendar.period_ending` is a MONTH while a metric's
+  `as_of` is a DATE: a 52/53-week fiscal calendar closes on the Saturday nearest the month end,
+  landing in the FOLLOWING month about half the time, so an exact month match silently drops most of
+  US retail and tech. Widen by a week each side — and make the fixture's quarter end OUTSIDE the
+  named month, or the mutation passes clean.
+- **`management` COSTS ONE YFINANCE CALL PER SECURITY AND DOES NOT BATCH**, on the budget four other
+  backlogs already share — 12,350 equities is ~50 days of it for a list of names. Bounded to
+  securities that are >=0.5% of a tracked fund (~2,300) with a page of 15, because this is the least
+  urgent thing on that budget. **Scoping the population is what makes an expensive resource
+  affordable rather than skipped.** Its serving view flags the CEO by TITLE: ordering by pay puts
+  whoever received the largest grant that year first, which is not who runs the company.
 - **A DEFECT THAT IS SYSTEMATIC MUST BE MEASURED SYSTEMATICALLY — a per-company ratio cried wolf
   three times.** `check_quarter_is_a_quarter` failed market-verify with 13 "contaminated" figures
   and NONE was contaminated: Teads Holding 2021 filed +10.7m, +15.2m and **-53.9m** against a +11.0m
