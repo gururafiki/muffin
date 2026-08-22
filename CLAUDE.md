@@ -1351,6 +1351,30 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   "comparable" and "made comparable" are different facts. Subunits (ILA, ZAC, KWF) get history
   derived from the parent in the SAME pass, or a subunit whose parent has ten years and which has
   three days silently falls back to spot for every historical bar.
+- **A PER-SYMBOL 402 BELONGS TO AN ENDPOINT, NOT TO A PROVIDER — I carried one across and it was
+  wrong.** Measured 2026-08-22 with a live FMP key: `equity/fundamental/revenue_per_geography`
+  answers for AAPL/MSFT/NVDA/JPM/TSM and returns **402 for NEE, PLD, BHP, SAP.DE, 7203.T,
+  005930.KS, SHEL.L** — while `equity/compare/peers` answered 8-10 rows for **every one** of those
+  thirteen. Migration 119 justified computing peers partly on that 402 and the justification was
+  false. The DECISION was still right, for a better reason: FMP's peers for AAPL run from NVDA at
+  $5.20T down to **Algorhythm Holdings at $852,000**, so it is a sector grab-bag rather than a
+  size-proximate set. **Check the endpoint you are actually calling.**
+- **`historical_eps` HAS EXACTLY ONE WORKING PROVIDER AND IT ALLOWS 25 CALLS A DAY.** alpha_vantage
+  returns 122 quarters of actual/estimate/surprise; FMP's copy of the same endpoint is **402 premium
+  even for AAPL**, so there is no second source and no way to widen it. That makes it a TRICKLE, not
+  a backlog: 3 securities a run x 8 runs = 24 a day, scoped to holdings above 1% with a 90-day
+  cursor — ~2,000 calls a year against a ~9,000 budget. **When a quota is the binding constraint,
+  the population bound and the cursor ARE the feature**, and both are tighter here than anywhere
+  else in the schema on purpose.
+- **`surprise_percent` IS A FRACTION.** MSFT's Q2 2026 beat arrives as `surprise: 0.53` on
+  `eps_estimated: 4.21` with `surprise_percent: 0.125891` — 12.59%. Storing that raw in a column
+  named `_pct` is the third instance of the fraction/percent confusion here, after OpenBB's
+  performance fractions and the shared `pct()` that put NVIDIA at a 46% dividend yield. Convert at
+  the boundary; `logic-check` fails if the `* 100` is removed.
+- **STILL GENUINELY UNAVAILABLE, measured with keys rather than assumed:** `equity/ownership/form_13f`
+  returns an empty **204** from SEC and accepts no other provider (`fmp` is rejected by the schema);
+  `revenue_per_geography` is per-symbol premium. News sentiment needs Benzinga, for which there is
+  no key.
 - **TWO OF THE PLAN'S THREE REMAINING FETCHES WERE BETTER COMPUTED THAN BOUGHT.**
   `equity/compare/peers` (FMP) returns SECTOR PLUS MARKET-CAP PROXIMITY — SAP.DE beside Micron and
   SK hynix — which is a computation this schema can do from `security_current.sector_id` and
