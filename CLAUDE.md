@@ -1751,6 +1751,24 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   `lastError` was kept. Report both ends of a run. And pace to the rate the provider NAMES — "1
   request per second" was sitting in its own throttle text, and three calls back to back tripped it
   on the second, which marks nothing and wastes the page.
+- **A KEY WIDENED IN THE SCHEMA MUST BE WIDENED IN EVERY READER, AND THE VERIFY SCRIPT IS THE ONE
+  THAT GETS FORGOTTEN.** `market-verify` failed with *27 derived metrics disagree with the filing
+  they came from* and **the data was right in every case**. `check_derived_metrics` indexed
+  statements on `(statement, period_ending)`, so a security holding BOTH an annual and a quarterly
+  filing for 2025-12-31 kept whichever row the dict saw last and compared an annual metric against
+  three months of revenue. **The arithmetic named it before the code did**: every disagreement had a
+  served/filing ratio of 2.9-4.8, which is a year over a quarter, not drift. Verified directly —
+  annual metric 595,965,682,000 against annual filing 595,965,682,000, quarterly 150,188,010,000
+  against quarterly 150,188,010,000, both correct and paired crosswise. Migration 106 had already
+  put `period_type` into the primary key, both writers' `onConflict` and both dedupe keys for
+  exactly this reason; the verify script was the one place it never reached. **When a fiscal-year
+  end can also be a Q4, grep for every reader keyed on `(security, period_ending)` before believing
+  any of them.**
+- **A HALF-MUTATION THAT BREAKS THE HARNESS PROVES NOTHING — it fails for the wrong reason.**
+  Reverting only the index key, or only the lookup, makes the two tuples different lengths, so
+  nothing matches and the check fails via its own `checked == 0` guard. Both "caught" the mutation
+  and neither tested the rule. Only reverting BOTH — the exact pre-fix state — reproduces the real
+  failure. Ask what the mutation makes the code DO, not merely whether the guard went red.
 - **A GUARD CAN FIRE ON ITS OWN BLIND SPOT, AND THAT IS NOT DRIFT.** `check_derived_metrics` began
   reporting `compared 0 values` the day `security-xbrl` started: it samples `security_metric` by
   recency, the newest rows were all `sec-xbrl`, and those are written straight from company facts
