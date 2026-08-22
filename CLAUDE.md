@@ -1715,6 +1715,35 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   leave TTM permanently underived. Three subsequent runs at 4,000 and 2,000 completed in ~12s. The
   first call was competing with the deploy's own tail (matview refresh, PostgREST reload). One
   observation of a timeout is a measurement of that moment, not of the page.
+- **AN EMPTY RESPONSE BODY IS AN ANSWER ABOUT THE SYMBOL, AND A BARE TICKER IS NOT A US LISTING.**
+  Measured 2026-08-22 on one alpha_vantage key seconds apart: `ASMLF` returns `{}` — an object with
+  **zero keys**, not even `symbol` — while `ASML` returns 108 quarters and `MSFT` 122. So the empty
+  object is about the SYMBOL, not the quota and not the endpoint, and that key count is the whole
+  discriminator: a renamed field would still leave `symbol` and `annualEarnings` behind, so it can
+  never be mistaken for a symbol the provider does not carry. Without a way to record "asked, not
+  carried", the weight-ordered backlog re-asked the same head every run for ever — **fifth instance
+  of that stall**. The deeper cause is upstream: migration 123 had stopped feeding suffixed symbols
+  (`ASML.AS`) by taking the US ticker and rejecting dots, but **OpenFIGI's US lookup returns the
+  thin OTC foreign-ordinary line** for most foreign companies — `ASMLF`, `BUDFF`, `ICTEF`, `TSMWF` —
+  which carry no suffix and are not US listings either. **621 of 1,015 backlog rows**, i.e. 62%, at
+  three calls a run against a 25-a-DAY quota: twenty-six days of budget to learn, one call at a
+  time, that an OTC line is an OTC line. The filter is the **venue already in `market.listing`**,
+  never the shape of the symbol (`security-symbol-repair` records why pattern-matching a ticker
+  rewrites working ones), and it takes **ANY** US listing rather than the primary one so an ADR
+  survives — only 10 of 394 differ, but the inclusive test stays right when `is_primary` is wrong.
+  Each excluded company is separately held under the row carrying its US listing: `TSMWF` beside
+  `TSM`, `ASMLF` beside `ASML`.
+- **A FIXTURE MUST KEEP THE OLDER RULE LOAD-BEARING WHEN A NEWER ONE WOULD ALSO EXCLUDE THE ROW.**
+  The existing quota test's suffixed security had no listing at all, so once "must have a US
+  listing" shipped, the suffix assertion would have passed under EITHER rule and migration 123's
+  filter could have been deleted unnoticed. Giving that fixture row a US listing on purpose is what
+  keeps the suffix rule the only thing excluding it — the same "make the candidate rules disagree"
+  discipline, applied to a rule that already existed rather than the one being added.
+- **A RATE LIMIT AT CALL TWO OVERWRITES THE REAL FAILURE AT CALL ONE.** The first production run
+  reported a quota problem while an unanswerable symbol was the actual story, because only
+  `lastError` was kept. Report both ends of a run. And pace to the rate the provider NAMES — "1
+  request per second" was sitting in its own throttle text, and three calls back to back tripped it
+  on the second, which marks nothing and wastes the page.
 - **A GUARD CAN FIRE ON ITS OWN BLIND SPOT, AND THAT IS NOT DRIFT.** `check_derived_metrics` began
   reporting `compared 0 values` the day `security-xbrl` started: it samples `security_metric` by
   recency, the newest rows were all `sec-xbrl`, and those are written straight from company facts
