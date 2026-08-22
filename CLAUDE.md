@@ -1359,6 +1359,29 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   false. The DECISION was still right, for a better reason: FMP's peers for AAPL run from NVDA at
   $5.20T down to **Algorhythm Holdings at $852,000**, so it is a sector grab-bag rather than a
   size-proximate set. **Check the endpoint you are actually calling.**
+- **A RATE LIMIT THAT ARRIVES AS A 200 BECOMES AN INDISTINGUISHABLE 204 THROUGH openbb.**
+  Alpha Vantage's free key allows 25 requests a DAY and answers exhaustion with **200 plus an
+  `Information` field**, no error status. openbb turns that into an empty 204 — byte-identical to a
+  symbol it genuinely has nothing for. Measured 2026-08-22: MSFT returned full quarterly data from
+  the raw API in the same minute openbb reported 204 for it. Any resource marking an empty answer as
+  "this security has no data" would negative-cache real companies every time the quota ran out. So
+  `security-eps-history` calls the provider DIRECTLY, exactly as `fetchUsdPerUnit` calls Yahoo:
+  **when the wrapper hides the one field that carries the meaning, go around it.**
+- **A QUOTA A DOZEN EXPLORATORY CALLS CAN EXHAUST WILL BE EXHAUSTED IN PRODUCTION ROUTINELY.** I
+  burnt alpha_vantage's whole day probing coverage, which is itself the finding — the resource has
+  to treat exhaustion as the normal case, not the exception: `rateLimited` stops the run and marks
+  NOTHING, an unrecognised shape is reported rather than treated as absence, and only a genuine
+  answer with no rows marks.
+- **THE SAME NUMBER HAS TWO UNITS DEPENDING ON WHO YOU ASK.** openbb sends
+  `surprise_percent: 0.125891`; the raw provider sends `surprisePercentage: 12.5891`. Reading the
+  provider directly means reading ITS units — no `* 100` — and both readings are plausible enough to
+  survive a glance, so it is pinned in `logic-check` rather than left to a comment. **Open item:**
+  the raw `quarterlyEarnings` payload has not been read directly (the quota went), so the first real
+  run must be checked against a known beat before that figure reaches a page.
+- **`market.security_officer` / `security_eps_history` / `security_filing` / `earnings_calendar` /
+  `insider_trade` / `security_profile` all landed 2026-08-21..22** with backlogs bounded by fund
+  weight and cursors rather than negative caches — boards, filings and earnings dates all change, so
+  an absence is never permanent for any of them.
 - **alpha_vantage SERVES US LISTINGS, AND A SUFFIXED SYMBOL HANGS RATHER THAN ERRORING.**
   `historical_eps?symbol=ASML.AS` produced `error sending request` after the 20s timeout while
   `security-management` wrote 30 officers in the same minute — which is what ruled out the service
