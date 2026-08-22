@@ -129,6 +129,20 @@ blocked everything after it; Phases 1-3 built the derived layer, the presentatio
 | **filings, management, next earnings** | live | SEC filing index by CIK, officers, and upcoming report dates from nasdaq |
 | **leadership, with the pay currency** | live | `pay` was served as a bare number. SK hynix's chief executive is **4,239,000,000** — won, about $3m — and with a hardcoded `$` that reads as four billion dollars. Same shape as Alibaba's CNY revenue printing as "$1.02T" |
 
+**Found by using the pages rather than reading the diff (2026-08-22):**
+
+| | what it was | state |
+|---|---|---|
+| annual charts plotted a fiscal year **twice** | AAPL 2025 at both 09-27 (filing) and 09-30 (provider), values agreeing | fixed — migration 126 collapses to one point per fiscal period, filing wins |
+| a country's sector list had **no ordering** | `weight` is the SECTOR fund's, null for all 56 Korean IT rows, so the list ran alphabetically — Clobot above SK hynix | fixed — market cap is the fallback |
+| the returns request was **unbounded** | one `in.()` over every loaded symbol, and infinite scroll grows the page by 20 forever | chunked at 100 (prevention: 600 symbols measured OK at 5,793 chars) |
+| EPS history asked under **OTC lines** | `ASMLF`/`BUDFF`/`TSMWF` are bare tickers the provider answers `{}` for | fixed — backlog requires a US listing, 1,015 → 394 |
+
+Three earlier reports turned out to be **already fixed** and are recorded here so they are not
+re-investigated: Vietnam showing US sectors (a country with no coverage now says so), a country's
+sector returns not matching its ETF, and the missing gained/lost labels (a whole-universe fetch was
+silently truncated at `PGRST_DB_MAX_ROWS`; it now asks only for the symbols on the page).
+
 **Verification that mattered more than the row counts:** Samsung's P/E reads 25.89 (KRW over KRW),
 AAPL 37.54, NVDA 39.34; all nine stock-page anon reads answer in 0.06-0.83s against a 2,000 ms
 budget. A ratio spot-checked against a **non-USD filer** as well as a US mega-cap, because the

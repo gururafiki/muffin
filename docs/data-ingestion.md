@@ -152,6 +152,7 @@ The app should never join five tables on a phone.
 | `pending_promotion` | listings eligible for promotion | opt-in per venue, home markets first, **name-deduped** against what we hold |
 | **`security_facets`** | the filter spine — every dimension a list filters by | **MATERIALIZED**, 15 indexes. As a plain view a two-filter conjunction hit anon's 3s timeout (`57014`); see §8 |
 | **`symbol_security`** | symbol → security_id | **MATERIALIZED**, indexed on the symbol. `security_symbol` is a view over two LATERAL subqueries, so resolving ONE symbol through it scans all 27,629 securities — measured, that was most of a daily chart's 260 ms and 1,382 ms of a weekly one, which timed out for anon. Refreshed by `facets-refresh` alongside the spine |
+| **`security_metric_series`** | metric history with the symbol — what the charts and statement tables read | **ONE ROW PER FISCAL PERIOD.** Rows for the same (security, metric, period_type) whose period ends fall within 7 days are one period reported by two sources; the highest-priority source wins, which also picks the true fiscal period end. See §8 |
 | `security_style` | growth/value, ranked within a (tier × cap band) cohort | a plain view — a pure function of `security_fundamentals`, with nothing extra to keep fresh |
 | `macro_current` | latest value per macro series, unit-converted | the fraction→percent conversion lives HERE so no reader has to know which provider sent which |
 | `pending_*` (9 views) | the backlogs that drive each resource | see §5 |
@@ -450,6 +451,44 @@ incremented by the right quantity.
 
 ---
 
+### A number that is merely present TWICE is invisible to every guard here
+
+Measured 2026-08-22. AAPL's annual revenue was plotted twice for 2025 and twice for 2024:
+
+```
+2025-09-30  416.2B  yfinance        2024-09-30  391.0B  yfinance
+2025-09-27  416.2B  sec-xbrl        2024-09-28  391.0B  sec-xbrl
+```
+
+One fiscal year, two sources, period ends three days apart. **All 18 duplicate pairs in production
+agree in value to within 0.1%** — which is exactly why it survived every check in §7. A floor sees
+enough rows. A unit band sees a plausible magnitude. A freshness rule sees a recent `fetched_at`.
+Nothing here asks whether the same fact is present twice, because every other defect this pipeline
+has had made a number *wrong*, and this one makes it *doubled*.
+
+It was visible only on the rendered page, as two points at nearly the same x.
+
+Three things follow.
+
+- **Collapse in the SERVING VIEW, not at write time.** Both rows are legitimate: the filing and the
+  provider each reported that year honestly. Deleting one at ingest would throw away provenance and
+  make the choice unrepeatable; `security_metric_series` picks per read, the same way
+  `security_taxonomy` is resolved by `distinct on … order by ds.priority desc`.
+- **The survivor is the SOURCE, not the date.** `sec-xbrl` (275) reports the true fiscal period end
+  and `yfinance` (100) rounds to the month, so preferring the filing also fixes the label. Writing it
+  as "keep the earliest" is right for AAPL and wrong the moment a filing lands after the provider's
+  guess — which is why the test fixture puts them in opposite orders in consecutive years.
+- **A plan's own estimate of rarity is not a measurement.** The plan that spotted this sized it at
+  "0 of 252 securities sampled" and concluded it deserved a guard rather than a fix. Re-measured:
+  **5 of 142 (3.5%)**, AAPL included. A guard alone would have failed CI on the day it was written,
+  against data that is not wrong.
+
+`check_one_period_one_point.py` watches both halves in production: the serving view must show one
+point per fiscal period, and the raw table must hold no annual pair **8–299 days apart** — a fiscal
+year duplicated with a gap the 7-day window cannot see. Zero today.
+
+---
+
 ## 9. Adding things
 
 **Add an ETF** (no deploy): insert a row in `market.tracked_fund` in Studio, then
@@ -524,6 +563,21 @@ For gaps in the *data*, see [data-coverage.md](data-coverage.md).
   disagreeing about the same fact is the thing to watch for here.
 - **Corporate actions are US-only** (Tiingo 404s local foreign listings), so a Japanese split is
   invisible.
+- **EPS history can only be asked for securities whose US-listed symbol we hold.**
+  `historical_eps` has exactly one working provider (alpha_vantage, **25 calls a DAY**) and it serves
+  US listings. OpenFIGI's US lookup returns the thin OTC foreign-ordinary line for most foreign
+  companies — `ASMLF`, `BUDFF`, `TSMWF` — which are bare tickers that pass a suffix filter and which
+  the provider answers with an **empty object** (zero keys, measured beside `ASML`'s 108 quarters).
+  `pending_eps_history` therefore requires a US listing in `market.listing`, taking the backlog from
+  1,015 to 394. **~610 large holdings are consequently unreachable**: AB InBev is held only as
+  `BUDFF` (its US rows are BONDS), Novo Nordisk only as `NONOF`. Closing that is ADR resolution
+  (`BUD`, `NVO`) — a symbol problem, not an EPS one.
+- **`security_metric_series` joins `security_symbol`, not the materialised `symbol_security`.**
+  Migration 102 built the indexed map precisely because resolving one symbol through the view scans
+  all 27,629 securities, and 096/102 fixed `price_series` for that reason. This view was never moved
+  across. Anon latency is currently fine (statements 472 ms against a 2,000 ms budget), so it is a
+  known inefficiency rather than a defect — but it is the same shape that has twice ended in an anon
+  timeout, and it will get worse as the universe grows.
 - **`security-performance` runs at ~89s of its 90s worker limit.** Its deadline gates whether to
   *start* a batch while that batch's tail is unbounded. It has been killed once.
 - **A deploy briefly breaks readers.** Migrations are `--single-transaction` *per file*, so between
