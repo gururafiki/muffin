@@ -1351,6 +1351,32 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   "comparable" and "made comparable" are different facts. Subunits (ILA, ZAC, KWF) get history
   derived from the parent in the SAME pass, or a subunit whose parent has ten years and which has
   three days silently falls back to spot for every historical bar.
+- **A DEFECT THAT IS SYSTEMATIC MUST BE MEASURED SYSTEMATICALLY — a per-company ratio cried wolf
+  three times.** `check_quarter_is_a_quarter` failed market-verify with 13 "contaminated" figures
+  and NONE was contaminated: Teads Holding 2021 filed +10.7m, +15.2m and **-53.9m** against a +11.0m
+  year, so both positive quarters exceed the annual NET and nothing is wrong. The check's own
+  `value=gt.0` filter made it worse — dropping the loss quarter before comparing manufactures the
+  exact signature of YTD stacking. Three repairs each failed: largest-annual (13 innocent), summing
+  the year's quarters (**compared ZERO years — a SEC filer has THREE quarterly filings, not four**,
+  since the 10-K covers Q4), and a materiality gate (46 innocent). The fix is that **YTD stacking is
+  an INGEST defect, so it happens to everyone at once**: within a year the values become `a, a+b,
+  a+b+c`, making the last quarter ~3x the first across company after company, while discrete
+  quarters give a MEDIAN near 1. A volatile company moves its own ratio and cannot move a median.
+  Live: 0.98 across 261 fiscal years.
+- **A THRESHOLD NOBODY HAS WATCHED FIRE IS AN ASSUMPTION.** Three versions of that check shipped on
+  a claimed number. It now has `--self-test`, which runs the real statistic over synthetic discrete
+  and cumulative series (0.93 vs 3.10 against a ceiling of 2.0) and fails if they stop separating —
+  no database, so `quality.yml` runs it on every PR. Note the env lookup had to move to
+  `os.environ.get`: read at import, it killed the offline mode on a missing variable before argv
+  was parsed.
+- **A TABLE THAT ONLY GROWS LOOKS EXACTLY LIKE A HEALTHY ONE.** Every other market-verify check
+  asserts data EXISTS; none can see a retention rule that stopped running. `earnings_calendar` and
+  `security_news` both prune at 90 days from TypeScript inside their resource, so a failing resource
+  or an edited cutoff turns a bounded table unbounded in silence. `check_retention_is_enforced`
+  watches them at 120 days — deliberately looser, because a few days over means the cron is late
+  (which `check_resource_health` reports better) and a month over means the delete is not happening.
+  Verified in production first: a row seeded 200 days back was pruned on the next run and a 30-day
+  row survived.
 - **TWO ENDPOINTS FROM THE SAME PROVIDER CAN HAVE OPPOSITE CONTRACTS.**
   `equity/fundamental/filings` accepts `cik` directly; `equity/ownership/insider_trading` REQUIRES
   `symbol` and rejects a CIK. So the filings resource needs no symbol resolution at all while the
