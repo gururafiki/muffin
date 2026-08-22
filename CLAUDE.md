@@ -1731,8 +1731,15 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   never the shape of the symbol (`security-symbol-repair` records why pattern-matching a ticker
   rewrites working ones), and it takes **ANY** US listing rather than the primary one so an ADR
   survives — only 10 of 394 differ, but the inclusive test stays right when `is_primary` is wrong.
-  Each excluded company is separately held under the row carrying its US listing: `TSMWF` beside
-  `TSM`, `ASMLF` beside `ASML`.
+  **I first wrote that each excluded company is separately held under the row carrying its US
+  listing, having checked `ASMLF`/`ASML` and `TSMWF`/`TSM`. Measured properly: only 2 of the top 40
+  excluded by weight have a US-listed sibling** — the two I checked were the exception. Same
+  "probe with symbols you expect to FAIL" rule this file already records, ignored while writing a
+  rule down. The decision is unchanged (AB InBev is held only as `BUDFF` — its US rows are BONDS
+  with no symbol — and `{}` is the answer either way, so the filter spends no call to learn it),
+  but the GAP is real: ~610 large holdings have no symbol this pipeline holds that alpha_vantage
+  can serve, and closing it means resolving the ADR (`NVO`, `BUD`) — a symbol-resolution problem,
+  not an EPS one.
 - **A FIXTURE MUST KEEP THE OLDER RULE LOAD-BEARING WHEN A NEWER ONE WOULD ALSO EXCLUDE THE ROW.**
   The existing quota test's suffixed security had no listing at all, so once "must have a US
   listing" shipped, the suffix assertion would have passed under EITHER rule and migration 123's
