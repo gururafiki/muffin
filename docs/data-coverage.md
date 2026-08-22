@@ -112,6 +112,28 @@ table nobody could fill.
 unexplained**: 7,701 have one, ~3,479 the provider answered without one, ~837 have no profile at
 all, ~331 have no symbol to ask about.
 
+### 2.4 What was added 2026-08-21/22 — the derived layer and the pages that read it
+
+The gap being closed here was against financecharts' per-stock page. Phase 0 fixed a defect that
+blocked everything after it; Phases 1-3 built the derived layer, the presentation, and the breadth.
+
+| | state | note |
+|---|---|---|
+| **quarterly series, decontaminated** | repaired | XBRL duration facts for Q2/Q3 are frequently YTD, and the old filter (`days > 200`) let the 6-month ones through. AAPL's `2026-03-28` "quarter" read **254,940M against a full-year 416,161M — 61% of a year in one quarter**. Nothing in any row count showed it |
+| **TTM as a third `period_type`** | 633,788 rows (from 83,247) | a rolling sum of four discrete quarters for flow metrics, the latest instant for stock metrics |
+| **`security_ratio_series`** | live | P/E, P/S, P/B, EV/EBITDA, earnings and FCF yield **computed per price bar**, the way financecharts does it — they store adjusted close and diluted EPS TTM and never store a ratio. EPS TTM is **stepwise in time**, so it holds between filings and steps on the filing date; getting that wrong makes P/E jump on report dates rather than on price |
+| **FX per bar** | 21,605 rate rows | a ratio across currencies divides dollars by kroner and looks ordinary. Withheld unless comparable |
+| **news, dividends, profile, statements, peers** | rendered | 1,216 articles and 9,066 corporate actions had been collected and **nothing read them** |
+| **company profile fields** | zero new calls | description, employees, website, HQ and beta were on every `equity/profile` response this pipeline ever made, and were discarded. Fifth instance of "the answer is already in a response you fetch" |
+| **Form 4 insider transactions** | live | `equity/ownership/insider_trading?provider=sec` — the item §5 named as the one free thing still worth doing |
+| **filings, management, next earnings** | live | SEC filing index by CIK, officers, and upcoming report dates from nasdaq |
+| **leadership, with the pay currency** | live | `pay` was served as a bare number. SK hynix's chief executive is **4,239,000,000** — won, about $3m — and with a hardcoded `$` that reads as four billion dollars. Same shape as Alibaba's CNY revenue printing as "$1.02T" |
+
+**Verification that mattered more than the row counts:** Samsung's P/E reads 25.89 (KRW over KRW),
+AAPL 37.54, NVDA 39.34; all nine stock-page anon reads answer in 0.06-0.83s against a 2,000 ms
+budget. A ratio spot-checked against a **non-USD filer** as well as a US mega-cap, because the
+currency mismatch is the failure mode that looks right.
+
 ### 2.3 What each security can carry
 
 - **Identity** — ISIN, CUSIP, FIGI, ticker, LEI (on the issuer), name, issuer
@@ -121,7 +143,7 @@ all, ~331 have no symbol to ask about.
 - **Returns** — 1d/1w/1m/3m/6m/ytd/1y/3y/5y, **price returns only**
 - **Fundamentals** — ~35 ratios: P/E, margins, ROE, debt/equity, beta, EV, dividend yield
 - **Statements** — income, balance sheet, cash flow, ~52 line items per period as jsonb
-- **Corporate actions** — splits and dividends, **US listings only**
+- **Corporate actions** — splits and dividends; dividends are **global** since migration 87 (Korea, Spain, Finland, Taiwan, Indonesia), splits remain US-listed
 
 ### 2.4 Aggregates that work
 
@@ -355,8 +377,24 @@ ETFs to track, which venues to opt into promotion, and the licensed sets (GICS, 
 ratings, estimates). The free engineering items that were outstanding — total return, FX, bond
 reference data, filters, style, macro — all landed on 2026-08-18/19.
 
-**The free item still worth doing is Form 4 insider transactions** (§4 Tier 2) — served by
-`equity/ownership/insider_trading?provider=sec` through the openbb-api already deployed, so it is a
-resource, not a pipeline. **13F is NOT one of them**: `form_13f` answers 204 and FMP's equivalents
-402. This summary previously named both as free, contradicting §3.1's own measurement two hundred
-lines above it — the filings being public is not the same as a configured provider serving them.
+~~**The free item still worth doing is Form 4 insider transactions**~~ **DONE 2026-08-21** — served
+by `equity/ownership/insider_trading?provider=sec` through the openbb-api already deployed, so it
+was a resource rather than a pipeline, exactly as predicted. **13F is NOT one of them**: `form_13f`
+answers 204 and FMP's equivalents 402. This summary previously named both as free, contradicting
+§3.1's own measurement two hundred lines above it — the filings being public is not the same as a
+configured provider serving them. **Re-measured 2026-08-22 with a live FMP key**, since a 402 read
+from a keyless deployment proves nothing: `form_13f` still returns 204 from SEC and rejects every
+other provider, and `revenue_per_geography` 402s for 7 of 13 symbols tried — genuinely per-symbol
+premium, which is the same trap `equity/fundamental/metrics` set when a 3-symbol probe of mega-caps
+suggested a feature that could never serve the universe.
+
+**One measured correction to an earlier justification:** `equity/compare/peers` was recorded here as
+402/premium. With a live key it works for all 13 symbols tried, so that reason was wrong. The
+decision not to use it stands on a different and better ground — FMP's peer list for AAPL includes
+an **$852k** company — which is why `security_peers` is computed from the spine instead.
+
+**A coverage gap named rather than papered over:** EPS history (`historical_eps`, alpha_vantage,
+**25 calls a DAY**) can only be asked for securities whose US-listed symbol this pipeline holds.
+~610 large holdings have none — AB InBev is held only as `BUDFF` (its US rows are BONDS), Novo
+Nordisk only as `NONOF` — and alpha_vantage answers `{}` for those spellings. Closing it means
+resolving the ADR (`NVO`, `BUD`), which is a symbol-resolution problem, not an EPS one.
