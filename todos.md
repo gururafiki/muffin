@@ -986,6 +986,70 @@ EXCHANGE layer was not. Six PRs, each verified live:
 - **N-PORT lags ~60 days.** Membership can be up to ~4 months old — fine for reference data, but
   the UI must show `as_of` and never imply live weights.
 
+## OpenBB — upstream contributions (recorded 2026-08-23)
+
+Every item is why a `market-refresh` module bypasses OpenBB, and each is already backed by a
+measurement in that module's header — filable as issues with evidence, not guesses. The first two
+are bugs and are the natural first contributions.
+
+- [ ] **BUG — `etf/nport_disclosure?provider=sec` 500s on every equity fund.** Pydantic
+      ValidationError on `other_id / counterparty / expiry_date … input_value=nan`, fields that only
+      apply to derivative rows. Reproduced on openbb 4.7.2 / openbb-sec 1.6.7. (`edgar.ts` header)
+- [ ] **BUG — Alpha Vantage quota exhaustion is silently destroyed.** AV answers an exhausted free
+      quota with `200` plus an `Information` field; OpenBB collapses that into an empty `204`,
+      byte-identical to "this symbol has no data". Callers cannot tell a rate limit from absence —
+      the exact failure class that has repeatedly negative-cached real securities here. (`fx.ts`)
+- [ ] **FEATURE — `etf/holdings` has no `sec` provider**, so N-PORT holdings are unreachable through
+      OpenBB at all. (`edgar.ts`)
+- [ ] **FEATURE — SEC statements are annual-only.** `period=quarter` returns 422, while SEC's own
+      `companyfacts` carries ~17 years of quarterly data plus IFRS taxonomies for foreign private
+      issuers and the reporting currency as the unit key. OpenBB also costs 3 calls x ~1.9s per
+      security against SEC's 0.17s. (`xbrl.ts`)
+- [ ] **FEATURE — no ISIN resolution anywhere.** `equity/search` returns zero hits for an ISIN and
+      `equity/profile` returns no ISIN, so it cannot be joined from either side. An OpenFIGI
+      provider would close this. (`figi.ts`)
+- [ ] **PERFORMANCE — `openbb-api` serialises concurrent requests.** Three parallel calls for one
+      security took 5.53s against 5.58s serial. (`xbrl.ts`)
+- [ ] **FEATURE — `openbb-mcp` does not expose FastMCP's `json_response`.** Streamable HTTP defaults
+      to SSE and a client asking for `Accept: application/json` alone gets **406**, so the endpoint
+      is uncacheable by ordinary HTTP infrastructure and the client cannot opt in. muffin works
+      around it with `FASTMCP_JSON_RESPONSE=true`; a `--json-response` passthrough flag would be a
+      one-line change upstream. (measured 2026-08-23)
+
+## HTTP cache — deferred scope (recorded 2026-08-23)
+
+Shipped: an OpenResty read-through cache (`http-cache`) in front of every external provider, plus
+the openbb REST and MCP hops. Deferred, with reasons:
+
+- [ ] **Provider-layer caching below openbb (openbb -> yfinance/fmp/finviz).** Needs MITM, because
+      OpenBB's provider URLs are hardcoded inside the Python packages. NOT required — the MCP hop
+      is cached instead, which covers the agent. If it is ever revisited, two things gate it: does
+      MITM break yfinance (curl_cffi impersonates a Chrome TLS fingerprint *on purpose*, and a MITM
+      re-originates TLS with its own ClientHello), and does any provider pin certificates.
+- [ ] **Retire `ToolResultCacheMiddleware`.** The `/mcp/` location replaces it with the same
+      semantic key (tool name + sorted arguments), one layer lower and shared across processes.
+      Sequence: verify hit rate in production FIRST, then delete — reversing that leaves the agent
+      uncached in between.
+- [ ] **Point-in-time / as-of replay — future work, deliberately not built.** An nginx
+      `proxy_cache` keeps exactly ONE entry per key and overwrites on refresh, so it can never serve
+      an as-of query; that needs a different store alongside (pywb, or a small mitmproxy addon).
+      Also needs a miss policy, enforced end-date bounding on tool schemas, and an as-of lens over
+      `market.*`. **Open decision: add `observed_at` to `market.security_metric` now, or accept that
+      every restatement until then is lost permanently.** It is cheap today and irrecoverable
+      retroactively. Note `security_statement` has `as_of` (which IS its transaction time), not
+      `fetched_at`, and `security_metric.fetched_at` exists but the upsert at `index.ts:1484` never
+      sets it.
+- [ ] **TTL by request SHAPE, not just endpoint.** A statements call naming explicit past
+      `start_date`/`end_date` is immutable and could take an unlimited TTL; the same endpoint
+      without them cannot. An nginx `map` on `$arg_end_date` selecting a `$cache_ttl` does it — and
+      it is the same discriminator a future as-of gate needs to prove a request cannot leak the
+      future. Highest-leverage next item.
+- [ ] **LLM, Langfuse and Firecrawl egress uncached.** LLM calls should stay live during a backtest
+      (they are the thing under test); Firecrawl has no fixed host list, so a per-provider
+      `location` cannot express it.
+- [ ] **The cache is not an archive.** Pairs are retrievable only by re-issuing the request, not
+      enumerable for offline analysis. If that is ever wanted, it is the mitmproxy-addon path.
+
 ## Other P2
 - [ ] Add new tab to donate to Ukraine with links to different funds
 - [ ] Create agent similiar to criteria analysis, but for hypothesis analysis. The idea is that we firstly define multiple hypothesis and then define which data is needed to compute it's probability -> collect the data and define how probable it is.

@@ -150,6 +150,70 @@ muffin-ui  ──supabase.schema('market').select()──►  PostgREST (supabas
   `index/sectors` is TMX-only. Deriving weights from muffin's own 35 curated tickers would be a
   different number wearing the index's name — the SAMPLE badge stays until there is a real source.
 
+
+## The HTTP cache (added 2026-08-23)
+
+Every external provider call now goes through **`http-cache`**, an OpenResty read-through cache on
+`muffin-net` (`stack/proxy/nginx.conf`). Callers reach a provider through a base URL, so no calling
+code knows a cache exists: `origins.ts` supplies the seven provider origins for the edge functions,
+`OPENBB_API_URL` the REST hop, `OPENBB_MCP_URL` the agent's MCP hop. **Every default is the real
+origin**, which is what makes the cache removable without an outage.
+
+Things here that are easy to get wrong, all measured 2026-08-23:
+
+- **`$request_body` IS THE WRONG CACHE KEY FOR A POST, IN TWO SEPARATE SILENT WAYS.** It is EMPTY
+  once the body spills past `client_body_buffer_size` to a temp file — measured, a 62 KB body then
+  keyed on the URL alone and the second request was served the FIRST one's answer, which is exactly
+  the defect that disqualified Squid (it treats POST as GET) reproduced inside nginx. And because
+  the key CONTAINS the body, the key itself can exceed `proxy_buffer_size` (default 4k), at which
+  point nginx logs `... is not enough for cache key` and **silently stops caching** while still
+  answering correctly. Raising the buffer only moves the cliff. The key is an **MD5 computed in
+  Lua**, which reads the spilled temp file and can never overflow.
+- **`inactive=` EVICTS BY LAST ACCESS, NOT BY TTL, AND DEFAULTS TO 10 MINUTES.** A
+  `proxy_cache_valid 30d` caches nothing without it, while looking perfectly correct.
+- **A LITERAL HOSTNAME IN `proxy_pass` IS RESOLVED AT STARTUP**, so http-cache would fail to boot
+  whenever openbb-api is down, and would pin a provider's IP for the container's lifetime. Every
+  upstream goes through a `set $up` variable plus `rewrite ... break`, which defers resolution to
+  `resolver`.
+- **MCP IS CACHEABLE, BUT ONLY IN JSON MODE, AND THE CLIENT CANNOT OPT IN.** Streamable HTTP answers
+  `text/event-stream` by default and a client sending `Accept: application/json` alone gets **406
+  Not Acceptable** — the *server* chooses. `openbb-mcp` exposes `--transport` but no
+  `json_response` flag; **`FASTMCP_JSON_RESPONSE=true` (a FastMCP setting) flips it**, and
+  langchain-mcp-adapters loads all 219 tools identically either way.
+- **A JSON-RPC RESPONSE ECHOES THE REQUEST ID, so a cached body carries the id of whoever missed
+  first** and the client cannot correlate it — it hangs rather than erroring, which is worse than a
+  miss. The id is rewritten on the way out. **And the rewrite must drop `Content-Length`**: `7` ->
+  `99999` is four bytes longer, the stale header makes the client truncate, and the JSON is then
+  invalid. That failure is INVISIBLE to a test whose ids happen to be the same width — which is
+  exactly what a fresh-client-per-call test produces, since each session restarts its id counter.
+  Mutation-test it with ids of deliberately different widths.
+- **Only `tools/call` is cached.** `initialize` and `tools/list` are session-scoped and pass through;
+  caching either corrupts the session rather than degrading. `tools/list` is also 1.9 MB.
+- **The key is the tool name plus SORTED arguments**, not the raw body: the body carries an
+  incrementing `"id"`, so hashing it gives a unique key per call and a 0% hit rate. cjson does not
+  sort keys, so the canonicaliser sorts objects and preserves array order (OpenFIGI reads its
+  response positionally).
+- **A provider with no `location` keeps working and silently bypasses the cache for ever** — the
+  `origins.ts` defaults see to that, and nothing in production can report it. `quality.yml`'s
+  `http-cache-covers-every-provider` job fails a PR in both directions: an origin with no location,
+  and a location no caller uses.
+- **Never cache a non-2xx.** A cached 429 is poison. Note `proxy_cache_use_stale ... http_429` is
+  the OPPOSITE and is correct — it serves the last GOOD response when a provider starts throttling.
+
+- **A HEALTHCHECK MUST USE `127.0.0.1`, NEVER `localhost` — and getting it wrong produces NO
+  DIAGNOSTIC ANYWHERE.** The container's `/etc/hosts` maps `localhost` to both `127.0.0.1` and
+  `::1`; wget tries the IPv6 entry first and `listen 8080` binds IPv4 only, so the probe gets
+  "connection refused" while nginx is healthy and listening on `0.0.0.0:8080`. Swarm then stops the
+  task, nginx exits **0** on SIGTERM, and Swarm reports a clean exit as **`Complete`** — so the
+  service sits at `0/1` restart-looping every ~65s (`start_period` + retries x interval) with an
+  EMPTY `Error` field and ZERO container logs. It reads as a crash loop and is a probe bug. Docker
+  Desktop on macOS resolves this differently, so no amount of local testing catches it. Found by
+  dark-launching; had the cache been in the traffic path, every provider call would have failed.
+
+**An nginx `proxy_cache` keeps exactly ONE entry per key and overwrites it on refresh**, so it can
+never serve a point-in-time / as-of query. That needs a different store alongside; see
+`todos.md` § HTTP cache — deferred scope.
+
 **A new table is INVISIBLE over the API until PostgREST rebuilds its schema cache**, and
 `notify pgrst, 'reload schema'` at the end of a migration is NOT reliable — 15 tables 404'd with
 `PGRST205` after two successful deploys. Earlier migrations only ever appeared because their deploy
