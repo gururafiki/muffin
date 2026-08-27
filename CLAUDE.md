@@ -1917,6 +1917,32 @@ runbook: **[muffin-deployment/README.md § Observability](muffin-deployment/READ
   makes the config part of the spec, so `docker stack deploy` restarts exactly the services whose
   config moved — self-healing, and it repaired the existing stale state simply by not being there
   yet. Carried by traefik, http-cache (BOTH nginx.conf and openresty.conf), prometheus and grafana.
+- **`deploy.labels` IS THE SERVICE OBJECT; ONLY THE TASK TEMPLATE RESTARTS ANYTHING.** The
+  config-hash fix above shipped under `deploy:` and restarted nothing. Measured:
+  `.Spec.Labels` carried `muffin.config-hash` and `.Spec.TaskTemplate.ContainerSpec.Labels` did
+  not — Swarm creates a new task only when the TASK TEMPLATE changes, and a service label is not
+  in it. So the label updated, the deploy reported success, and traefik and http-cache kept
+  running fourteen-hour-old config: **the exact failure the label exists to prevent, reproduced by
+  the fix for it.** Portainer restarted on the same deploy because its `command` and `secrets`
+  changed, which is what proves the mechanism rather than the deploy. Top-level `labels:` are
+  CONTAINER labels and do live in the task template. **Traefik's routing labels must stay under
+  `deploy:`** because its swarm provider reads service labels — the two keys look interchangeable
+  and are correct for opposite jobs.
+- **cADVISOR SEES NOTHING THROUGH A NON-RECURSIVE ROOTFS BIND.** `/:/rootfs:ro` does not propagate
+  submounts, and Docker's data-root here is `/mnt/data/docker` on a SEPARATE filesystem
+  (`/dev/sdb`), so `/rootfs/mnt/data` was an empty directory. cAdvisor asked Docker where its root
+  was, looked there, and failed to identify EVERY container — then served
+  `container_memory_working_set_bytes{id="/"}` (the root cgroup alone) with a green Prometheus
+  target throughout. `ro,rslave`. Separately, **`--store_container_labels=false` drops every
+  `container_label_*`**, taking the swarm service name with it — the label every panel and the
+  memory alert group by — so it needs
+  `--whitelisted_container_labels=com.docker.swarm.service.name` beside it.
+- **A GAUGE SAMPLED 16 TIMES A DAY IS NOT A LINE CHART.** The Pipeline and Universe panels had
+  real data (4 rows, 20 rows, verified by running the panel queries) and rendered as nothing: a
+  `timeseries` panel draws a LINE, and one sample is a zero-length line at the far edge of a 30-day
+  window — indistinguishable from no data, and it cost a round of "why is it empty". The
+  Postgres-backed panels set `showPoints: always` and default to 7d/2d. Prometheus panels are left
+  alone; they scrape every 30s.
 - **A WARM CACHE IS NOT A MEASUREMENT.** `count(*)` over every `market` table measured **771 ms**
   on the node and was used to justify counting all 63 exactly, 16 times a day. In production
   `sample_universe` then timed out, and the honest number is **10,252 ms** — the 771 ms reading
