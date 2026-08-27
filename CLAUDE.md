@@ -1917,6 +1917,21 @@ runbook: **[muffin-deployment/README.md § Observability](muffin-deployment/READ
   makes the config part of the spec, so `docker stack deploy` restarts exactly the services whose
   config moved — self-healing, and it repaired the existing stale state simply by not being there
   yet. Carried by traefik, http-cache (BOTH nginx.conf and openresty.conf), prometheus and grafana.
+- **`docker stack deploy` NEVER REMOVES ANYTHING WITHOUT `--prune`.** A service deleted from the
+  compose file keeps running for ever: cAdvisor was removed in a merged PR and was still up three
+  hours later, holding 256M and scraped by nobody. `--prune` is safe here because the stack is
+  fully declared in one file Ansible renders immediately before the deploy — a render failure fails
+  the play first. The trade-off: a service created BY HAND in the `muffin` namespace will be
+  removed by the next deploy, which is why one-off containers on this node use `docker run`, not
+  `docker service create`.
+- **ANSIBLE RENDERS INLINE `copy: content:` THROUGH JINJA**, so a script containing `{{ }}` dies
+  with `template error while templating string: expected name or number` — and the per-service
+  collector is full of them (`{{json .}}` for docker's format string, `{{service="..."}}` for the
+  Prometheus label). `copy:` with a `src:` copies verbatim, and makes the script lintable and
+  runnable on the node BEFORE shipping, which is how the replacement was verified without another
+  deploy cycle. `quality.yml` now parses every inline block with Jinja — the test is VALIDITY, not
+  "contains braces", because plenty of inline content is meant to be templated
+  (`AWS_ACCESS_KEY_ID={{ _s3_key }}`) and a guard that flags those gets disabled.
 - **AN ALERT CANNOT JUDGE A RESOURCE IT HAS ONLY JUST MET.** The resource-stalled rule fired on
   its first day and was a TRUE POSITIVE — three resources had failed with
   `relation "market.pending_*" does not exist` inside a deploy window, a failure previously

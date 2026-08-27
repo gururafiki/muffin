@@ -1072,6 +1072,13 @@ See `muffin-deployment/README.md` § Observability. What was deliberately NOT do
   every image layer on a live node — so it wants its own change and its own rollback plan.
   The `muffin-disk-filling` alert now fires at 80% so this cannot arrive as a surprise.
 
+- [ ] **`/` IS AT 76% AND CLIMBING WITH EVERY DEPLOY — this is now the most pressing item here.**
+  70% on the morning of 2026-08-27, 76% by the evening after eight deploys, while `/mnt/data` sits
+  at 9% of 98 GB. Every image pull lands in `/var/lib/containerd` on the ROOT filesystem, because
+  Docker uses the containerd image store and `daemon.json`'s `data-root` does not control it. The
+  `muffin-disk-filling` alert fires at 80%, so this will announce itself shortly. Fix in the entry
+  below; it wants its own change and its own rollback plan.
+
 - [ ] **99 STALE MIGRATION FILES ON THE NODE.** `/home/ubuntu/supabase/migrations/` holds **227**
   files: 128 zero-padded (what the repo has) and 99 unpadded survivors from before the padding
   rename. `ansible copy` never deletes what vanished from source. They are NOT applied — the
