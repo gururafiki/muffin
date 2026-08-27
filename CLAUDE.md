@@ -2009,6 +2009,41 @@ runbook: **[muffin-deployment/README.md § Observability](muffin-deployment/READ
   container-memory alert watches. Re-measure before adding services; this node's documented failure
   mode is an OOM kill (openbb-api died at its 1 GB limit to a single exploratory request).
 
+### Coverage metrics (added 2026-08-27)
+
+`market.coverage_current` is a VIEW over the `security_facets` matview joined to the per-facet
+timestamp columns on `security`; `market.coverage_sample` is a twice-daily SNAPSHOT of it, so the
+two cannot disagree. Ten dimensions: country, sector, industry, cap band, style, MSCI tier and
+region, income group, currency, security type. 469 buckets, **743 ms**.
+
+- **`performance` IS KEYED BY SYMBOL, NOT `security_id`** — `scope = 'instrument'` with `scope_id`
+  holding `PMZ-U.TO`. Joining it on `security_id` reported performance coverage as **0 of 27,629**
+  and read as catastrophic ingestion failure; the real number is 11,589. Anything aggregating
+  `performance` must join on `security_facets.symbol`.
+- **A MEASUREMENT THAT DOES NOT CONSUME ITS OWN RESULT MEASURES NOTHING.** The first timing of the
+  coverage query was **15 ms** and was fiction: the outer query selected only `count(*)`, so
+  PostgreSQL ELIMINATED every unused LEFT JOIN — they are on unique keys and no column was
+  referenced. Consuming every facet column gives the honest 743 ms. Sibling of the warm-cache
+  error in `sample_universe`, on the same day.
+- **COMPLETENESS MUST BE TYPED: 15,159 of 27,629 securities are BONDS.** A bond arrives from an
+  N-PORT filing and that is all it will ever be. One flat definition reports 55% of the universe
+  permanently broken for facets that can never apply, and the number gets ignored within a week.
+  `market.required_facet` decides per type and is a CONTROL TABLE — retyping what a type owes is a
+  row in Studio, not a migration.
+- **FIRST REAL SAMPLE, 2026-08-27:** equities **39.9% complete** (4,927 of 12,350) with
+  **`industry` the bottleneck at 7,712** against symbol 12,016 / price 11,711 / profile 11,799;
+  statements 8,841 and metrics 8,947 next. By country: **CN 12.8%, JP 15.2%, TW 17.0%** against the
+  39.9% average — Asian markets are far behind. That is where provider budget should go.
+- **ETFs READ 0% COMPLETE AND THE SEED IS WHAT IS WRONG.** All 74 have a symbol and performance and
+  **none has a row in `security_price`** — ETF returns come from `performance` computed off
+  `etf/historical`, and bars were never stored. Requiring `price` of an ETF asks for something this
+  pipeline has never produced. Fix is one row in `required_facet`, no deploy.
+- **`market-verify` NOW RECORDS THE ~30 NUMBERS IT COMPUTES** as `verify.<slug>` in
+  `universe_sample` — third instance of "computed and thrown away" after `refresh_log` and the run
+  reports. Recorded from inside `check_min`/`check_zero`, so a check added later is captured
+  without anyone remembering to. **`Content-Profile`, not `Accept-Profile`** — the latter selects a
+  schema for a READ and is silently ignored on a write.
+
 ## Running an OpenSandbox server locally
 
 - **`docker run -d -p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock opensandbox/server:latest`.**
