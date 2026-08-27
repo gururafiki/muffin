@@ -1050,6 +1050,60 @@ the openbb REST and MCP hops. Deferred, with reasons:
 - [ ] **The cache is not an archive.** Pairs are retrievable only by re-issuing the request, not
       enumerable for offline analysis. If that is ever wanted, it is the mitmproxy-addon path.
 
+## Observability — deferred scope (recorded 2026-08-27)
+
+Grafana + Prometheus + cAdvisor + node-exporter + postgres-exporter + Portainer shipped, along
+with `market.refresh_run` / `backlog_sample` / `universe_sample` and http-cache's `/metrics`.
+See `muffin-deployment/README.md` § Observability. What was deliberately NOT done:
+
+- [ ] **CONTAINERD'S ROOT IS STILL ON `/`, AND THAT IS THE REAL DISK RISK.** Measured on the node
+  2026-08-27: `/` is at **70% (31 G of 45 G)** while `/mnt/data` sits at **9% of 98 G**. Docker
+  reports `DockerRootDir=/mnt/data/docker`, but it also reports
+  `driver-type: io.containerd.snapshotter.v1` — with the **containerd image store, images live
+  under CONTAINERD's root, not Docker's `data-root`** — and `/etc/containerd/config.toml` has no
+  `root` override, so it defaults to `/var/lib/containerd` (**20 G**). A further **7.6 G** of stale
+  `/var/lib/docker` sits beside it. Every overlay `lowerdir` on the node points into
+  `/var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/snapshots/`.
+  So `/` grows with every image pull across 32 services and `daemon.json` does not control it.
+  Neither `migrate-docker-root` nor `reclaim-old-docker-root` in `maintenance.yml` addresses this.
+  **Cheap relief:** `docker image prune -a` plus reclaiming the stale `/var/lib/docker`.
+  **The fix:** stop docker + containerd, set `root = "/mnt/data/containerd"` in
+  `/etc/containerd/config.toml`, migrate the directory, restart. Riskier than it looks — it moves
+  every image layer on a live node — so it wants its own change and its own rollback plan.
+  The `muffin-disk-filling` alert now fires at 80% so this cannot arrive as a surprise.
+
+- [ ] **PostHog Cloud for muffin-ui product analytics.** Self-hosting is disqualified on this node
+  (hobby needs 8 GB: ClickHouse + Kafka + Redis + Postgres + MinIO) and it answers none of the
+  backend questions, so it was cut from the observability work rather than deferred within it.
+  As a separate decision it is still worth having — which screens people use, where they drop out.
+  Cloud free tier is 1M events/month.
+
+- [ ] **openbb-api's own egress is unmeasured.** `http-cache` sees the seven direct provider
+  origins plus the two internal hops, but yfinance / finviz / FMP calls made INSIDE openbb-api go
+  straight out. That is the provider whose rate limit matters most, and today the only signal is
+  `refresh_run.error`. Options: an egress proxy in front of openbb-api (`HTTP_PROXY` in its
+  environment, pointed at http-cache with a CONNECT handler), or openbb's own instrumentation if
+  it has any. Neither investigated.
+
+- [ ] **Per-request tracing across the request path.** Traefik → UI → langgraph-api → MCP → provider
+  currently has no correlating id, so a slow page cannot be attributed to a hop. Traefik can inject
+  one; nothing downstream propagates it. Langfuse already traces the agent's own internals, so this
+  is only about the hops OUTSIDE the agent.
+
+- [ ] **Move the warm-up cron on-node with `pg_cron`.** `supabase/postgres:17.6.1.136` ships
+  `pg_cron` and `pg_net` in `shared_preload_libraries`, so the 8-times-daily sweep could run
+  without GitHub Actions — which would also make it work when Actions is down or the repo is
+  archived. Not done because GitHub Actions is the established pattern here (warm-up, verify,
+  maintenance all use it) and it is visible and cancellable; `pg_cron` failures would need their
+  own monitoring, which is a small circularity.
+
+- [ ] **`refresh_run.report` is jsonb with no schema.** Field names differ per resource
+  (`written`/`covered`/`classified`/`emptySeries`/`unanswered`), which is honest — they measure
+  different things — but it means a cross-resource panel can only use the three promoted columns.
+  A `metric`-table-style catalogue (as `market.metric` does for provider field names) would let a
+  dashboard chart `classified` for the resources that have it. Only worth doing if a panel actually
+  wants it.
+
 ## Other P2
 - [ ] Add new tab to donate to Ukraine with links to different funds
 - [ ] Create agent similiar to criteria analysis, but for hypothesis analysis. The idea is that we firstly define multiple hypothesis and then define which data is needed to compute it's probability -> collect the data and define how probable it is.

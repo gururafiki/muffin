@@ -1845,6 +1845,57 @@ Note on hardening: **`gh pr merge` merged a workflow-only PR fine** (muffin-depl
 2026-08-10). The "OAuth App … without `workflow` scope" dead end recorded above did not reproduce —
 try the merge before assuming it needs a human click.
 
+## Observability (added 2026-08-27)
+
+Grafana at `muffin-grafana.<domain>` and Portainer at `muffin-portainer.<domain>`, both behind
+Cloudflare Access; Prometheus, cAdvisor, node-exporter and postgres-exporter are internal. Full
+runbook: **[muffin-deployment/README.md § Observability](muffin-deployment/README.md#observability-grafana-prometheus-portainer)**.
+
+- **`market.refresh_log` HAS NO HISTORY BY CONSTRUCTION** — it is keyed `resource text PRIMARY KEY`,
+  one row per resource, overwritten every run, because it is the mutex `begin_refresh` claims.
+  Measured 2026-08-27: it held one row per resource from the 23:xx sweep, all `ok: true`, and **not
+  one number about what any of them did**. `market.refresh_run` is the append-only history; do not
+  "fix" `refresh_log` by adding rows to it.
+- **GRAFANA READS SAMPLES, NEVER THE LIVE `pending_*` VIEWS.** Counting all 26 costs **~8,400 ms**
+  (measured; `pending_prices` alone is **5,380 ms**, above the 8s statement timeout the PostgREST
+  role carries), so a dashboard on a 30s refresh would run that continuously against the database
+  the app reads — and a runaway query here has already stalled a deploy for 22 minutes.
+  `market.backlog_sample` is written 16x/day and every panel reads it. By contrast `count(*)` over
+  every market TABLE is **771 ms for all 63**, `security_price` at 10.9M rows included — the tables
+  are cheap and the views are not, which is why only `sample_backlogs` needs a deadline and
+  per-item isolation.
+- **THE RUN RECORD IS TAKEN FROM THE RESPONSE, IN ONE WRAPPER.** `market-refresh/index.ts` has ~40
+  `return json(...)` sites in 5,400 lines; recording at each one means the next resource added
+  below one is silently unrecorded. `Deno.serve` wraps a named `handle()` and `recordRun` reads a
+  clone of the response. It is **awaited** (bounded by `abortSignal`) rather than fire-and-forget —
+  a dropped record defeats the point and the worker can be torn down under a floating promise.
+  `written`/`remaining`/`failed` are **GENERATED** columns over the report jsonb, gated on
+  `jsonb_typeof(...) = 'number'`: proven by mutation, without that gate `"3000"` stores silently as
+  3000 and `"n/a"` **raises and aborts the whole deploy**.
+- **`$provider` IS AN EXPLICIT nginx VARIABLE PER LOCATION, NEVER `$proxy_host`.** Two locations
+  share `query2.finance.yahoo.com` (a 30-day ISIN lookup and a 1-hour price cache), so deriving the
+  label would merge them into one meaningless series. Third instance of "measure an identifier
+  before keying on it" in this file.
+- **http-cache CANNOT SEE openbb-api's OWN EGRESS.** It sees the seven origins in `origins.ts` plus
+  the `OPENBB_API_URL` and `OPENBB_MCP_URL` hops — but yfinance/finviz/FMP calls made *inside*
+  openbb-api go straight out. That is the rate limit that matters most, and its only signal remains
+  `refresh_run.error` / `report`. The two layers do not substitute for each other.
+- **DOCKER'S `data-root` DOES NOT CONTROL WHERE IMAGES LIVE ON THIS NODE.** It reports
+  `DockerRootDir=/mnt/data/docker` *and* `driver-type: io.containerd.snapshotter.v1` — with the
+  containerd image store, images live under **containerd's** root, which has no override and
+  defaults to `/var/lib/containerd`. Measured 2026-08-27: **`/` at 70%** (20 G containerd + 7.6 G
+  stale `/var/lib/docker`) while **`/mnt/data` sits at 9% of 98 G**. So `/` grows with every image
+  pull and the docker-root migration only ever moved half the data. See `todos.md` § Observability.
+- **A ZERO-WIDTH `relativeTimeRange` MAKES GRAFANA REFUSE TO START.** `{from: 0, to: 0}` on an
+  alert query is rejected outright (`invalid relative time range`) and the container exits 1 — not
+  a warning, and not visible until you actually run it. Found by running Grafana against the real
+  provisioning files rather than by reading them.
+- **MEASURED HEADROOM, 2026-08-27:** 23,974 MB total, **7,913 used, 16,061 available** — against
+  ~21.9 GB of *declared* limits across 32 services, because real usage runs far under the ceilings.
+  `supabase-kong` at **81% of its 512 MB** is the closest thing to an OOM today, which is what the
+  container-memory alert watches. Re-measure before adding services; this node's documented failure
+  mode is an OOM kill (openbb-api died at its 1 GB limit to a single exploratory request).
+
 ## Running an OpenSandbox server locally
 
 - **`docker run -d -p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock opensandbox/server:latest`.**
