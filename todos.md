@@ -1072,6 +1072,14 @@ See `muffin-deployment/README.md` § Observability. What was deliberately NOT do
   every image layer on a live node — so it wants its own change and its own rollback plan.
   The `muffin-disk-filling` alert now fires at 80% so this cannot arrive as a surprise.
 
+- [ ] **99 STALE MIGRATION FILES ON THE NODE.** `/home/ubuntu/supabase/migrations/` holds **227**
+  files: 128 zero-padded (what the repo has) and 99 unpadded survivors from before the padding
+  rename. `ansible copy` never deletes what vanished from source. They are NOT applied — the
+  Ansible loop globs the LOCAL repo and only passes basenames through — so this is clutter rather
+  than a defect. But anything that ever globbed the NODE's directory instead would apply 99
+  migrations a second time under their old names. Either `synchronize` with `delete: yes`, or a
+  task that removes `*.sql` not present in the local set.
+
 - [ ] **PostHog Cloud for muffin-ui product analytics.** Self-hosting is disqualified on this node
   (hobby needs 8 GB: ClickHouse + Kafka + Redis + Postgres + MinIO) and it answers none of the
   backend questions, so it was cut from the observability work rather than deferred within it.

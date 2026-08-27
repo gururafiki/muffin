@@ -1886,6 +1886,57 @@ runbook: **[muffin-deployment/README.md § Observability](muffin-deployment/READ
   defaults to `/var/lib/containerd`. Measured 2026-08-27: **`/` at 70%** (20 G containerd + 7.6 G
   stale `/var/lib/docker`) while **`/mnt/data` sits at 9% of 98 G**. So `/` grows with every image
   pull and the docker-root migration only ever moved half the data. See `todos.md` § Observability.
+- **A BIND-MOUNTED CONFIG CHANGE RESTARTS NOTHING, AND THIS IS NOT NEW.** `docker stack deploy`
+  only updates a service whose **spec** changed, and a file on disk is not part of the spec. So an
+  edited `traefik.yml` or `proxy/nginx.conf` is staged by Ansible and then IGNORED, with no error
+  anywhere and a deploy that reports success. Measured 2026-08-27: a deploy staged a new
+  `nginx.conf` carrying a `/metrics` location and a `traefik.yml` carrying a metrics entrypoint,
+  and Prometheus reported `http-cache down: 404` and `traefik down: connection refused` while both
+  files on disk were correct. **Every edit to either file has been silently ineffective all along**
+  unless that deploy happened to change the service definition for an unrelated reason — the exact
+  shape of the PGRST205 incident, where migrations only ever became visible because their deploy
+  also restarted `supabase-rest` by accident. `muffin_stack.yml` now registers each staging task
+  and force-updates the affected services AFTER the stack deploy, conditional on the file having
+  changed. Grafana is in that set: it reads its provisioning directory at STARTUP only.
+- **A STATEMENT TIMEOUT CANNOT BE ESCAPED FROM INSIDE THE STATEMENT.** PostgreSQL arms the
+  statement timer ONCE, at statement start; assigning `statement_timeout` afterwards does not
+  re-arm it for the statement already running. A PostgREST RPC is a SINGLE statement, so the role's
+  8-second limit bounds the WHOLE function — including any per-item `set_config(...)` and any
+  exception handler meant to record the failure. Migration 127 shipped exactly that mitigation for
+  a cost measured at ~8,400 ms and it died at **8,068 ms** on its first production call, with the
+  handler that would have recorded which backlog failed dying with it. **A loop that must outlive
+  the role's timeout belongs in the CALLER**, one RPC per item — and the error row must be written
+  by the caller too, because a timeout aborts its transaction and a row inserted by the function's
+  own handler dies with it.
+- **A CONDITIONAL RESTART CANNOT HEAL DRIFT IT DID NOT CAUSE — put the config's HASH in the SPEC.**
+  The first fix for the bind-mount problem above restarted whichever services' staging task
+  reported `changed`. Correct, and insufficient: on the very next deploy the files were ALREADY
+  right on disk, `changed` was correctly false, nothing restarted, and the stale processes kept
+  serving. A conditional restart can only act on drift it creates, which is the opposite of the
+  situation a missed restart leaves behind. A `muffin.config-hash` label under `deploy.labels`
+  makes the config part of the spec, so `docker stack deploy` restarts exactly the services whose
+  config moved — self-healing, and it repaired the existing stale state simply by not being there
+  yet. Carried by traefik, http-cache (BOTH nginx.conf and openresty.conf), prometheus and grafana.
+- **A WARM CACHE IS NOT A MEASUREMENT.** `count(*)` over every `market` table measured **771 ms**
+  on the node and was used to justify counting all 63 exactly, 16 times a day. In production
+  `sample_universe` then timed out, and the honest number is **10,252 ms** — the 771 ms reading
+  came off a warm buffer cache, and a full scan of `security_price` (10.9M rows) is 266 ms from
+  shared buffers and seconds off disk. Nothing had grown; the deploy had evicted the cache. For a
+  GAUGE the exactness bought nothing anyway: `pg_class.reltuples` is a catalogue lookup, accurate
+  to a few percent, invisible on a chart of ten million — so the series is named `rows_estimate.*`
+  rather than `rows.*`, because a number that is not what its name says is the failure mode this
+  file is mostly about. `reltuples` is **-1** for a never-analysed relation and must be skipped
+  rather than recorded.
+- **PORTAINER CE LOCKS ITSELF FIVE MINUTES AFTER FIRST START** if no admin account has been
+  created — "the Portainer instance timed out for security purposes" — and only a restart reopens
+  the window. Measured 2026-08-27: up at 11:52, locked at 11:57. `--admin-password-file` reading a
+  Docker secret makes it deterministic; note it only INITIALISES and never resets an existing
+  admin, so an instance claimed by hand keeps its own password.
+- **A BIND MOUNT INSIDE A READ-ONLY BIND MOUNT CANNOT BE CREATED.** node-exporter took `/:/host:ro`
+  plus `/var/lib/node-exporter:/host/textfile:ro` and restart-looped at 0/1 with
+  `make mountpoint "/host/textfile": read-only file system` — runc cannot mkdir the mountpoint
+  inside the read-only parent. The second mount was never needed: anything under `/` is already
+  visible at `/host/...`.
 - **A ZERO-WIDTH `relativeTimeRange` MAKES GRAFANA REFUSE TO START.** `{from: 0, to: 0}` on an
   alert query is rejected outright (`invalid relative time range`) and the container exits 1 — not
   a warning, and not visible until you actually run it. Found by running Grafana against the real
