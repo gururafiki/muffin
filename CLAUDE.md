@@ -1917,6 +1917,27 @@ runbook: **[muffin-deployment/README.md § Observability](muffin-deployment/READ
   makes the config part of the spec, so `docker stack deploy` restarts exactly the services whose
   config moved — self-healing, and it repaired the existing stale state simply by not being there
   yet. Carried by traefik, http-cache (BOTH nginx.conf and openresty.conf), prometheus and grafana.
+- **AN ALERT CANNOT JUDGE A RESOURCE IT HAS ONLY JUST MET.** The resource-stalled rule fired on
+  its first day and was a TRUE POSITIVE — three resources had failed with
+  `relation "market.pending_*" does not exist` inside a deploy window, a failure previously
+  INVISIBLE because `refresh_log` holds one row per resource and overwrites it on the next run. It
+  then kept firing after the condition healed, because "has this succeeded in 12 hours" cannot be
+  satisfied by 73 minutes of history: the rule could not tell BROKEN FOR TWELVE HOURS from
+  RECORDING FOR ONE, so every fresh deployment would fire it for half a day — which is how the
+  first alert anyone sees becomes one they ignore. A resource is now judged only once it has been
+  RECORDED for longer than the threshold. Proven against LIVE data with the cases made to disagree:
+  0 against production (was 3), 1 with a resource injected at three days old and never ok.
+- **cADVISOR CANNOT IDENTIFY A CONTAINER UNDER DOCKER'S CONTAINERD IMAGE STORE, AND IT LOOKS
+  HEALTHY WHILE FAILING.** `driver-type: io.containerd.snapshotter.v1` means the classic
+  graph-driver layout does not exist — `/mnt/data/docker/image/` holds only `identity-cache.db` —
+  so it fails to identify EVERY container and serves only systemd slices, with a green Prometheus
+  target throughout. Measured across both factories: **zero** series carrying a `name=` label.
+  Fixing the rootfs bind (`ro,rslave`, needed because `/mnt/data` is `/dev/sdb` and a plain bind
+  does not propagate submounts) made the path reachable and the path is empty; pointing it at
+  containerd (`--containerd-namespace=moby`, since it defaults to `k8s.io`) raised 1 series to 49,
+  all cgroup slices. Replaced by `docker stats` into node-exporter's textfile collector — Docker
+  knows the service name AND the limit, so nothing is inferred from a cgroup path. Verify a
+  monitoring agent by looking for the LABEL you intend to group by, not by its target being up.
 - **`deploy.labels` IS THE SERVICE OBJECT; ONLY THE TASK TEMPLATE RESTARTS ANYTHING.** The
   config-hash fix above shipped under `deploy:` and restarted nothing. Measured:
   `.Spec.Labels` carried `muffin.config-hash` and `.Spec.TaskTemplate.ContainerSpec.Labels` did
