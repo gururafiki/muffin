@@ -2184,6 +2184,28 @@ runbook: **[muffin-deployment/README.md § Observability](muffin-deployment/READ
   that stopped". **And the first mutation run scored 3 of 4 "caught" on mutations that were
   NO-OPS** (the panel's SQL had no `group by` to replace), which is this file's most-repeated trap:
   assert the mutation changed the artifact before believing the result.
+- **A CHART CAN BE MEASURING SOMETHING OTHER THAN ITS TITLE, AND THE DIPS ARE THE TELL.** "Cache
+  size on disk" plotted `node_filesystem_size - node_filesystem_avail` for `/mnt/data` — the WHOLE
+  FILESYSTEM. Measured 2026-08-28: 9.4 GB, of which the http-cache is 0.6 and
+  **`muffin_supabase-db-data` is 8.4** — so the line falling from time to time was Postgres
+  recycling WAL and vacuuming, and the panel was ~90% a Postgres chart wearing a cache's name.
+  Two more defects sat underneath, each invisible because of the one above it.
+  **`muffin-cache-size.sh` HARDCODED `/var/lib/docker/volumes`** while docker's data-root here is
+  `/mnt/data/docker`, so it measured the STALE pre-migration copy: frozen at 202 MB / 1,031 entries
+  since 2026-08-26 while the live volume reached **596 MB / 3,206**. A gauge that stops moving looks
+  exactly like a cache that stopped growing. And **no panel plotted the correct metric at all**,
+  which is why nobody noticed — *an unplotted metric cannot be seen to be wrong*, the same shape as
+  `exchange-listings` never being scheduled and `untracked_listing` never being read. Resolve the
+  root from `docker info --format '{{.DockerRootDir}}'`, never assume it. Two lanes, because the
+  costs differ by two orders of magnitude: every named volume is **0.17s** (per minute), `du` over
+  the 21 GB `/var/lib/containerd` is **1.5-3.7s** (every 15 min). Guarded by
+  `check_collector_metrics_are_plotted.py` — a metric nothing plots, a panel nothing feeds, and a
+  hardcoded docker volumes path all fail CI. **Running that guard found two false positives in
+  itself**: it missed `nginx.conf` as an emitter (reporting three working provider panels as unfed)
+  and matched metric names inside panel DESCRIPTIONS (`muffin_supabase`, out of
+  `muffin_supabase-db-data` in prose) — a guard that cries wolf on prose is a guard someone
+  disables. Plot bytes AND ENTRIES for a cache: bytes alone cannot distinguish four enormous SEC
+  companyfacts payloads from forty thousand small OpenFIGI answers.
 - **PORTAINER CE LOCKS ITSELF FIVE MINUTES AFTER FIRST START** if no admin account has been
   created — "the Portainer instance timed out for security purposes" — and only a restart reopens
   the window. Measured 2026-08-27: up at 11:52, locked at 11:57. `--admin-password-file` reading a
