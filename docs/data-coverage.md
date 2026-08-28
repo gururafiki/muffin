@@ -3,6 +3,30 @@
 **Measured against production 2026-08-19.** Every number here was counted, not estimated. How the
 pipeline works is a separate document: [data-ingestion.md](data-ingestion.md).
 
+> **Coverage is now measured continuously, so prefer the live view over the tables below.**
+> `market.coverage_current` (migration 131) computes completeness across ten dimensions — country,
+> sector, industry, cap band, style, MSCI tier and region, income group, currency, security type —
+> and `market.coverage_sample` snapshots it twice daily, which is what the Grafana coverage
+> dashboard reads. The numbers in this document are a hand-counted point in time; the view is the
+> same question asked automatically.
+>
+> **Completeness is TYPED, and `market.required_facet` is the control table that decides what each
+> security type owes.** A bond arrives from an N-PORT filing and that is all it will ever be, so one
+> flat definition would report 55% of the universe (15,159 bonds of 27,629) as permanently broken
+> for facets that can never apply — a number that gets ignored within a week. Retyping what a type
+> owes is a row in Studio, not a migration.
+>
+> **Known miscalibration: ETFs read 0% complete and the SEED is what is wrong, not the data.** All
+> 74 have a symbol and performance and **none has a row in `security_price`** — `pending_prices` is
+> scoped `where security_type_code = 'equity'`, so an ETF can never get one. ETF returns come from
+> `performance`, computed off `etf/historical`, and bars were never stored. Requiring `price` of an
+> ETF asks for something this pipeline has never produced. Fix is one row in `required_facet`.
+>
+> **First real sample, 2026-08-27:** equities **39.9% complete** (4,927 of 12,350), with `industry`
+> the bottleneck at 7,712 against symbol 12,016 / price 11,711 / profile 11,799. By country,
+> **CN 12.8%, JP 15.2%, TW 17.0%** against the 39.9% average — Asian markets are far behind, and
+> that is where provider budget should go.
+
 ---
 
 ## 1. The distinction that governs everything below
@@ -53,6 +77,10 @@ can only PRUNE after promotion, never gate before it.
 ---
 
 ## 2. What IS integrated
+
+> **Freshness has two floors, not one.** A row's `stale_after` bounds how old the *stored* value
+> may be; the **HTTP cache** in front of every provider bounds how new the value could have been
+> when it was stored. See `data-ingestion.md` §3 and §9c.
 
 ### 2.1 The universe
 
@@ -225,6 +253,11 @@ flattening it would make the "curve" whichever maturity was written last.
 ---
 
 ## 3. What is NOT integrated
+
+> **Some apparent coverage gaps are CACHE artefacts, not source gaps.** The canonical case: a
+> newly listed company cannot be resolved at all while `company_tickers.json` is up to 30 days
+> stale, because that file is the CIK↔ticker map. Before concluding a provider lacks something,
+> check the TTL table in `data-ingestion.md` §3 and the traps in §8.
 
 ### 3.1 Blocked on money or a licence
 

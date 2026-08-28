@@ -1191,6 +1191,46 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   observation. Guarded offline in `macro-format.ts` + `scripts/macro-panel-check.ts` — the panel
   component itself imports react-native, which `tsx` cannot transform, so testable logic has to
   live outside it (the same split `money.ts` uses).
+- **psql DOES NOT INTERPOLATE `:'var'` INSIDE A DOLLAR-QUOTED BLOCK, so the obvious upsert shape
+  cannot take a variable.** Substitution happens in psql's LEXER, which treats `$$ ... $$` as
+  opaque text — a `do $$ ... perform vault.create_secret(:'key', ...) ... $$` fails with
+  `syntax error at or near ":"`, naming the colon rather than the quoting. Ansible's `| to_json`
+  is NOT the way round it: JSON double quotes are an SQL **identifier**, so the key arrives as
+  `column "eyJhbG..." does not exist`. Use plain statements where `:'key'` works —
+  delete-then-create rather than an upsert in a block. Verified on the node before deploying,
+  which is the only reason it was not a third failed deploy in a row.
+- **`no_log: true` ON THE WHOLE TASK HIDES THE ERROR THAT DIAGNOSES IT.** The failing deploy above
+  reported exactly `{"censored": "the output has been hidden due to the fact that 'no_log: true'
+  was specified"}` and nothing else, so the cause had to be reproduced by hand on the node. Put
+  `no_log` on a task whose ONLY job is to stage the secret (a root-only file), and leave the task
+  that uses it — which now contains no secret — loggable.
+- **ANSIBLE'S `shell:` RUNS UNDER DASH, AND VERIFYING BY HAND OVER ssh LANDS IN BASH.**
+  `set -euo pipefail` dies with `/bin/sh: 1: set: Illegal option -o pipefail` before the task's
+  first real command, so the SQL I had carefully verified on the node never executed and the deploy
+  failed a third time. **The shell was never the thing under test** — an interactive ssh gives you
+  bash, and only Ansible uses `/bin/sh`. The playbook already knew: both other `pipefail` tasks
+  declare `args: executable: /bin/bash` and the new one did not, which is "a rule written at one
+  call site is not a rule" again. Now guarded in `quality.yml` on any bash-only syntax (`pipefail`,
+  `<(`, `[[ `, `declare -A`, `${!`), with task blocks bounded by the `- name:` markers because the
+  neighbouring Jinja guard's first version ran past the boundary and blamed the wrong task.
+- **A GUARD'S FIRST PRODUCTION READ IS PART OF WRITING IT, AND MINE FOUND TWO FALSE POSITIVES IN
+  ITSELF.** `market.data_defect` shipped green in CI and immediately reported two non-zero asserted
+  invariants that would have failed market-verify on correct data. (1) **A flat price does not
+  contradict a `performance_missing_at` mark** — migration 055's own header had predicted the exact
+  rule I wrote, warning that a money-market line "has a bar every day and a single distinct close
+  forever, so it legitimately yields no return, earns its mark honestly"; **15 of 29** flagged
+  securities were that shape. Holding BARS is not evidence, holding bars that MOVE is. (2) **A
+  country whose securities carry tickers is not silently dropped** — the fetch key is
+  `coalesce(provider_symbol, ticker)`, and testing only `security_provider_symbol` flagged Bermuda,
+  whose 56 equities all have tickers. **The first fix was worse than the bug**: rewriting it as
+  "20+ individually unaddressable securities" flagged US, CN and FR, because 334 equities lack both
+  keys as ordinary residue — the SHAPE ("not ONE security in the country is addressable") was the
+  part that was right. Read the offending ROWS before believing a count, and assert a guard stays
+  SILENT on the innocent shape, not only that it fires on the defect.
+- **A ONE-SHOT REPAIR'S HEADER IS A DESIGN DOCUMENT FOR THE GUARD THAT COMES LATER.** 055 said
+  "recurrence is prevented in the resource, not here" and explained precisely which recurring rule
+  would be wrong. Reading it turned a cry-wolf guard into a correct one and settled which 15 of 29
+  rows to leave alone. **Before writing an invariant, read the migration that repaired that defect.**
 - **A DEAD APT MIRROR LOOKS LIKE A FLAKY NETWORK AND IS PERMANENT.** Two deploys failed with
   `Failed to update apt cache after 5 retries: ` — no cause in the message, and "after 5 retries"
   reads as transient, so the second deploy was run purely on that assumption. Oracle's cloud-init
@@ -1840,6 +1880,17 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   verified nothing must never read as one that passed — but the fix is to scope the sample to what
   the check is ABOUT, and to derive that scope from the mapping table rather than "everything except
   X", so the next non-statement source cannot silently empty it again.
+
+**A PR WITH MERGE CONFLICTS RUNS NO `pull_request` WORKFLOWS AT ALL, AND READS AS ALL-GREEN.**
+Measured 2026-08-28 on muffin-deployment#245: `gh pr checks` reported **4 passing and nothing
+pending** — three CodeQL `Analyze` jobs plus the CodeQL umbrella — while `Quality`, the repo's
+REQUIRED check, never appeared. A `pull_request` workflow runs against the computed merge commit
+(`refs/pull/N/merge`), and GitHub cannot compute one for a conflicting PR, so the run is never
+created. CodeQL still reported because it fires on the `dynamic` event against the head commit,
+which needs no merge. So the tell is not a red check, it is a MISSING one — `mergeStateStatus:
+DIRTY` / `mergeable: CONFLICTING` beside a check list shorter than usual. Rebasing took it from 4
+checks to 10, all passing, without touching a line of the code. **Count the checks against a
+known-good PR on the same repo; never read "no failures" as "the suite ran."**
 
 Note on hardening: **`gh pr merge` merged a workflow-only PR fine** (muffin-deployment#24,
 2026-08-10). The "OAuth App … without `workflow` scope" dead end recorded above did not reproduce —

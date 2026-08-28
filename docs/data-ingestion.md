@@ -1,6 +1,9 @@
 # Market data ingestion — how it works
 
-**Status: current as of 2026-08-19.** Numbers are measured against production, not estimated.
+**Status: current as of 2026-08-28.** Numbers are measured against production, not estimated.
+
+> **Changed 2026-08-27:** the scheduler moved out of GitHub Actions into **pg_cron** (§4).
+> `market-warmup.yml` no longer exists; `market.cron_resource` is the source of truth for what runs.
 
 This describes the whole ingestion pipeline: the data model, every external call, every scheduled
 resource, where each field comes from, and what is missing. Coverage — what data we *have* versus
@@ -17,7 +20,7 @@ PostgREST; ingestion is a set of Deno edge functions that write to those tables 
 flowchart LR
     subgraph clients[Clients]
       UI[muffin-ui<br/>Expo / React Native]
-      CRON[GitHub Actions<br/>market-warmup.yml]
+      CRON[pg_cron<br/>market.cron_tick&#40;&#41; every 5 min]
     end
 
     subgraph supabase[Self-hosted Supabase]
@@ -36,7 +39,7 @@ flowchart LR
 
     UI -- "select() (anon key)" --> REST
     UI -- "functions.invoke() (admin only)" --> FN
-    CRON -- "POST (service-role key)" --> FN
+    CRON -- "POST (service-role key, from vault)" --> FN
     REST --> PG
     FN --> PG
     FN --> OBB
@@ -174,6 +177,46 @@ The app should never join five tables on a phone.
 | ↳ **FRED** (through openbb) | `FRED_API_KEY` (already configured) | — | international macro by explicit series id | `macro-indicators` |
 | ↳ **OECD / federal_reserve** (through openbb) | keyless | — | CPI, GDP, unemployment, yield curve, EFFR, SOFR | `macro-indicators` |
 
+### Every one of those goes through the cache first (2026-08-25)
+
+**The "Reached via" column above is the ORIGIN, not the address the code dials.** Since
+`http-cache` shipped, every provider is reached through an OpenResty read-through cache on the
+overlay, and the callers only know a base URL — `origins.ts` for the direct providers,
+`OPENBB_API_URL`, `OPENBB_MCP_URL`. No cache logic exists in any caller.
+
+| Location | Origin | TTL (200s only) |
+|---|---|---|
+| `/sec/` | `www.sec.gov` | 30d |
+| `/sec-data/` | `data.sec.gov` | 7d |
+| `/sec-fts/` | `efts.sec.gov` | 7d |
+| `/openfigi/` | `api.openfigi.com` | 90d |
+| `/yahoo/v1/finance/search` | `query2.finance.yahoo.com` | 30d |
+| `/yahoo/` | `query2.finance.yahoo.com` | 1h |
+| `/alphavantage/` | `www.alphavantage.co` | 30d |
+| `/tiingo/` | `api.tiingo.com` | 7d |
+| `/openbb/` | `openbb-api:6900` | 1h |
+| `/mcp/` | `openbb-mcp:8001` | 1h |
+
+**Key recipe v1** — `"$request_method|$proxy_host|$request_uri|$body_key"`, where `$body_key` is an
+**MD5 computed in Lua**, not `$request_body`. That is not a stylistic choice: `$request_body` is
+EMPTY once a body spills past `client_body_buffer_size`, and because the key *contains* the body it
+can also overflow `proxy_buffer_size`, at which point nginx logs an error and **silently stops
+caching**. Both were measured; see §8.
+
+Three more facts worth knowing before you change anything here:
+
+- **`inactive=365d` is load-bearing.** nginx evicts by **last access**, not by TTL, and the default
+  is **10 minutes** — without it a `proxy_cache_valid 30d` caches nothing while looking correct.
+- **Only 200s are cached.** A cached 429 or 5xx would be poison. Conversely
+  `proxy_cache_use_stale ... http_429` deliberately serves the last GOOD entry when a provider
+  starts throttling.
+- **`X-Cache-Status` is on every response** (`HIT`/`MISS`/`EXPIRED`/`STALE`/`UPDATING`/`BYPASS`).
+  That header, not the proxy's own counters, is what any verification should read.
+
+**The bypass** is `http_cache_enabled: false` (GitHub variable `HTTP_CACHE_ENABLED`), which points
+every caller back at the real origin without editing the stack. Every default in `origins.ts` is
+the real origin, so removing the cache service cannot take ingestion down.
+
 ### openbb routes actually used
 
 ```
@@ -215,27 +258,48 @@ equity/compare/groups        finviz sector performance (US only)
 
 ```mermaid
 flowchart TD
-    A[market-warmup.yml<br/>cron 8×/day, service-role key] --> R[market-refresh<br/>edge function]
+    A[pg_cron rotation<br/>1 resource / 5 min, key from vault] --> R[market-refresh<br/>edge function]
     B[muffin-ui stale-while-revalidate<br/>a screen reads a row past stale_after] --> R
     C[Refresh / Track buttons<br/>admin only] --> R
     D[Operator<br/>gh workflow run -f resource=NAME] --> R
-    E[market-verify.yml<br/>daily 03:00 UTC, anon key] --> V[39 assertions<br/>shape, not exceptions]
+    E[market-verify.yml<br/>daily 03:30 UTC, anon key] --> V[assertions + market.data_defect<br/>shape, not exceptions]
     R --> PG[(market schema)]
     V --> PG
 ```
 
-- **Cron**: `market-warmup.yml`, **every 3 hours** (02:10, 05:10, … 23:10 UTC), **paced 30s between
-  resources**. The pacing is load-bearing: firing everything back to back is what tripped yfinance's
-  rate limit and caused the mass false-marking incident.
+- **Cron**: a **pg_cron ROTATION inside the database** (migration 133), not a GitHub workflow.
+  `market.cron_tick()` fires **every 5 minutes** and posts the NEXT resource from
+  `market.cron_resource`, so 38 resources make a full sweep every **3.2 hours** — about the same
+  per-resource cadence as the 8×/day workflow it replaces (7.6 turns/day vs 8), with gentler
+  spacing. **The pacing is load-bearing and the rotation cannot burst by construction**: firing
+  everything back to back is what tripped yfinance's rate limit and caused the mass false-marking
+  incident. A missed firing now delays the rotation by five minutes rather than losing a sweep.
+
+  It moved because GitHub was not honouring the schedule — measured over four days, **19 runs
+  against 32 expected**, every one 19–127 minutes late, with gaps up to **13.3 hours** against a
+  nominal 3. That exceeded the 12-hour "resource has stopped succeeding" alert, so the scheduler's
+  own flakiness would eventually have fired our alarm.
+
+  **`observability-sample` is NOT in the rotation** — it touches no external provider, so it is
+  free to run often, and its rate is what decides whether a dashboard draws a line or a single dot.
+  It has its own hourly job.
+
+  **The credentials live in `vault.secrets`**, written by Ansible and read by `market.cron_post()`.
+  If they are absent the tick returns a reason and posts **nothing**, rather than firing 288
+  unauthenticated requests a day — a deliberate loud no-op, and one that kept the pipeline stopped
+  for hours when the Ansible task that writes them failed. Nothing alerts on it yet beyond the
+  scheduler-silent rule; `cron.job_run_details` records `succeeded` because the tick did.
 - **The app**: stale-while-revalidate. A screen reading a row past `stale_after` fires a background
   refresh; **the reader is never blocked**. Writes are admin-only (`app_metadata.role`, never
   `user_metadata`, which users can write themselves).
 - **On demand**: `security-refresh` does returns, market cap, fundamentals **and statements** for one
   symbol — so a security someone actually opens is not last in a multi-week queue.
-- **Manual**:
+- **Manual** (the `gh workflow run market-warmup.yml` recipe is GONE — that workflow was deleted
+  when the scheduler moved into the database):
   ```bash
-  gh workflow run market-warmup.yml -f resource=<name>
-  # or, for force / fund scoping (service-role only):
+  # drive one resource now, from the node:
+  #   select market.cron_post('security-statements');
+  # or over HTTP — for force / fund scoping (service-role only):
   curl -X POST "$BASE/functions/v1/market-refresh" \
     -H "apikey: $SRV" -H "Authorization: Bearer $SRV" -H 'Content-Type: application/json' \
     -d '{"resource":"fund-holdings","fund":"XLE","force":true}'
@@ -392,7 +456,7 @@ guards check behaviour and shape rather than exceptions.
 | `quality.yml` → `migrations` | applies every migration **twice** against a throwaway Postgres, `--single-transaction` per file (mirrors production) |
 | `quality.yml` → behaviour tests | 27 `.sql` tests; several seed the *production shape* then `\i` the real migration, because "applies to an empty database" proves nothing about a backfill |
 | `quality.yml` → `functions` | `deno check` on `index.ts` **and** `logic-check.ts`, plus a network-free `logic-check.ts` run |
-| `market-verify.yml` | daily, 39 assertions against production **as anon** — role matters: anon has a **3-second statement timeout** and `service_role` does not |
+| `market-verify.yml` | daily 03:30 UTC, assertions against production **as anon** — role matters: anon has a **3-second statement timeout** and `service_role` does not. Its zero-expected invariants now come from **`market.data_defect`**, one view read as anon, which the hourly sampler ALSO snapshots as `defect.*` — so the nightly gate and the trend cannot drift. It stays in GitHub Actions deliberately: run inside the database as `postgres` it would bypass the anon key, RLS, grants, the anon timeout, PostgREST's schema cache and Cloudflare, which is the whole point of it |
 | `check_significant_holdings.py` | canary by **fund weight**, not market cap — a percentage is free of currency, cap and country |
 
 **Guard discipline: a guard must be proven by deleting what it guards, and the mutation must be
@@ -489,6 +553,51 @@ year duplicated with a gap the 7-day window cannot see. Zero today.
 
 ---
 
+### Cache traps — every one of these produces a WRONG ANSWER, not an error
+
+**An open-ended `start_date` is one cache key with a growing answer.** `equity/price/historical
+?start_date=2020-01-01` with **no `end_date`** means "everything up to now" — and it is cached as
+"everything up to whenever the first caller asked". Under `/openbb/` (1h) that is bounded; under
+any long-TTL location it would not be. The discriminator that makes a long TTL safe is **not**
+"has a date", it is **"has an explicit END date already in the past"**. Designed, not built (§10).
+
+**The per-location TTLs, with their consequence rather than their number:**
+
+| Location | TTL | What you cannot see, and for how long |
+|---|---|---|
+| `/alphavantage/` | 30d | A newly reported quarter's EPS — on a provider allowing **25 calls a day** |
+| `/sec/` | 30d | `company_tickers.json` is the CIK↔ticker map, so a **newly listed company cannot be resolved at all** |
+| `/sec-data/` | 7d | A company files a 10-Q and its `companyfacts` changes that instant — invisible for a week |
+
+**Parameter ORDER changes the key.** `$request_uri` is used verbatim, so
+`?symbol=AAPL&period=annual` and `?period=annual&symbol=AAPL` are two entries, two provider calls
+and two copies on disk — and a "miss" that looks like a cache bug. Measured. **Deliberate
+exception:** `/mcp/` canonicalises by sorting argument keys in Lua, so MCP calls are immune. The
+inconsistency is exactly why it is written down.
+
+**Headers are NOT in the key** — including SEC's mandatory descriptive User-Agent. Two callers
+differing only by header share an entry. **And the mirror image, which is the expensive one:**
+Alpha Vantage and Tiingo carry their credential in the **query string** (`apikey=`, `token=`),
+which *is* in the key — so **rotating either key silently invalidates that provider's entire
+cache**, because every URI changes.
+
+**A TTL marks an entry stale; it does not delete it.** Three knobs people conflate:
+`proxy_cache_valid` (when to revalidate), `inactive` (when to evict), `max_size` (the ceiling).
+**Disk use is governed by the last two, never by the TTLs.** Two behavioural consequences:
+
+- `proxy_cache_use_stale ... http_429` **deliberately serves an expired entry when a provider
+  throttles**, so "the TTL expired" does not imply "you got a fresh answer".
+- `proxy_cache_background_update on` means **the first request after expiry gets the STALE body**
+  and only triggers an async refresh — a correct-looking 200 whose only signal is
+  `X-Cache-Status: UPDATING`. This is the one that will cost someone an afternoon.
+
+**`$request_body` is the wrong POST key in two silent ways**, both measured 2026-08-23. It is empty
+once the body spills to a temp file — a 62 KB body then keys on the URL alone, and a request with
+different content was served the **first one's answer** (the defect that disqualified Squid,
+reproduced inside nginx). And because the key contains the body, the key can exceed
+`proxy_buffer_size`, at which point nginx logs `... is not enough for cache key` and **stops
+caching entirely while still answering correctly**. Hence the Lua MD5.
+
 ## 9. Adding things
 
 **Add an ETF** (no deploy): insert a row in `market.tracked_fund` in Studio, then
@@ -505,8 +614,11 @@ negative-cached.
 including `figi_field` — `securityType2` for stocks and receipts, `securityType` for `ETP`.
 
 **Add a new resource** (deploy): a handler in `index.ts`, an entry in `EXTRA_TTL_MINUTES` (there is
-no default — omitting it makes the resource `unknown`), a name in `market-warmup.yml`, and a
-`pending_*` view with a negative cache. `logic-check.ts` enforces all of these.
+no default — omitting it makes the resource `unknown`), **a row in the `market.cron_resource` seed**
+(migration 133 — `position` is spaced by 10 so a resource slots in without renumbering), and a
+`pending_*` view with a negative cache. `logic-check.ts` enforces all of these, parsing the
+migration's `values` list — it is the guard that caught `exchange-listings` being deployed,
+reachable and **never scheduled** for weeks.
 
 **Add a macro series** (no deploy): a row in `market.macro_indicator` — route, provider, params and
 `unit`. The `macro-indicators` resource drives whatever it finds; there is no list in code.
@@ -551,7 +663,50 @@ whose charts are already drawn from `security_price`.
 Prices themselves are current: spot-checked across AAPL, 7203.T, 005930.KS, NESN.SW, BHP.AX and
 PETR4.SA, the newest bar is the last trading day in every market.
 
+## 9c. What the cache holds, and how to look at it
+
+The cache lives in `/var/cache/muffin` (on the block volume since 2026-08-26), `levels=1:2`, and
+each file is named for the **MD5 of its key**. A file is a binary
+`ngx_http_file_cache_header_t` struct, then a plaintext `KEY:` line, then the upstream status line
+and headers, then the body.
+
+**Inventory recipe** — run inside the `http-cache` container:
+
+```
+find /var/cache/muffin -type f -exec sh -c 'printf "%s " "$(stat -c %s "$1")"; grep -a -m1 "^KEY: " "$1"' _ {} \;
+```
+
+That gives size + method + upstream host + full URI for every entry, because the `KEY:` line holds
+exactly the recipe from §3.
+
+Four things that are **not** possible, recorded so they are not re-attempted:
+
+- **No S3 browser can read this — MinIO included.** These are MD5-named files with a binary
+  prefix, not objects. Modern MinIO also refuses to serve a foreign directory and would
+  **initialise its own layout in it**, destroying the cache you were trying to inspect.
+- **Supabase Storage cannot either, for a different reason.** It is an object store with a
+  **Postgres metadata index** — the API lists from `storage.objects`, not from the filesystem, so
+  files appearing in its backend path out-of-band are invisible.
+- **POST bodies are unrecoverable.** For `/openfigi/` and `/mcp/` the key holds only the body's
+  MD5, so you cannot learn *which* OpenFIGI job array or *which* tool arguments produced an entry.
+  That is inherent to the design.
+- **There is no purge.** `proxy_cache_purge` is not in the stock OpenResty build. Invalidation is
+  `rm` the file, `docker volume rm muffin_http-cache-data`, or the global bypass flag.
+
+**The cache is not backed up**, deliberately: it is rebuildable, and the cost of losing it is
+provider budget rather than data.
+
 ## 10. Known gaps in the *pipeline*
+
+**Cache gaps (2026-08-25).**
+- The **explicit-`end_date` split is designed and not built** — see the open-ended `start_date`
+  trap in §8. Until it lands, long TTLs are only safe on genuinely immutable endpoints.
+- **There is no cache inventory without SSH.** The recipe in §9c works but is manual; nothing
+  reports what is cached, how stale, or the hit rate.
+- **The access log is the only per-request record and rotates at 10m × 3**, so **cache hit rate
+  over any window longer than a few hours is unmeasurable.**
+- **`http-cache-data` is not backed up** and has no retention beyond nginx's `max_size` /
+  `inactive`. Deliberate — it is a cache — but it means a volume loss costs provider budget.
 
 For gaps in the *data*, see [data-coverage.md](data-coverage.md).
 
