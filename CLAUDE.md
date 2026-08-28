@@ -2163,6 +2163,27 @@ runbook: **[muffin-deployment/README.md § Observability](muffin-deployment/READ
   on the Access sign-in page. Transplanting the resulting `CF_Authorization` cookie into the browser
   is credential injection and is blocked. To drive the UI, sign in once in the persistent Playwright
   profile — do not try to route around Access.
+- **A PANEL MUST NOT FILTER AWAY THE STATE IT EXISTS TO REVEAL — three instances, one shape, all
+  found by a person looking at a dashboard and asking why something they knew was there was not.**
+  The cross table carried `limit 60` over a WORST-FIRST sort: 106 buckets cleared the size floor,
+  the United States ranked 90-98 of them **because it is well covered**, and the only US row that
+  survived was `US | unknown` at 0% — so the best-covered country in the universe appeared as the
+  worst. `Rows written per resource` filtered `written > 0`, hiding **53 runs across 7 resources**
+  including `security-corporate-actions` at written=0 for seven consecutive runs: a throughput
+  chart that cannot draw a zero cannot show a resource that STOPPED, which is the only thing it is
+  for. `Backlog depth by resource` filtered `depth > 0`, so a queue draining to completion looked
+  identical to one that never existed. A cutoff is sound when it bounds an UNBOUNDED stream (a log
+  tail, `topk` over hostname cardinality); it is a bug on a BOUNDED set the panel claims to
+  summarise, because the dropped rows are data the reader believes they are seeing. Where a floor
+  is genuinely wanted it becomes a VARIABLE (`$minsize`, default 20, selectable to 1 — 106 buckets
+  against 538), so the exclusion is the reader's choice rather than an invisible one.
+  **The guard for it had the same bug twice over**: it exempted by PANEL, so the exemption held for
+  the cross table would have silently re-blessed a `limit 60` added beside it (exemptions are keyed
+  on the EXPRESSION now), and it skipped floors of ZERO as harmless when `written > 0` is the
+  defect's commonest form — it reads as "ignore the empty rows" and means "never draw a resource
+  that stopped". **And the first mutation run scored 3 of 4 "caught" on mutations that were
+  NO-OPS** (the panel's SQL had no `group by` to replace), which is this file's most-repeated trap:
+  assert the mutation changed the artifact before believing the result.
 - **PORTAINER CE LOCKS ITSELF FIVE MINUTES AFTER FIRST START** if no admin account has been
   created — "the Portainer instance timed out for security purposes" — and only a restart reopens
   the window. Measured 2026-08-27: up at 11:52, locked at 11:57. `--admin-password-file` reading a
