@@ -2087,6 +2087,51 @@ runbook: **[muffin-deployment/README.md § Observability](muffin-deployment/READ
   `hasLocalExchange(country)` in TypeScript. Measured: all 281 sit in countries with no
   `market.exchange` row (Cayman 118, Bermuda 56, Luxembourg 20, Russia 16). Same-fact-in-two-places,
   which this file already records as certain to drift.
+- **EGRESS IS OBSERVABLE WITHOUT TLS INTERCEPTION: THE HOSTNAME IS IN THE ClientHello, IN
+  PLAINTEXT.** `http-cache` sits in FRONT of openbb-api, so openbb's own calls to yfinance never
+  traverse it — and neither do firecrawl, the agent's LLM traffic or opensandbox. conntrack cannot
+  name them (L3/L4: the hostname is resolved and gone), and a DNS-response map needs a logging
+  resolver plus Docker DNS reconfiguration and still guesses on shared CDN addresses. **SNI needs
+  none of that.** `muffin-egress.py` filters ClientHellos in the KERNEL — 25 BPF instructions,
+  measured — and parses `server_name`. Live within a minute of deploying:
+  `muffin_langgraph-api -> api.smith.langchain.com`, `muffin_openbb-api -> publicreporting.cftc.gov`.
+  **10 MB RSS, 0% CPU** against a 40-60 MB prediction.
+- **A FORWARD PROXY CANNOT DO THIS, AND WOULD REPORT A CONFIDENT ZERO.** openbb-api carries
+  `requests`, `httpx` AND `aiohttp` (measured), and aiohttp ignores `*_PROXY` unless
+  `trust_env=True` is passed explicitly, while modern yfinance fetches through `curl_cffi`. The
+  obvious design would have silently missed the single most important provider.
+- **FOUR DEFECTS IN THAT COLLECTOR THAT ONLY APPEARED BY RUNNING IT.** (1) `for line in
+  proc.stdout` READS AHEAD and will not yield until its buffer fills, so a low-rate stream produced
+  an EMPTY metrics file after nineteen seconds of real traffic. Use `iter(readline, '')`. (2)
+  tcpdump's stderr on `/dev/null` means an unparseable filter leaves a collector running happily
+  for ever writing nothing. (3) **`-i any` CAPTURES THE SAME PACKET THREE TIMES** — on the veth, on
+  `docker_gwbridge` and on the NIC — with the source rewritten by NAT along the way
+  (`172.18.0.32` becoming `10.0.1.111`), which would treble every count AND file one connection
+  under two different containers; dedupe on the SOURCE PORT, which survives NAT. (4) An INBOUND
+  ClientHello is identical in shape to ours, so every visitor arriving through Cloudflare counted
+  as egress — `muffin-grafana.rafiki.guru` appeared as an external host *we* call, under a metric
+  named `egress`. Filter to RFC1918 sources.
+- **THE GWBRIDGE ADDRESS IS THE ONE THAT MATTERS, AND `docker inspect` DOES NOT EXPOSE IT.** A
+  container reaches the internet through `docker_gwbridge`, so its ClientHello carries a
+  `172.18.x` source while `.NetworkSettings.Networks` lists only the overlay `10.0.x` address —
+  mapping the overlay alone leaves every external connection labelled with a bare IP.
+  `docker network inspect docker_gwbridge` names endpoints `gateway_<sandboxid>`, joined back on
+  the container's SandboxID prefix: **31 of 32 resolve**.
+- **IT COUNTS CONNECTIONS, NOT REQUESTS, AND IS NAMED ACCORDINGLY.** HTTP keep-alive reuses one
+  connection for many requests — demonstrated while testing, when a driven openbb call produced NO
+  new ClientHello because the connection already existed. The panel that shipped one PR earlier
+  claimed openbb requests "actually left the node", which was true for the seven direct providers
+  and an OVERCLAIM for openbb (its misses go to openbb-api *inside* the swarm). Same failure the
+  `rows_estimate.*` naming exists to prevent, one file over.
+- **openbb's `use_cache` DOES NOT CACHE PROVIDER DATA.** It defaults to True already and covers
+  SEC/cboe symbol DIRECTORIES — the parameter's own description says "the results of the function
+  are not cached", which is why the only sqlite files are `sec_*`. So caching yfinance through
+  openbb needs TLS interception, and the measured case for it is currently weak: the openbb-layer
+  cache hit ratio is **0%** (ingestion requests are unique) and openbb-api opened ONE external
+  connection in the first observation window. `/root/OpenBBUserData/cache` is now a volume —
+  measured correction, it is NOT lost per deploy (openbb-api ran 42 hours across many, because
+  `docker stack deploy` only replaces a service whose SPEC changed), only on an image bump, reboot
+  or OOM kill.
 - **GRAFANA'S SQL DATABASE NAME BELONGS IN `jsonData`, AND THE WRONG PLACE STILL CONNECTS.**
   Grafana 11+ moved it there; the deprecated top-level `database:` connects perfectly — health says
   `Database Connection OK` and every panel returns rows — but the settings UI reads
