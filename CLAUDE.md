@@ -2040,6 +2040,53 @@ runbook: **[muffin-deployment/README.md § Observability](muffin-deployment/READ
   rather than `rows.*`, because a number that is not what its name says is the failure mode this
   file is mostly about. `reltuples` is **-1** for a never-analysed relation and must be skipped
   rather than recorded.
+- **`written` IS NOT A DRAIN SIGNAL, AND TWO LIVE STALLS WERE FOUND BY EYE BECAUSE NOTHING
+  COMPUTED A RATE.** `security-statements` returned `written: 240, remaining: 8668`
+  **byte-identical on five consecutive runs** while the head of its backlog already held 15-27
+  statements each; `security-eps-history` sat at 300 re-asking an exhausted quota. Both reported
+  `ok: true` and both were invisible to every count. `backlog_sample` had the depth all along —
+  `market.backlog_drain` now computes the DERIVATIVE (a 7-day `regr_slope`, because a two-point
+  delta across an outage reports an absurd rate), and `FLAT` with a non-zero depth is an alert.
+  **A growing backlog gets NULL rather than a negative ETA**: several legitimately grow, and a
+  forecast for a queue moving away from empty reads as reassurance.
+- **AND A DRAINING BACKLOG IS NOT NECESSARILY GOOD NEWS — the drain rate is meaningless without
+  the negative cache beside it.** On 2026-08-13 `pending_industry` reached zero while ~8,300
+  securities were marked permanently unanswerable, and the depth curve of that is IDENTICAL to a
+  healthy drain. `backlog_drain` reports `draining_by_marking` when depth falls while the matching
+  `%_missing_at` population rises at a comparable rate. The pairing is a CONTROL TABLE
+  (`market.backlog_negative_cache`), not string surgery: `pending_metrics` has no negative cache
+  at all, `pending_ticker` pairs with `figi_missing_at`, and this schema has been bitten three
+  times keying on an identifier that merely looked regular.
+- **SEC IS ADDRESSABLE BY CIK AND FETCHED BY TICKER, AND A BACKLOG NEEDS BOTH.** Migration 088's
+  `no_currency` population gated on `us_ticker is not null` — but a US ticker is OpenFIGI's US
+  lookup, a thin OTC foreign-ordinary line for most foreign companies, so D05.SI and 005930.KS
+  looked addressable and were not. Measured: **0 securities without a CIK have ever received a
+  `sec`-sourced statement**, while 2,416 such securities starved the 3,328 SEC can serve.
+  Replacing the ticker test with the CIK was ALSO wrong and the behaviour test caught it in one
+  run: the resource passes `us_ticker` and skips SEC when it is null, so a CIK-holder with no US
+  line would be queued for a fetch that cannot be made. **The ticker is HOW, the CIK is WHETHER.**
+- **THE ENDPOINT YOU ALREADY CALL MAY ANSWER WHAT YOU ARE BUYING ELSEWHERE — ask it a different
+  question before adding a provider.** `security-eps-history` bought actual-vs-estimate from
+  alpha_vantage at **25 calls a DAY**, one symbol per call, reaching 79 securities in weeks — all
+  of which already had derived EPS. `equity/calendar/earnings?provider=nasdaq` is the endpoint the
+  FORWARD calendar already uses, and nobody had asked it for a PAST range: measured 2026-08-28, one
+  3-day window returns **643 companies** with `eps_actual`, `eps_consensus` and `surprise_percent`,
+  and 2018 answers as readily as 2024. Its `surprise_percent` is a FRACTION through the wrapper
+  (XOM `-0.0435` against a computed `-4.35%`) — fourth instance of that confusion. Predominantly
+  US plus ADRs, stated rather than assumed: of 643 symbols only 3 carried an exchange suffix.
+- **AN ESTIMATE IS NOT IN A FILING, WHICH IS WHY SURPRISE HISTORY CANNOT BE DERIVED.** Actual EPS
+  is computed from statements for **8,923 securities over 20 years**; the consensus that existed
+  BEFORE a 2019 report is a fact only someone recording it at the time holds. Checked and rejected
+  as sources: FMP `estimates/historical` is per-SYMBOL gated (AAPL/MSFT return 10 rows; SAP.DE,
+  005930.KS and BHP.AX all 402, and its 502 was masking that 402); yfinance
+  `estimates/consensus` is global and free but returns PRICE TARGETS, not EPS estimates;
+  seeking_alpha `forward_eps` answers "No estimates data was returned".
+- **A RULE THAT LIVES IN THE RESOURCE AND NOT IN THE VIEW MAKES A BACKLOG REPORT WORK NOBODY CAN
+  DO.** `pending_local_symbol` listed 281 securities while `security-local-symbols` reported
+  `no addressable securities pending` on every run — both correct, because the resource filters by
+  `hasLocalExchange(country)` in TypeScript. Measured: all 281 sit in countries with no
+  `market.exchange` row (Cayman 118, Bermuda 56, Luxembourg 20, Russia 16). Same-fact-in-two-places,
+  which this file already records as certain to drift.
 - **GRAFANA'S SQL DATABASE NAME BELONGS IN `jsonData`, AND THE WRONG PLACE STILL CONNECTS.**
   Grafana 11+ moved it there; the deprecated top-level `database:` connects perfectly — health says
   `Database Connection OK` and every panel returns rows — but the settings UI reads

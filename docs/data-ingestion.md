@@ -358,6 +358,8 @@ stopped price ingestion for three days while every signal said "healthy".
 | `sec-cik-map` | 30 days | SEC `company_tickers.json` | — (one file, applied in one statement) | `security.cik` |
 | `security-xbrl` | 10 min | **SEC XBRL direct**, not openbb | `pending_xbrl` | `security_metric` (`sec-xbrl`) |
 | `security-price-history` | 10 min | yfinance `interval=1W` | `pending_price_history` | `security_price` (`grain = 'weekly'`) |
+| **`security-daily-history`** | 10 min | yfinance `interval=1d`, `start_date=1970-01-01` | `pending_daily_history` | `security_price` (`grain = 'daily'`) — **20+ years**, whole universe |
+| **`earnings-history`** | 10 min | nasdaq `calendar/earnings`, walked BACKWARD | `earnings_history_cursor` | `security_eps_history` (`source_code = 'nasdaq'`) |
 | `security-share-stats` | 10 min | yfinance | `pending_share_stats` (drives BOTH endpoints) | `security_share_stats`, `security_estimate` |
 | `security-news` | 10 min | yfinance | `pending_news` | `news_article`, `news_security` |
 | `security-symbol-repair` | 10 min | yfinance (one probe per candidate) | `pending_symbol_repair` | `security_provider_symbol` |

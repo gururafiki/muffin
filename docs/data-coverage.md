@@ -3,6 +3,14 @@
 **Measured against production 2026-08-19.** Every number here was counted, not estimated. How the
 pipeline works is a separate document: [data-ingestion.md](data-ingestion.md).
 
+> **Two live stalls were found on 2026-08-28 and both were invisible to every count here.**
+> `security-statements` returned `written: 240, remaining: 8668` byte-identical on five consecutive
+> runs — the `no_currency` population admitted 2,416 securities SEC can never answer for (no CIK),
+> starving the 3,328 it can. And `security-eps-history` re-asked an exhausted 25-a-day quota for
+> data the forward earnings calendar returns 643 companies at a time. **A coverage figure that is
+> not moving is the thing to look at**; `market.backlog_drain` now names it (`FLAT`,
+> `draining_by_marking`) rather than leaving it to be spotted by eye.
+
 > **Coverage is now measured continuously, so prefer the live view over the tables below.**
 > `market.coverage_current` (migration 131) computes completeness across ten dimensions — country,
 > sector, industry, cap band, style, MSCI tier and region, income group, currency, security type —
