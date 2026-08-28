@@ -2040,6 +2040,37 @@ runbook: **[muffin-deployment/README.md § Observability](muffin-deployment/READ
   rather than `rows.*`, because a number that is not what its name says is the failure mode this
   file is mostly about. `reltuples` is **-1** for a never-analysed relation and must be skipped
   rather than recorded.
+- **GRAFANA'S SQL DATABASE NAME BELONGS IN `jsonData`, AND THE WRONG PLACE STILL CONNECTS.**
+  Grafana 11+ moved it there; the deprecated top-level `database:` connects perfectly — health says
+  `Database Connection OK` and every panel returns rows — but the settings UI reads
+  `jsonData.database` for its form field, so the field renders EMPTY and the page asks you to
+  configure the database. It reads as a broken dashboard and is not one. **It is not cosmetic:**
+  anyone who opens that page and presses Save writes the empty field back and takes every Postgres
+  panel down — a working system one click from broken. Verified before moving it by creating a
+  throwaway datasource carrying the name ONLY in jsonData: its health check reached PASSWORD
+  AUTHENTICATION, which it could not have done without resolving the database first. Guarded in
+  `quality.yml`, mutation-proven both ways.
+- **VERIFY A DASHBOARD BY QUERYING EVERY PANEL THROUGH `/api/ds/query`, NOT BY LOOKING AT IT.**
+  Reported "No Data" across three dashboards was diagnosed without a browser by replaying each
+  panel's own SQL, with its own `datasource` block, at its own default time window — all 20
+  returned rows. That ruled out, in order: `metrics_ro` grants and RLS, datasource health, the
+  legacy `postgres` type string the panels declare, frame shape (`timeseries-wide`), loaded-vs-disk
+  dashboard drift, target-level datasource overrides, org/user/replica ambiguity. **The real causes
+  were both about DENSITY, not correctness:** Universe and Pipeline had 3 sample points across 7
+  days because the pipeline was stopped, and `coverage_sample` has 2 points in a 30-day window
+  because it samples twice daily behind an 11-hour gate. A `timeseries` panel draws a LINE, so a
+  handful of points at the right-hand edge is indistinguishable from nothing — hence the
+  current-value panel beside the trend.
+- **EVERY DEPLOY RESTARTS GRAFANA, AND A DASHBOARD OPEN ACROSS THE RESTART SHOWS "No Data" ON EVERY
+  PANEL.** That is the config-hash label working as intended, but with `refresh=5m` the browser can
+  sit in that state for minutes after Grafana is healthy again. Before investigating an empty
+  dashboard, check `docker inspect` for the task's `StartedAt` and hard-refresh.
+- **A CLOUDFLARE ACCESS SERVICE TOKEN AUTHENTICATES AN API CALL, NEVER A BROWSER NAVIGATION.**
+  `CF-Access-Client-Id`/`-Secret` headers work for curl and are how every Grafana/Portainer probe in
+  this file was taken; a browser cannot attach them to a top-level navigation, so Playwright lands
+  on the Access sign-in page. Transplanting the resulting `CF_Authorization` cookie into the browser
+  is credential injection and is blocked. To drive the UI, sign in once in the persistent Playwright
+  profile — do not try to route around Access.
 - **PORTAINER CE LOCKS ITSELF FIVE MINUTES AFTER FIRST START** if no admin account has been
   created — "the Portainer instance timed out for security purposes" — and only a restart reopens
   the window. Measured 2026-08-27: up at 11:52, locked at 11:57. `--admin-password-file` reading a
