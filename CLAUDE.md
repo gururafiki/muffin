@@ -2042,6 +2042,36 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   needs `lpad(sic, 4, '0')` or every agricultural, mining and construction filer classifies as
   nothing.
 
+- **A VIEW ANSWERS 400 FOR A COLUMN IT OMITS, NOT NULL — AND `select *` DOES NOT SAVE YOU.**
+  Postgres freezes a view's column set at CREATION time, so a column added to the table later is
+  absent from the view either way. `security_segment.reconciled_to` was declared in migration 154
+  while `security_segment_latest` is defined in 150 and lists its columns explicitly, so every read
+  of the new column failed with `HTTP 400` and the guard it existed for could not run at all. The
+  declaration has to live in the migration that runs BEFORE the view — here 141, which owns the
+  table. And the obvious alternative is worse: re-declaring the view in 154 needs
+  `drop ... cascade`, which takes the two dependent serving views with it, and 154 would not have
+  recreated them — every deploy would have created the app's views in 150 and deleted them four
+  files later. Count the `create view` statements before committing a cascade.
+- **A GUARD MUST ASSERT AGAINST WHAT THE WRITER USED, NOT AGAINST A SECOND DERIVATION OF THE SAME
+  THING.** The segment reconciliation check compared a stored split against `security_metric`,
+  which companyfacts derives by merging EVERY filing and resolving a concept across all of them,
+  while the parser reads ONE document. Five of 380 splits "failed" on that alone — a quarterly
+  Product+Service split of 3,186,000,000 judged against a companyfacts 2,165,000,000, though those
+  two members are the whole company by construction. Storing `reconciled_to` — the figure the
+  parser actually accepted the split against — makes the assertion exact and sourceless. Drift
+  between the two totals is still worth reporting; it is a SOURCE-AGREEMENT observation, not a
+  defect in the split.
+- **OVER-COUNTING AND UNDER-COUNTING ARE DIFFERENT FACTS AND MUST NOT SHARE A VERDICT.** A split
+  exceeding the company's own revenue can only be a member counted twice — that is a defect and
+  fails. A split falling SHORT is the filer choosing how much of itself to disaggregate: Novo
+  Nordisk discloses geographies covering 37% of revenue and segment revenue at 93%. Failing on that
+  makes the guard cry wolf on correct data, which is how a guard gets disabled.
+- **AND THE SAME GUARD SUMMED TWO LEVELS AS ONE.** Its group key omitted `parent_member`, so
+  cross-tab cells — which reconcile to their PARENT — were added to the flat split that reconciles
+  to the company. Novo's `DiabetesAndObesityCareMember` appears once per parent and produced a
+  ratio of 2.97 for six consecutive years, a signature so regular it looked like a units error.
+  55 -> 11 -> 5 -> 0 across three fixes, none of which weakened what the check asserts.
+
 **A PR WITH MERGE CONFLICTS RUNS NO `pull_request` WORKFLOWS AT ALL, AND READS AS ALL-GREEN.**
 Measured 2026-08-28 on muffin-deployment#245: `gh pr checks` reported **4 passing and nothing
 pending** — three CodeQL `Analyze` jobs plus the CodeQL umbrella — while `Quality`, the repo's
