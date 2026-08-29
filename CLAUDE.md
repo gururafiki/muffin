@@ -1873,6 +1873,83 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   nothing matches and the check fails via its own `checked == 0` guard. Both "caught" the mutation
   and neither tested the rule. Only reverting BOTH — the exact pre-fix state — reproduces the real
   failure. Ask what the mutation makes the code DO, not merely whether the guard went red.
+- **A BACKLOG ORDERED BY A PROPERTY OF THE *ENTITY* IS DEPTH-FIRST, AND EVERY COUNTER SAYS
+  HEALTHY WHILE IT IS.** `pending_segments` shipped `order by best_weight desc, accession_number`.
+  Fund weight belongs to the SECURITY, so every one of a company's filings carries the same sort
+  key and the accession tiebreak walks that company's entire history before the next company is
+  touched. Measured 2026-08-29: **440 filings parsed, belonging to 14 securities** (69, 69, 69, 65,
+  61, 57, 39, 15, 10, 9, 9, 9, 8, 5 each) out of ~3,500 SEC filers — a day spent on Amazon's 1998
+  10-Q while Microsoft, Alphabet and Meta had no segment row at all. `written` read as 240-450 rows
+  a run, `remaining` fell, `ok` was true every run and the reconciliation guard passed, **because
+  the rows being written were correct — they were the wrong rows first.** The consequence was that
+  exactly ONE concept had two companies on it, so "compare AWS to Google Cloud" was blocked on an
+  ORDERING, not on a provider, a vocabulary or a schema. The fix is a per-entity `row_number()` as
+  the FIRST sort key (`round`), the entity's importance second; annuals before quarterlies within a
+  company, because the serving view is annual. Reproduce offline before changing it — at 245,000
+  filings a page of 20 returned twenty filings of one company and now returns twenty companies, and
+  the window function cost 323 → 489 ms.
+- **A MEMBER'S KIND IS NOT ITS AXIS'S KIND.** A company whose reportable segments are GEOGRAPHIC
+  files countries on `us-gaap:StatementBusinessSegmentsAxis`, because that is what it reports.
+  Measured there: `country:TW` 299.4bn, `srt:NorthAmericaMember` 178.2bn, `srt:AsiaPacificMember`
+  53.8bn. Reading the kind off the axis put **41 of 113** unmapped members in a curation queue
+  asking a human to give Taiwan a *product* concept — a wrong answer waiting to be curated rather
+  than a missing one — and left a latent bug: `derive_segment_classification` picks the axis with
+  the most MAPPED members, so mapping one region member would write WHERE a company earns into
+  `security_taxonomy` as WHAT it does. `market.segment_member` resolves the published members and
+  the ISO ones are **DERIVED from `market.countries`**, never authored; `country_iso2` stays null
+  for a region, because `us-gaap:NonUsMember` is everywhere-except-the-US and
+  `ifrs-full:CountryOfDomicileMember` resolves per filer.
+- **A COMPLETENESS NUMBER THAT IS STRUCTURALLY UNREACHABLE GETS IGNORED WITHIN A WEEK, AND TAKES
+  THE REAL REGRESSIONS WITH IT.** Segment disclosure is SEC-only, so 8,834 of 12,350 equities can
+  never have one; putting `segments` in `required_facet` would report ~71% of the universe
+  permanently broken against correct data — the ETF/`price` miscalibration at four times the scale.
+  The fix is a **DIMENSION, not a required facet**: `sec_filer` splits the population, so segment
+  coverage is measured against companies that can have it. Measured on the fixture — SEC filers
+  75%, non-filers 0%, whole universe 22.5%, that last being exactly the misleading figure the split
+  exists to correct.
+- **TWO ACCESS PATTERNS NEED TWO OBJECTS, AND A SINGLE-SECURITY PROBE CANNOT SEE THE PROBLEM.**
+  Measured at 1.92M qualifying rows: `security_segment_current` filtered to ONE security **3.8 ms**,
+  whole view **6,108 ms**, `pending_segment_alias` **7,508 ms** against the role's 8s timeout. So
+  the app was fine and every dashboard query was a few hundred thousand rows from `57014` — fourth
+  occurrence after `fund_sector_weight`, `security_facets` and `price_series`. **An index was the
+  first hypothesis and the number did not move** (6,225 vs 6,108); the cost is intrinsic, since
+  `security_segment_latest` dense-ranks the whole table. Materialised as `security_segment_spine`,
+  defined **`select *` over the view** so the two cannot drift in definition, only in freshness:
+  7,508 → **28 ms**, 6,077 → **0.4 ms**. Its refresh is its OWN RPC because it measured 7,242 ms
+  and a PostgREST RPC is one statement — folding it into `refresh_facets` would have taken the
+  screener's spine down with it — and it returns `duration_ms` so the walk toward that ceiling is a
+  chart rather than a surprise.
+- **AND WHEN A FACET IS ADDED TO A VIEW WITH A CEILING, READ IT OFF THE BOUNDED RELATION.**
+  `distinct security_id from security_segment` is 56 ms at 612,000 facts and **grows with history
+  depth** (~180 rows per company per filing, 33,000 filings queued); the same question off the
+  spine is **5.8 ms** and bounded by companies × members. That one substitution took
+  `coverage_current`'s regression from +42% to +20%. Exactly why `price_history_from` is a column
+  and not a 7.9 s scan of `security_price`.
+- **A MEASUREMENT INSIDE A `DO` BLOCK IS NOT A MEASUREMENT OF THE STATEMENT.** Testing whether a
+  function-level `SET statement_timeout` re-arms the timer, a `DO` block reported that it DOES —
+  because `perform f()` inside it is a nested statement that gets the new value. At statement
+  level, a plain function, a `SET`-decorated function and `set_config` in the body are all
+  cancelled identically. CLAUDE.md was right and the first measurement was the artifact; the escape
+  from the 8-second RPC ceiling is a second RPC or pg_cron, never a `SET`.
+- **A GUARD'S SENTINEL CAN MATCH A SUBSTRING OF SOMETHING ELSE AND REPORT A REAL MUTATION AS
+  NOT-APPLIED.** Checking that a `sec_filer` DIMENSION had been removed with
+  `definition like '%sec_filer%'` matched the surviving `is_sec_filer` base COLUMN, so a mutation
+  that had applied perfectly reported "did not reach the db". The failure direction is the safe one
+  — it under-claims rather than certifying a no-op — but it costs a real guard. Anchor a sentinel
+  on the syntax that distinguishes the two (`union all.*'sec_filer'::text`), not on the name.
+- **A MIGRATION THAT DROPS A VIEW MUST DROP ITS OWN DEPENDENTS, OR IT ONLY WORKS BY ACCIDENT OF
+  ORDERING.** Migration 157 passed four full passes and could not be re-applied ALONE: every
+  mutation returned `cannot drop view ... because other objects depend on it`, so four "guarded"
+  verdicts would have been four no-ops. It survived the chain only because migration 141 happened
+  to run earlier and clear them — the same accidental safety recorded for migration 13's matview.
+  A named list is right for a file's OWN views; `pg_depend` is right for whatever a LATER migration
+  may build on yours, and it must handle `relkind in ('v','m')` separately, since `drop view` on a
+  matview raises and so does the converse.
+- **FOUR MIGRATIONS DEFINING ONE VIEW WITH FOUR COLUMN LISTS MEANS IT IS DROPPED ON EVERY DEPLOY.**
+  `create or replace view` can only APPEND, so the earliest definer can never replace the latest
+  one's shape and must drop — a real window, every deploy, in which the view and its dependents do
+  not exist. Tolerable only while nothing user-facing reads them. Consolidating the definitions is
+  the fix; adding a fifth definer is not.
 - **A GUARD CAN FIRE ON ITS OWN BLIND SPOT, AND THAT IS NOT DRIFT.** `check_derived_metrics` began
   reporting `compared 0 values` the day `security-xbrl` started: it samples `security_metric` by
   recency, the newest rows were all `sec-xbrl`, and those are written straight from company facts
@@ -2071,6 +2148,31 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   to the company. Novo's `DiabetesAndObesityCareMember` appears once per parent and produced a
   ratio of 2.97 for six consecutive years, a signature so regular it looked like a units error.
   55 -> 11 -> 5 -> 0 across three fixes, none of which weakened what the check asserts.
+
+- **TWO JURISDICTIONS, OPPOSITE ANSWERS, AND ONLY MEASUREMENT COULD TELL THEM APART — which is why
+  the plan gated both.** With live API keys, 2026-08-29:
+  **KOREA (DART) PASSES.** A full 7.1 MB XBRL instance with definition and presentation linkbases,
+  carrying `ifrs-full:ProductsAndServicesAxis` (28), `SegmentConsolidationItemsAxis` (20),
+  `SegmentsAxis` (16), `GeographicalAreasAxis` (8) — **the same axes the parser already handles for
+  Diageo**. SK Gas's geography split reconciles exactly to 7,050,068,258,000 KRW. It needed one
+  control-table row and three parser rules, not a new parser.
+  **JAPAN (EDINET) FAILS, exactly like ESEF.** Nintendo's FY2026 annual report is a 3.66 MB
+  instance with **8 distinct dimensions and ZERO segment axes** — equity components,
+  consolidated/non-consolidated, shareholders, directors, share classes — and the same 8 for a
+  small manufacturer, so it is the taxonomy rather than the company. The segment note is
+  `jpcrp_cor:NotesSegmentInformationEtcConsolidatedFinancialStatementsTextBlock`: **escaped HTML in
+  a text block**. Extracting it is per-filer HTML scraping with Japanese labels, a different
+  reliability class from parsing XBRL. Do not assume a jurisdiction publishes XBRL means it
+  publishes DIMENSIONED XBRL — three of the four checked (ESEF, EDINET, and FMP's paid feed) do not.
+- **DART IS SLOW FROM OUTSIDE KOREA AND THAT IS A DESIGN INPUT.** Its 3.6 MB `corpCode.xml` timed
+  out twice at 240 s (2.6 MB received) and a 1.2 MB XBRL took **115 s**, against EDINET's 3.66 MB
+  in 6.5 s and SEC's 10.92 MB in 0.37 s. A Korean backlog is therefore bounded by transfer time
+  rather than by a rate limit, and needs a much smaller page than `security-segments`' twenty.
+- **THE DART API KEY IS NOT ON THE KEY-MANAGEMENT PAGE.** `인증키 신청/관리` shows only the
+  application's status (승인/반려); the key itself is on **마이페이지 → 오픈API 이용현황**
+  (`/mng/apiUsageStatusView.do`), beside the usage chart it needs the key to draw. EDINET's is
+  issued at `https://api.edinet-fsa.go.jp/api/auth/index.aspx?mode=1` — `.aspx`, not `.html`, which
+  redirect-loops — behind Azure B2C, and the registration screen needs pop-ups allowed for that host.
 
 **A PR WITH MERGE CONFLICTS RUNS NO `pull_request` WORKFLOWS AT ALL, AND READS AS ALL-GREEN.**
 Measured 2026-08-28 on muffin-deployment#245: `gh pr checks` reported **4 passing and nothing

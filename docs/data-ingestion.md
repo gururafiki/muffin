@@ -158,6 +158,8 @@ The app should never join five tables on a phone.
 | **`security_metric_series`** | metric history with the symbol — what the charts and statement tables read | **ONE ROW PER FISCAL PERIOD.** Rows for the same (security, metric, period_type) whose period ends fall within 7 days are one period reported by two sources; the highest-priority source wins, which also picks the true fiscal period end. See §8 |
 | `security_style` | growth/value, ranked within a (tier × cap band) cohort | a plain view — a pure function of `security_fundamentals`, with nothing extra to keep fresh |
 | `macro_current` | latest value per macro series, unit-converted | the fraction→percent conversion lives HERE so no reader has to know which provider sent which |
+| **`security_segment_spine`** | every business line, for anything that scans more than one security | **MATERIALIZED**, refreshed hourly. `select *` over `security_segment_current`, so the two cannot drift in definition. The live view is 3.8 ms for one security and **6.1 s for all of them**; a stock page reads the view, an aggregate reads this |
+| `security_segment_geography` | where a company earns | published members only (ISO countries + standard regions), so **no curation was involved**. A filer's own region extension is absent until it has a `segment_member` row |
 | `pending_*` (9 views) | the backlogs that drive each resource | see §5 |
 
 ---
@@ -357,7 +359,7 @@ stopped price ingestion for three days while every signal said "healthy".
 | `security-metrics` | 10 min | **none — SQL only** | `pending_metrics` (a drift counter, not a queue) | `security_metric` |
 | `sec-cik-map` | 30 days | SEC `company_tickers.json` | — (one file, applied in one statement) | `security.cik` |
 | `security-xbrl` | 10 min | **SEC XBRL direct**, not openbb | `pending_xbrl` | `security_metric` (`sec-xbrl`) |
-| **`security-segments`** | 10 min | **SEC filing XBRL instance**, not the API | `pending_segments` | `security_segment` — revenue, operating income, capex, depreciation, cost of revenue and assets PER BUSINESS LINE |
+| **`security-segments`** | 10 min | **SEC filing XBRL instance**, not the API | `pending_segments` — **breadth-first**, see below | `security_segment` — revenue, operating income, capex, depreciation, cost of revenue and assets PER BUSINESS LINE |
 | **`security-filing-history`** | 10 min | SEC submissions API | `pending_filing_history` | `security_filing` (full history) + `security.sic` + `filer_profile` + `security_former_name` |
 | `security-price-history` | 10 min | yfinance `interval=1W` | `pending_price_history` | `security_price` (`grain = 'weekly'`) |
 | **`security-daily-history`** | 10 min | yfinance `interval=1d`, `start_date=1970-01-01` | `pending_daily_history` | `security_price` (`grain = 'daily'`) — **20+ years**, whole universe |
@@ -373,7 +375,7 @@ stopped price ingestion for three days while every signal said "healthy".
 | `promote-listing` | 10 min | OpenFIGI | `exchange_listing` | `security` + identifiers |
 | `promote-wave` | 10 min | — (pure SQL) | `pending_promotion` | `security` + identifiers, **≤100/run** |
 | `macro-indicators` | 6 h | openbb (oecd/fed/fred/yfinance) | `macro_indicator` | `macro_observation` |
-| `facets-refresh` | 60 min | — (pure SQL) | — | refreshes `symbol_security` **and** `security_facets`, both **concurrently** |
+| `facets-refresh` | 60 min | — (pure SQL) | — | refreshes `symbol_security` **and** `security_facets` concurrently, then calls `refresh_segment_spine()` as a **second RPC** — one statement cannot hold all three under the role's 8 s timeout |
 | `security-refresh` | 10 min | yfinance | one symbol | performance, cap, fundamentals, statements |
 | `instrument-prices` | 24 h | yfinance | `instruments` | `prices` |
 | `instrument-profile` | 7 d | yfinance | `instruments` | `instruments` |
@@ -414,6 +416,21 @@ flowchart TD
    days that way.
 5. **`remaining` counts SECURITIES.** Counting rows and subtracting from a count of securities
    clamps to zero, so a backlog thousands deep reports itself drained.
+6. **A backlog ordered by a property of the ENTITY is depth-first, and that is invisible.**
+   `pending_segments` ranked by fund weight, which every filing of a company shares — so the
+   accession tiebreak walked one filer's entire history and 440 parsed filings belonged to
+   **14 securities**. Every counter said healthy because the rows were correct; they were the
+   wrong rows first. Where breadth matters, rank by a per-entity `row_number()` **first** and the
+   entity's importance second.
+7. **Every backlog needs a row in `market.backlog_negative_cache`.** It is what lets
+   `backlog_drain` tell a queue that drained by WORKING from one that drained by MARKING — the
+   2026-08-13 signature, where a backlog reached zero while ~8,300 securities were negative-cached
+   and the depth curve looked identical to health. A backlog with no row still gets a depth and a
+   slope and silently loses that discrimination. **Six are still unclassified** (`pending_news`,
+   `pending_insider`, `pending_filings`, `pending_management`, `pending_eps_history`,
+   `pending_fx_history`) — deliberately not guessed at, because naming the wrong column asserts a
+   pairing that does not hold, which is worse than the absence. Nothing enforces this yet; a CI
+   guard over `pg_class` would.
 
 ---
 
@@ -518,6 +535,130 @@ information-technology BY PROFIT**.
 migration 137 established: the five-minute rotation paces **yfinance**, and these spend SEC's
 uncontended budget. In the rotation a 30,072-filing backlog would take ~200 days; at `2-59/5` it
 lands in under a week at ~0.7 req/s against SEC's documented 10.
+
+#### The order is the feature, and the obvious order was wrong (2026-08-29)
+
+**`pending_segments` shipped ordered by fund weight, and fund weight is a property of the
+SECURITY.** Every filing of a company therefore carries the same sort key, the accession tiebreak
+runs through that company's whole history, and the queue is depth-first. Measured in production:
+**440 filings parsed, belonging to 14 securities** out of ~3,500 SEC filers —
+
+```
+filings per security: 69, 69, 69, 65, 61, 57, 39, 15, 10, 9, 9, 9, 8, 5
+```
+
+**Nothing here could report it.** `written` read as 240–450 rows a run, `remaining` fell, `ok` was
+true every run, and `check_segments_reconcile` passed — because the rows being written were
+**correct**. They were the wrong rows first. The pipeline spent a day on Amazon's 1998 10-Q while
+Microsoft, Alphabet and Meta had no segment row at all, so exactly **one** concept had two
+companies on it and the cross-company comparison the table exists for was blocked on an ordering.
+
+Migration 156 ranks by `round` — the filing's depth into its **own** company's history, with
+annuals before quarterlies — so one pass over ~3,500 filings covers every filer's latest annual
+report. The round is computed over PENDING filings only, so it self-rebalances; and a filing SEC
+could not serve an instance for is still stamped `segments_parsed_at`, so a company cannot wedge
+the queue on its own head.
+
+Reproduced offline at 245,000 filings (≈7× the live backlog) before anything was changed: a page of
+20 returned twenty filings of one company. Cost of the window function — page 323 ms → **489 ms**,
+count 467 ms → **857 ms**, against the PostgREST role's 8-second timeout.
+
+#### A member's kind is not its axis's kind (2026-08-29)
+
+`segment_axis.kind` is right for the axis and wrong for the member, because **a company whose
+reportable segments are geographic files countries on the BUSINESS axis.** Measured there:
+`country:TW` 299.4bn, `srt:NorthAmericaMember` 178.2bn, `srt:AsiaPacificMember` 53.8bn,
+`srt:SouthAmericaMember` 11.6bn, `us-gaap:EuropeMember` 0.8bn.
+
+Two consequences, one live and one latent. The curation queue asked a human to give Taiwan a
+**product** concept — 41 of 113 queued members were this, a wrong answer waiting to be curated
+rather than a missing one. And `derive_segment_classification` picks the axis with the most
+**mapped** members among `kind in ('product','business')`: nothing is wrong today because no
+geographic member has an alias, but the moment somebody reasonably maps `srt:NorthAmericaMember`,
+**where** a company earns would be written into `security_taxonomy` as **what it does**.
+
+`market.segment_member` (migration 157) holds the members whose meaning is **published** rather
+than filer-specific. The ISO ones are **derived from `market.countries`**, not typed out — the same
+discipline as migration 151 fetching SEC's 444 SIC codes, and the reason authored reference data
+once silently dropped Taiwan. `country_iso2` is deliberately null for a region: `us-gaap:NonUsMember`
+is *everywhere except the US*, and `ifrs-full:CountryOfDomicileMember` resolves per filer.
+
+It is a **control table**, so a region member the seed has not met is a row in Studio rather than a
+migration — and until it is one it inherits the axis's kind and appears in `pending_segment_alias`.
+Fail-visible, not fail-silent.
+
+The payoff is `market.security_segment_geography`: **where a company earns, with no curation at
+all.** A filer's own extension for a region (`bud:LatinAmericaWestMember`) is deliberately absent
+until someone gives it a row.
+
+#### Two access patterns, two objects (2026-08-29)
+
+Measured at 1.92M qualifying rows — 38.3% of production's `security_segment` rows qualify (annual,
+partition 1), so that is roughly a 5M-row table:
+
+| | |
+|---|---|
+| `security_segment_current`, filtered to ONE security | **3.8 ms** |
+| `security_segment_current`, whole view | **6,108 ms** |
+| `pending_segment_alias` | **7,508 ms** ← the 8 s role timeout |
+
+**So the app was fine and the dashboard was not** — every whole-table reader sat a few hundred
+thousand rows from `57014`, while every single-security probe said the view was healthy. Fourth
+occurrence of that shape after `fund_sector_weight`, `security_facets` and `price_series`.
+
+**An index was the first hypothesis and the number did not move**: a covering index gave 6,225 ms
+against 6,108. The cost is intrinsic — `security_segment_latest` dense-ranks the whole table and
+`security_segment_current` then runs `distinct on` plus three laterals over all of it.
+
+`market.security_segment_spine` is the matview, defined **`select *` over the view** so restating
+the pivot cannot make the two disagree about anything but freshness. Curation queue **7,508 → 28 ms**,
+geography **6,077 → 0.4 ms**, whole scan **6,108 → 1.3 ms**.
+
+**Its refresh is its own RPC, and that is not tidiness.** A PostgREST RPC is a SINGLE statement
+under the role's 8-second timeout, and `refresh ... concurrently` measured **7,242 ms** — folding it
+into `refresh_facets` would have taken the screener's spine down with the segment one.
+`refresh_segment_spine()` returns `duration_ms`, `facets-refresh` reports it, and it lands in
+`refresh_run`, so the walk toward that ceiling is a line on a chart. When it gets there the escape
+is the one migration 142 established: a pg_cron job, which has no PostgREST timeout at all.
+
+*(A function-level `SET statement_timeout` looks like it re-arms the timer and does not. Measured
+both ways: inside a `DO` block the nested statement gets the new value, so the escape appears to
+work; at statement level a plain function, a `SET`-decorated function and `set_config` in the body
+are all cancelled identically.)*
+
+#### Coverage: the denominator is the hard part (2026-08-29)
+
+`coverage_current` gained `segments`, `segment_geography`, `sic` and `weighted_industry` — and a
+**`sec_filer` dimension**, which is the part that matters. Segment disclosure comes from SEC
+filings and nowhere else, so **8,834 of 12,350 equities can never have one**. Adding `segments` to
+`market.required_facet` would report ~71% of the universe permanently broken against data that is
+correct: the same miscalibration that made ETFs read 0% complete because `price` was required of a
+type this pipeline has never stored bars for. A structurally unreachable completeness number gets
+ignored within a week, and the real regressions go with it.
+
+As a dimension the question stays answerable and honest. On the seeded fixture: SEC filers **75%**,
+non-filers **0%**, whole universe **22.5%** — that last figure being exactly the misleading number
+the split exists to correct. `coverage-must-not-require-the-impossible.sql` fails CI if `segments`
+ever becomes a required facet, or if the dimension stops splitting on the CIK.
+
+**The cost was measured before it was added, because `sample_coverage` is an RPC under the
+8-second timeout and migration 140 exists because one facet took this view to 7.9 s.** On a
+production-shaped database (27,600 securities, 3,500 SEC filers, 612,000 segment facts), the same
+definition with and without:
+
+| | |
+|---|---|
+| migration 140 definition | 172, 172, 177 ms |
+| + 5 facets + 1 dimension | 242, 245, 257 ms — **+42%** |
+| …with `segments` read off the **spine** | 202, 206, 214 ms — **+20%** |
+
+The difference between the last two is migration 140's own lesson applied again.
+`select distinct security_id from security_segment` is **56 ms** at 612,000 facts and **grows with
+history depth** — every filing adds ~180 rows per company and 33,000 are queued — while the answer
+it computes does not change. Off the spine (10,200 rows against 612,000) it is **5.8 ms**, bounded
+by companies × members rather than periods × metrics. Two of the five facets are free: `sic` and
+`cik` are columns on `market.security`, which `base` already joins for `price_history_from`.
+
 
 ---
 
@@ -732,6 +873,17 @@ reachable and **never scheduled** for weeks.
 XBRL dimension, then bump `market.segment_parser.version` to re-queue every filing. To make a line
 comparable across companies, add a `market.segment_concept` and a `market.segment_alias` row —
 `aapl:IPhoneMember` → `smartphones`. Both are control tables and survive a redeploy.
+
+**Work the curation queue from `market.pending_segment_alias`**, which ranks by **leverage rather
+than size**: number of companies sharing the member first (a concept is worth nothing until TWO
+companies sit on it), then the share of its own company the line represents. Revenue is shown for
+context and is deliberately **not** the sort key — it is in the filer's own currency, so ordering
+by it ranks by exchange rate and TSMC's TWD 3,272,600,000,000 outranks every US line.
+
+**Name a published member instead** (no deploy): a row in `market.segment_member`. A member whose
+meaning does not depend on the filer — a country, a standard region — needs a *label and a kind*,
+not a concept. The ISO rows are derived from `market.countries`, so only regions are ever added by
+hand.
 
 **Add a macro series** (no deploy): a row in `market.macro_indicator` — route, provider, params and
 `unit`. The `macro-indicators` resource drives whatever it finds; there is no list in code.
