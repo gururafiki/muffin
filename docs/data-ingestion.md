@@ -357,8 +357,8 @@ stopped price ingestion for three days while every signal said "healthy".
 | `security-metrics` | 10 min | **none — SQL only** | `pending_metrics` (a drift counter, not a queue) | `security_metric` |
 | `sec-cik-map` | 30 days | SEC `company_tickers.json` | — (one file, applied in one statement) | `security.cik` |
 | `security-xbrl` | 10 min | **SEC XBRL direct**, not openbb | `pending_xbrl` | `security_metric` (`sec-xbrl`) |
-| **`security-segments`** | 10 min | **SEC filing XBRL instance**, not the API | `pending_segments` | `security_segment` — revenue and operating income PER BUSINESS LINE |
-| **`security-filing-history`** | 10 min | SEC submissions API | `pending_filing_history` | `security_filing` (full history) + `security.sic` |
+| **`security-segments`** | 10 min | **SEC filing XBRL instance**, not the API | `pending_segments` | `security_segment` — revenue, operating income, capex, depreciation, cost of revenue and assets PER BUSINESS LINE |
+| **`security-filing-history`** | 10 min | SEC submissions API | `pending_filing_history` | `security_filing` (full history) + `security.sic` + `filer_profile` + `security_former_name` |
 | `security-price-history` | 10 min | yfinance `interval=1W` | `pending_price_history` | `security_price` (`grain = 'weekly'`) |
 | **`security-daily-history`** | 10 min | yfinance `interval=1d`, `start_date=1970-01-01` | `pending_daily_history` | `security_price` (`grain = 'daily'`) — **20+ years**, whole universe |
 | **`earnings-history`** | 10 min | nasdaq `calendar/earnings`, walked BACKWARD | `earnings_history_cursor` | `security_eps_history` (`source_code = 'nasdaq'`) |
@@ -468,6 +468,20 @@ Four more things that are easy to get wrong here, each measured:
   permanently, because a filed document is immutable. Re-reading is driven by
   `market.segment_parser.version` — bump it and every filing re-queues, no deploy.
 
+**SIX METRICS, NOT TWO, AND FIVE OF THEM COST NOTHING.** The instance carries more than revenue.
+Measured on Amazon's 10-Q, the facts dimensioned by a segment axis are revenue (48),
+`SegmentExpenditureAdditionToLongLivedAssets` (20), `CostsAndExpenses` (12), `OperatingIncomeLoss`
+(12), `Depreciation` (12) and `Assets` (6) — so capex, depreciation, cost of revenue and assets are
+already on the wire. Live: **AWS assets 194,295,000,000, capex 16,043,000,000/quarter,
+depreciation 4,844,000,000/quarter**, which is return on segment assets and a capex-to-depreciation
+ratio per business line.
+
+**`Assets` IS AN INSTANT, AND THAT IS NOT A DETAIL.** A stock measured *at* a date, not a flow over
+one — and segment assets **never reconcile** to consolidated assets, because corporate assets and
+eliminations sit outside the segments exactly as unallocated cost does for profit. So no instant
+bucket can earn a partition on its own. The split is **learned** per (metric, period type, span) and
+**applied** per (axis, period end); an instant at a date with no duration bucket stays unplaced.
+
 `security-filing-history` exists because **the filing index was shallow by a `limit=40`**, not
 because SEC is: `security_filing` held 8,450 accounts filings for 2026 and **four** for 2015, and
 segment depth is exactly filing depth. SEC's submissions API returns the complete history in one
@@ -475,6 +489,22 @@ keyless request (Amazon: 114 accounts filings back to **1997**) — **and carrie
 payload**, so the SIC classification costs no request of its own. It also states `isXBRL` per
 filing, which is what stops the segment resource spending two requests on a 1998 filing to discover
 there is nothing to read.
+
+**AND THE SAME RESPONSE CARRIES THE REGISTRANT'S OWN TICKER.** `market.filer_profile` stores what
+the company told SEC — `AAPL / Nasdaq`, `TSM / NYSE` — beside `fiscal_year_end` (which explains a
+52/53-week calendar, currently only inferred from an 84-98 day duration), `category` (a size band
+needing no currency, unlike `market_cap`), `state_of_incorporation` and the business address;
+`security_former_name` holds dated name history. This matters because US tickers are otherwise
+resolved through **OpenFIGI**, whose US lookup returns the thin OTC foreign-ordinary line for most
+foreign companies — `TSMWF`, `ASMLF`, `BUDFF` — which cost 621 of 1,015 rows in the EPS backlog
+against a 25-calls-a-day provider. **Nothing is re-pointed on it yet**: `market.ticker_disagreement`
+reports where SEC and OpenFIGI differ, weighted by fund holding, and that number should be read in
+production before five backlogs change what they ask for.
+
+Two traps found by running it rather than reading the schema: SEC returns `""` for a field it does
+not hold (Apple's `lei`, `website`), stored as NULL so "no website" stays distinguishable from an
+empty one; and **`ein: "000000000"` is a placeholder**, measured on TSMC — the same shape as
+`<cusip>000000000</cusip>`, which once collapsed four companies into a single security.
 
 **Both run on their own pg_cron schedules, not in the rotation** (migration 142), for the reason
 migration 137 established: the five-minute rotation paces **yfinance**, and these spend SEC's
