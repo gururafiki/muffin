@@ -506,6 +506,14 @@ not hold (Apple's `lei`, `website`), stored as NULL so "no website" stays distin
 empty one; and **`ein: "000000000"` is a placeholder**, measured on TSMC — the same shape as
 `<cusip>000000000</cusip>`, which once collapsed four companies into a single security.
 
+**Three more classification sources landed with them**, all additive and all seeded BELOW yfinance
+so no existing sector page changes: **SIC** (444 codes fetched from SEC's published list, one level
+because SEC publishes no names for the 2- and 3-digit parents), **Wikidata** (`industry (P452)` —
+the only MULTI-VALUED source here, joined on ISIN, 12 ISINs in one request in 0.78 s), and the
+**weighted segment classification** (`derive_segment_classification`), which is the one that answers
+the original question: Amazon reads **0.6158 consumer-discretionary by revenue** against **0.5703
+information-technology BY PROFIT**.
+
 **Both run on their own pg_cron schedules, not in the rotation** (migration 142), for the reason
 migration 137 established: the five-minute rotation paces **yfinance**, and these spend SEC's
 uncontended budget. In the rotation a 30,072-filing backlog would take ~200 days; at `2-59/5` it

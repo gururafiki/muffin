@@ -1968,6 +1968,80 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   `security_current.industry` picks with no parent constraint while `sector_constituents` requires
   `n.parent_id = tn.node_id`. The stock page and the sector page disagree about the same company.
 
+- **A FILER RENAMES ITS OWN MEMBER CODES, AND AN ANNUAL REPORT CARRIES THREE YEARS — SO ONE PERIOD
+  ARRIVES FROM SEVERAL FILINGS AND THEY DO NOT AGREE ON NAMES.** Found by the reconciliation guard
+  on its FIRST production read. ASML's FY2022 segment split summed to **34,114,800,000** against a
+  filed **21,173,400,000**, and neither the parser nor the filings were wrong: FY2022 appears in
+  both the FY2022 and FY2023 20-Fs, and between them `asml:EuvMember` became `asml:NXEMember`,
+  `asml:ArfImmersionMember` became `asml:ArfiMember`, and `Metrologyandinspection` became
+  `MetrologyAndInspection` — **differing only in case**. Keyed on the member code those are
+  different rows, both survive, and reading them together unions two complete splits of one period.
+  Each filing's own split reconciles perfectly, which is why nothing else can see it.
+  `security_segment_latest` picks ONE filing per (security, axis, metric, period) with
+  **`dense_rank`, not `row_number`** — ranking rows individually takes the newest row per MEMBER and
+  reassembles a split no filing ever reported. The raw table keeps both deliberately: an upsert
+  cannot retract and a restatement must stay visible, so the choice belongs in the view.
+- **`PGRST_DB_MAX_ROWS` HAS NOW COST FOUR DEFECTS, AND THE FOURTH WAS INSIDE A GUARD.** The segment
+  reconciliation check asked for `limit=4000`, silently got 1000, and reported ASML's FY2021 split
+  at 7,226,500,000 against a filed 18,611,000,000 — ratio 0.39, a pure false alarm, because half
+  the split lay past the end of a page whose end it could not see. **A partial split can never
+  reconcile**, so the check was meaningless on everything it truncated. A guard that cries wolf is
+  a guard someone disables. Page with `Range` until a short page arrives.
+- **THE SAME GUARD ALSO COMPARED ACROSS SOURCES AND CURRENCIES.** A segment split comes from the
+  filing's own instance; the consolidated figure it was checked against was whatever
+  `security_metric` held — for Credicorp a **yfinance** number carrying **no currency at all**,
+  against a geography split correctly summing to 28,555,000,000 **PEN**. Two different measurements
+  of two different things in two different currencies, reported as a 1.19 discrepancy. Restrict a
+  reconciliation target to a FILING source and a MATCHING currency, and count the skips.
+- **A TTL AND A SCHEDULE THAT DISAGREE PRODUCE A HEALTHY-LOOKING HALF-SPEED RESOURCE — TWICE IN ONE
+  DAY.** `security-segments` was given its own five-minute pg_cron job and the shared
+  `BACKLOG_TTL_MINUTES` of 10, so every other firing returned
+  `{"skipped": true, "reason": "fresh or in flight"}` with `ok: true` and its 30,000-filing backlog
+  would have taken twice as long. Worse, `derive-classifications` has carried a **30-day** TTL and
+  a **daily** cron since migration 137 — it self-skips 29 days in 30, which was tolerable for
+  quarterly fund holdings and is not now that the weighted segment classification hangs off it. The
+  only tell is a `written` of null on alternate runs. **Size a TTL against the schedule that calls
+  it**, and shorter than the interval, because a TTL exactly equal to it is a coin flip on jitter.
+- **A SERVING VIEW WRITTEN WHEN THERE WAS ONE SOURCE WILL SILENTLY EXCLUDE THE NEXT ONE.**
+  `security_industries` — the view whose entire purpose is "every classification a security
+  carries" — filtered `taxonomy_id = 'muffin'`, because muffin was the only populated taxonomy the
+  day it was written. SIC and Wikidata then landed, stored correctly (36 rows, Amazon as
+  RETAIL-CATALOG & MAIL-ORDER HOUSES), and the view returned none of them. A taxonomy is a COLUMN,
+  not a filter. Same family as `untracked_listing` calling 9,976 tracked companies untracked.
+- **TWO SEGMENT AXES ON ONE FACT IS A CROSS-TAB CELL, AND REJECTING IT LOSES REAL DATA.** Alphabet
+  tags Search, YouTube, Network and Subscriptions with the product axis AND
+  `StatementBusinessSegments = GoogleServices` at once. Requiring exactly one axis was right while
+  there was nowhere to put them — mislabelling a cell as a flat member is the double count the
+  partition design exists to prevent — and it meant **YouTube's revenue was not in the database at
+  all**. The nested level has the same shape as the top: the four sum to 342,721,000,000, which is
+  Google Services exactly, and `GoogleAdvertising` (294,691,000,000) is a subtotal of three of them.
+  Only the TARGET changes — the parent member's value, not the company's 402,836,000,000.
+- **SEGMENT ASSETS ARE AN INSTANT AND NEVER RECONCILE, SO THEY MUST INHERIT THEIR SPLIT.** Corporate
+  assets and eliminations sit outside the segments exactly as unallocated cost does for profit, so
+  no instant bucket can earn a partition on its own and every one would be unusable. Learn the split
+  per (metric, period type, span) and APPLY it per (axis, period end). An instant at a date with no
+  duration bucket — a balance-sheet comparative — stays unplaced, which is honest.
+- **SEC STATES THE REGISTRANT'S OWN TICKER, AND THIS PIPELINE HAS BEEN GUESSING IT.** The
+  submissions response already fetched for the filing history carries `tickers`/`exchanges`:
+  Apple `AAPL`/Nasdaq, **TSMC `TSM`/NYSE** — where OpenFIGI's US lookup gives the thin OTC
+  foreign-ordinary line `TSMWF`, which cost 621 of 1,015 rows in the EPS backlog against a
+  25-calls-a-day provider. It also carries `fiscalYearEnd` (which explains a 52/53-week calendar,
+  currently only inferred from an 84-98 day duration), `category` (a size band needing no currency,
+  unlike `market_cap`), `stateOfIncorporation` and dated `formerNames`. Two traps: SEC returns `""`
+  for a field it does not hold, and **`ein: "000000000"` is a placeholder** — the same shape as
+  `<cusip>000000000</cusip>`, which once collapsed four companies into one security.
+- **WIKIDATA IS THE ONLY MULTI-VALUED CLASSIFICATION AVAILABLE HERE, AND IT IS WORTH EXACTLY ITS
+  PRIORITY.** `industry (P452)` joins on the ISIN already held and returns a LIST — measured, 12
+  ISINs in ONE request in 0.78s, 11 matched, Amazon as retail | web service | e-commerce | web
+  hosting service. It is crowd-sourced and it shows: Nestlé is simply "food industry" where Apple
+  has seven, and Microsoft's list includes "International Standard Industrial Classification of All
+  Economic Activities" — a reference work, not an industry. Seeded at priority **30**, the lowest
+  here, so it can never win `security_current.sector_id`. Nodes are created ON DISCOVERY because the
+  vocabulary is open; contrast **SIC**, where SEC publishes a CLOSED list of 444 and inventing
+  entries would be authoring reference data from memory. SEC lists 0100 as `100`, so a SIC join
+  needs `lpad(sic, 4, '0')` or every agricultural, mining and construction filer classifies as
+  nothing.
+
 **A PR WITH MERGE CONFLICTS RUNS NO `pull_request` WORKFLOWS AT ALL, AND READS AS ALL-GREEN.**
 Measured 2026-08-28 on muffin-deployment#245: `gh pr checks` reported **4 passing and nothing
 pending** — three CodeQL `Analyze` jobs plus the CodeQL umbrella — while `Quality`, the repo's
