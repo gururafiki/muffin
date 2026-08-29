@@ -1873,6 +1873,36 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   nothing matches and the check fails via its own `checked == 0` guard. Both "caught" the mutation
   and neither tested the rule. Only reverting BOTH — the exact pre-fix state — reproduces the real
   failure. Ask what the mutation makes the code DO, not merely whether the guard went red.
+- **A GUARD THAT CHECKS TWO LISTS AGAINST EACH OTHER CANNOT SEE A THIRD THING IN NEITHER.**
+  `http-cache-covers-every-provider` compares `origins.ts` with `nginx.conf` in BOTH directions —
+  every origin has a location, every location has a caller — and passed while `wikidata.ts`
+  hardcoded `https://query.wikidata.org/sparql` and went straight out on every run. A provider that
+  never entered `origins.ts` is in neither list. Same shape as `exchange-listings` being deployed,
+  reachable and absent from the cron: the guard asked "is everything declared wired up?", which
+  cannot see something never declared. The guard now also fails on any `https://` host named
+  outside `origins.ts` (`esm.sh` exempt — a module import is not a provider call). **And its first
+  version reported a deliberately reintroduced defect as CLEAN**: it stripped trailing comments
+  with `line.split('//')[0]`, which truncates `https://host` at `https:`, so the detector destroyed
+  the thing it detects. Whenever a check parses code, mutate the code and watch it go red.
+- **THE CACHE STORES RESPONSES ONLY; THE REQUEST SURVIVES AS THE KEY AND NOTHING ELSE.** A file is
+  a binary header, a plaintext `KEY:` line, then the upstream status line, headers and body. The
+  key is `"$request_method|$proxy_host|$request_uri|$body_key"` — so a **GET's full URI including
+  the query string is recoverable** (that is what the §9c inventory recipe reads), a **POST keeps
+  only an MD5 of its body** (you cannot learn which OpenFIGI job array or which SPARQL query
+  produced an entry), and **request headers are in neither**. Two consequences worth not
+  re-deriving: a query-string credential is part of the key, so rotating an Alpha Vantage or Tiingo
+  key silently invalidates that provider's whole cache; and SEC's mandatory User-Agent, being a
+  header, means two callers differing only by it share an entry.
+- **ADDING A FACET TO A VIEW IS HALF THE JOB — THE PANELS THAT ENUMERATE FACETS CLAIM TO BE
+  EXHAUSTIVE.** Migration 160 added four and left `Every facet for this scope`, `Independent
+  facets`, `Country × facet` and `Sector × facet` showing 19 of 23. A panel titled "every facet"
+  showing nineteen is read as complete, which is worse than not adding them. **And adding them
+  naively is also wrong**: the four are SEC-only, so `with_segments / securities` for a country
+  measures how many of its companies file with SEC rather than how well covered they are — 75.0%
+  against `sec_filers` and 22.5% against `securities`, measured. The denominator therefore has to
+  be a COLUMN in every dimension, not just a dimension of its own. The FUNNEL is the one place they
+  correctly do not appear: it shows stages that GATE one another, and no CIK is an absence rather
+  than a blocked stage.
 - **A BACKLOG ORDERED BY A PROPERTY OF THE *ENTITY* IS DEPTH-FIRST, AND EVERY COUNTER SAYS
   HEALTHY WHILE IT IS.** `pending_segments` shipped `order by best_weight desc, accession_number`.
   Fund weight belongs to the SECURITY, so every one of a company's filings carries the same sort

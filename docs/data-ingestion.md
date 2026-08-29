@@ -176,6 +176,7 @@ The app should never join five tables on a phone.
 | **SEC EDGAR** | `data.sec.gov`, `efts.sec.gov`, `www.sec.gov` | descriptive User-Agent (mandatory) | ~10 req/s fair access | fund holdings (N-PORT) |
 | **Tiingo** | `api.tiingo.com/tiingo/daily/<sym>/prices` | `TIINGO_TOKEN` | hourly allocation, caps **unique symbols** | corporate actions |
 | **Yahoo search** | `query2.finance.yahoo.com/v1/finance/search` | keyless | — | ISIN → home-market symbol |
+| **Wikidata** `/sparql` | `query.wikidata.org` | keyless (descriptive UA) | concurrency-limited, 60 s query timeout | `security-wikidata-industries` |
 | ↳ **FRED** (through openbb) | `FRED_API_KEY` (already configured) | — | international macro by explicit series id | `macro-indicators` |
 | ↳ **OECD / federal_reserve** (through openbb) | keyless | — | CPI, GDP, unemployment, yield curve, EFFR, SOFR | `macro-indicators` |
 
@@ -196,6 +197,7 @@ overlay, and the callers only know a base URL — `origins.ts` for the direct pr
 | `/yahoo/` | `query2.finance.yahoo.com` | 1h |
 | `/alphavantage/` | `www.alphavantage.co` | 30d |
 | `/tiingo/` | `api.tiingo.com` | 7d |
+| `/wikidata/` | `query.wikidata.org` | 30d |
 | `/openbb/` | `openbb-api:6900` | 1h |
 | `/mcp/` | `openbb-mcp:8001` | 1h |
 
@@ -823,6 +825,22 @@ any long-TTL location it would not be. The discriminator that makes a long TTL s
 and two copies on disk — and a "miss" that looks like a cache bug. Measured. **Deliberate
 exception:** `/mcp/` canonicalises by sorting argument keys in Lua, so MCP calls are immune. The
 inconsistency is exactly why it is written down.
+
+**ONLY THE RESPONSE IS STORED. THE REQUEST SURVIVES ONLY AS THE KEY.** A cache file is a binary
+`ngx_http_file_cache_header_t`, a plaintext `KEY:` line, then the upstream **status line, headers
+and body**. The key is `"$request_method|$proxy_host|$request_uri|$body_key"`, so what is
+recoverable differs by method:
+
+| | recoverable from a cache file | not stored at all |
+|---|---|---|
+| **GET / HEAD** | method, upstream host, **full URI including the query string** | request headers |
+| **POST** | method, host, URI, and an **MD5 of the body** | the body itself, request headers |
+
+Three consequences. The inventory recipe in §9c works precisely because a GET's URI is in the key.
+A POST's arguments are gone — you cannot learn *which* OpenFIGI job array or *which* SPARQL query
+produced an entry, and that is inherent rather than an oversight. And because a query-string
+credential is part of the URI, **rotating an Alpha Vantage or Tiingo key silently invalidates that
+provider's entire cache**, while a header-borne credential does not appear anywhere.
 
 **Headers are NOT in the key** — including SEC's mandatory descriptive User-Agent. Two callers
 differing only by header share an entry. **And the mirror image, which is the expensive one:**
