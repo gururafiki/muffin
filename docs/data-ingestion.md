@@ -357,6 +357,8 @@ stopped price ingestion for three days while every signal said "healthy".
 | `security-metrics` | 10 min | **none — SQL only** | `pending_metrics` (a drift counter, not a queue) | `security_metric` |
 | `sec-cik-map` | 30 days | SEC `company_tickers.json` | — (one file, applied in one statement) | `security.cik` |
 | `security-xbrl` | 10 min | **SEC XBRL direct**, not openbb | `pending_xbrl` | `security_metric` (`sec-xbrl`) |
+| **`security-segments`** | 10 min | **SEC filing XBRL instance**, not the API | `pending_segments` | `security_segment` — revenue and operating income PER BUSINESS LINE |
+| **`security-filing-history`** | 10 min | SEC submissions API | `pending_filing_history` | `security_filing` (full history) + `security.sic` |
 | `security-price-history` | 10 min | yfinance `interval=1W` | `pending_price_history` | `security_price` (`grain = 'weekly'`) |
 | **`security-daily-history`** | 10 min | yfinance `interval=1d`, `start_date=1970-01-01` | `pending_daily_history` | `security_price` (`grain = 'daily'`) — **20+ years**, whole universe |
 | **`earnings-history`** | 10 min | nasdaq `calendar/earnings`, walked BACKWARD | `earnings_history_cursor` | `security_eps_history` (`source_code = 'nasdaq'`) |
@@ -412,6 +414,72 @@ flowchart TD
    days that way.
 5. **`remaining` counts SECURITIES.** Counting rows and subtracting from a count of securities
    clamps to zero, so a backlog thousands deep reports itself drained.
+
+---
+
+### Business lines (added 2026-08-29)
+
+`security-segments` reads **each filing's own XBRL instance** — not the XBRL REST API, which
+**strips dimensions**: `companyconcept` for AAPL revenue returns one value per period
+($416.16bn for FY2025) with no iPhone in it. The instance keeps them and is small enough to read in
+a worker (measured: AAPL 10-Q **0.74 MB**, AMZN 10-K 1.98 MB, Diageo's 20-F **10.92 MB** — which
+still downloads in 0.37 s and parses in 40 ms at 15 MB of heap).
+
+SEC's quarterly **bulk datasets** carry the same `segments` column back to 2015q1 and are how every
+expected value in the tests was first proven — but at 122 MB zipped / **542 MB** unpacked they need
+a second scheduler or a second executor, which this pipeline deliberately does not have. Do not
+re-propose them.
+
+```mermaid
+flowchart LR
+  F[security_filing<br/>30,072 accounts filings] --> P[pending_segments]
+  P --> D[index.json<br/>→ HTML index fallback]
+  D --> I[the XBRL instance]
+  I --> S[segment facts<br/>+ partition_id]
+  S --> C[derive_segment_classification&#40;&#41;<br/>weighted security_taxonomy rows]
+```
+
+**THE ONE THING TO KNOW BEFORE READING `security_segment`.** An axis can carry SEVERAL OVERLAPPING
+SPLITS that each sum to the consolidated total. Measured on Amazon's FY2025 10-K: the
+`ProductOrService` axis holds a seven-line split summing to **716,924,000,000** *and* a
+Product/Service split summing to the same, while `StatementBusinessSegments` holds a three-line
+split summing to it again — and AWS appears under two axes with two different values.
+`sum(value)` over an axis **doubles** the company's revenue; over the table it **triples** it,
+silently and in the right units. Hence `partition_id`: **aggregate within one partition or not at
+all**, and never aggregate partition 0 (a subtotal such as Apple's `ProductMember`, which is the
+sum of iPhone/iPad/Mac/Wearables). `security_segment_current` serves partition 1 only.
+
+Four more things that are easy to get wrong here, each measured:
+
+- **The axis name is DATA, not code.** us-gaap says `srt:ProductOrServiceAxis`, ifrs-full says
+  `ifrs-full:ProductsAndServicesAxis`; Diageo's 20-F parses to Spirits/Beer/Ready-to-Drink through
+  the second. `market.segment_axis` is the allowlist, so a taxonomy is rows. An allowlist is
+  mandatory rather than tidy — Apple's instance carries 206 dimensioned facts of which only 44 are
+  segmentations, the rest being fair-value levels and equity components.
+- **Segment PROFIT does not reconcile, by design.** ASC 280 and IFRS 8 require a *reconciliation*,
+  not an identity: Apple's segment operating income sums to ~38.9bn against a consolidated ~28.2bn
+  because shared costs are unallocated. So the split is learned from **revenue** and applied to
+  profit; a rule demanding every metric reconcile marks all profit unusable, which is the number
+  the feature exists to serve.
+- **`index.json` is not reliable.** Diageo's and Infosys's 20-F directories report **4 items** while
+  the HTML index lists the full set including the instance — so trusting it concludes "no XBRL" for
+  exactly the foreign private issuers this reaches. There is an HTML fallback.
+- **A cursor, not a negative cache.** `security_filing.segments_parsed_at` records that we LOOKED,
+  permanently, because a filed document is immutable. Re-reading is driven by
+  `market.segment_parser.version` — bump it and every filing re-queues, no deploy.
+
+`security-filing-history` exists because **the filing index was shallow by a `limit=40`**, not
+because SEC is: `security_filing` held 8,450 accounts filings for 2026 and **four** for 2015, and
+segment depth is exactly filing depth. SEC's submissions API returns the complete history in one
+keyless request (Amazon: 114 accounts filings back to **1997**) — **and carries `sic` in the same
+payload**, so the SIC classification costs no request of its own. It also states `isXBRL` per
+filing, which is what stops the segment resource spending two requests on a 1998 filing to discover
+there is nothing to read.
+
+**Both run on their own pg_cron schedules, not in the rotation** (migration 142), for the reason
+migration 137 established: the five-minute rotation paces **yfinance**, and these spend SEC's
+uncontended budget. In the rotation a 30,072-filing backlog would take ~200 days; at `2-59/5` it
+lands in under a week at ~0.7 req/s against SEC's documented 10.
 
 ---
 
@@ -621,6 +689,11 @@ no default — omitting it makes the resource `unknown`), **a row in the `market
 `pending_*` view with a negative cache. `logic-check.ts` enforces all of these, parsing the
 migration's `values` list — it is the guard that caught `exchange-listings` being deployed,
 reachable and **never scheduled** for weeks.
+
+**Add a segment axis or map a business line** (no deploy): a row in `market.segment_axis` for a new
+XBRL dimension, then bump `market.segment_parser.version` to re-queue every filing. To make a line
+comparable across companies, add a `market.segment_concept` and a `market.segment_alias` row —
+`aapl:IPhoneMember` → `smartphones`. Both are control tables and survive a redeploy.
 
 **Add a macro series** (no deploy): a row in `market.macro_indicator` — route, provider, params and
 `unit`. The `macro-indicators` resource drives whatever it finds; there is no list in code.

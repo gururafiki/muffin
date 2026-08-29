@@ -1881,6 +1881,93 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   the check is ABOUT, and to derive that scope from the mapping table rather than "everything except
   X", so the next non-statement source cannot silently empty it again.
 
+- **THE XBRL REST API STRIPS DIMENSIONS; THE FILING'S OWN INSTANCE KEEPS THEM AND IS 100x SMALLER
+  THAN THE BULK DATASET.** Measured 2026-08-28: `companyconcept` for AAPL revenue returns keys
+  `accn,end,filed,form,fp,frame,fy,start,val` — no dimension field — and exactly ONE value per
+  period ($416.16bn FY2025). There is no iPhone in it and no paging will produce one, so
+  `security-xbrl` can never yield a segment. SEC's quarterly bulk datasets DO carry a `segments`
+  column (verified to 2015q1, and every expected value in the tests was proven against them) but
+  are 122 MB zipped / **542 MB** unpacked — they need a second scheduler or executor, which is why
+  the GitHub-Actions design was dropped. **Every filing publishes its instance as a separate file**:
+  AAPL 10-Q **0.74 MB**, AMZN 10-K 1.98 MB, Diageo's 20-F **10.92 MB** (0.37 s to fetch, 40 ms to
+  parse, 15 MB heap). Pre-2019 filings carry a standalone instance under a different name
+  (`aapl-20150926.xml`, no `_htm`), and an annual filing carries 2-3 years of comparatives.
+- **AN XBRL AXIS CAN CARRY SEVERAL OVERLAPPING SPLITS THAT EACH SUM TO THE CONSOLIDATED TOTAL, SO
+  `sum(value)` IS WRONG BY AN INTEGER MULTIPLE.** Amazon's FY2025 10-K: the `ProductOrService` axis
+  holds a SEVEN-line split summing to **716,924,000,000** *and* a Product/Service split summing to
+  716,924,000,000, while `StatementBusinessSegments` holds a THREE-line split summing to it again —
+  and AWS appears under two axes with two different values (128,725 of revenue, 10,160 of quarterly
+  operating income). Summing an axis DOUBLES the revenue, summing the table TRIPLES it, with every
+  individual number still correct and no error anywhere. Apple shows the third shape: its product
+  members decompose `ProductMember` only, so the split that reconciles is
+  {iPhone, iPad, Mac, Wearables, **Service**} — a mix of company extensions and a standard member,
+  which defeats both "prefer extension members" and "take the deepest". Hence
+  `security_segment.partition_id`: **aggregate within ONE partition or not at all**, never
+  partition 0. The partition is found locally — the filing states its own undimensioned total for
+  the same concept and period — as the maximal subset summing to it, and the target is chosen by
+  **`xbrl_concept.priority`, not document order** (a filing can tag `Revenues` and
+  `RevenueFromContractWithCustomerExcludingAssessedTax` for one period with different values).
+- **SEGMENT PROFIT DOES NOT RECONCILE AND NEVER WILL — THE SPLIT MUST BE LEARNED FROM REVENUE.**
+  ASC 280 and IFRS 8 require a *reconciliation*, not an identity: shared costs are deliberately
+  unallocated, so Apple's segment operating income sums to ~38.9bn against a consolidated ~28.2bn.
+  A rule demanding every metric reconcile marks ALL profit unaggregatable — which is exactly the
+  number the feature exists to serve. The split is a property of the axis and the filing, so it is
+  inferred from the metric that does reconcile and applied to the rest. The market-verify guard
+  asserts revenue only, for the same reason.
+- **EUROPE HAS NO EDGAR EQUIVALENT FOR SEGMENTS, AND filings.xbrl.org LOOKS LIKE ONE.** It indexes
+  25,675 ESEF filings with pre-converted xBRL-JSON that genuinely carries dimensions — and ASML,
+  Nokia, Novo Nordisk and TotalEnergies FY2025 carry **431-872 facts and ZERO segment axes**
+  (measured 2026-08-29). ESEF mandates *detailed* tagging of the PRIMARY STATEMENTS only; the IFRS 8
+  segment note is **block-tagged as text**, so the numbers are not machine-readable at all. Germany
+  is not indexed. What DOES work is the 787 non-US securities filing a 20-F/40-F with SEC — Diageo
+  parses to Spirits/Beer/Ready-to-Drink through `ifrs-full:ProductsAndServicesAxis` where Apple uses
+  `srt:ProductOrServiceAxis`, which is why the axis allowlist is a control table. **Diageo also
+  files in USD despite being British** (consolidated revenue 27,964,000,000 under `iso4217:USD`), so
+  the reporting currency must be read from the unit and never inferred from the country.
+- **FMP CANNOT SERVE SEGMENTS AT ANY TIER THAT MATTERS, AND THE v4 ENDPOINT IS RETIRED.** Measured
+  2026-08-29 on the `stable` API: `revenue-product-segmentation` answers for AAPL/MSFT/GOOGL/NVDA/
+  JPM/XOM/TSM/BABA and **402s** for NEE, PLD, SAP.DE, **ASML — even the US ADR** — SHEL.L, NESN.SW,
+  005930.KS, BHP.AX and 7203.T. It returns **revenue only, never profit**. `data-coverage.md`
+  already said "do NOT build `security_revenue_segment` on this"; it was right.
+- **THE FILING INDEX WAS SHALLOW BECAUSE OF A `limit=40`, NOT BECAUSE SEC IS.** `security_filing`
+  held 126,312 rows and looked healthy while the accounts forms by year ran **2026: 8,450 · 2024:
+  8,070 · 2021: 27 · 2018: 1 · 2015: 4** — a recent-filings table wearing a filing index's name, and
+  segment depth is exactly filing depth. SEC's submissions API returns the COMPLETE history in one
+  keyless request (Amazon: 114 accounts filings back to 1997), **carries `sic` in the same payload**
+  (sixth instance of "the answer is already in a response you fetch"), and states `isXBRL` per
+  filing so the segment resource never spends two requests on a 1998 filing to learn there is
+  nothing to read. Two shapes to handle: the main document nests its parallel arrays under
+  `filings.recent`, an older page is the SAME arrays at the TOP level with no wrapper — reading only
+  the first returns nothing for every historical page, which looks exactly like a filer with no
+  history. And `isXBRL` is 1/0: `Boolean("0")` is TRUE.
+- **`index.json` IS NOT A RELIABLE FILE LISTING.** Diageo's and Infosys's 20-F directories report
+  **4 items** (the xbrl zip and three zero-length index files) while the HTML index for the same
+  directory lists the full set including the instance. Trusting it concludes "this filing has no
+  XBRL" for exactly the foreign private issuers the feature exists to reach — and records it as
+  permanent. There is an HTML fallback for this reason.
+- **A FILED DOCUMENT IS IMMUTABLE, SO ITS BACKLOG NEEDS A CURSOR RATHER THAN A 30-DAY NEGATIVE
+  CACHE.** Every other backlog here carries `%_missing_at` because a provider's "no data" may
+  become data next month; a 10-Q that disclosed no segments in 2019 will still disclose none in
+  2030. `security_filing.segments_parsed_at` records that we LOOKED, permanently. What DOES change
+  is our own understanding, so re-reading is driven by `market.segment_parser.version` — bump it and
+  every filing re-queues, with no deploy and no hand-written UPDATE.
+- **A WEIGHT MUST BE CLAMPED AT ZERO AT BOTH ENDS OF THE FRACTION, OR IT EXCEEDS 1.** Deriving a
+  classification from segment profit, a loss-making line makes the DENOMINATOR smaller than the
+  numerator: with cloud +48 and retail −8, an unclamped share is 48/40 = **1.2**. Clamping only the
+  numerator is not enough. A negative weight also sorts a loss-making division above a profitable
+  one under `order by weight desc`. And several members can map to one node, so they must be
+  collapsed BEFORE the share is computed — otherwise the insert carries the same conflict key twice
+  and fails the whole statement with SQLSTATE 21000 (fourth instance of that shape here).
+- **`security_taxonomy` WAS MODELLED MANY-TO-MANY AND THE CAPACITY WAS ENTIRELY UNUSED.** Measured
+  2026-08-28 before any of the above: 7,754 level-2 rows over 7,754 securities — a distribution of
+  exactly `{1: 7754}` — every one from yfinance, while level 1 genuinely does carry multiplicity
+  (499 securities with two rows, 22 in two different sectors, and GVMXX, State Street's cash-sweep
+  fund, in **eleven** because every sector SPDR holds it). Also measured: **7 securities are served
+  an industry whose parent sector differs from their `sector_id`** — UBER and PAYX are *industrials*
+  with an *information-technology* industry, likewise LDOS, FIS, BALL, AMCR, EXO.AS — because
+  `security_current.industry` picks with no parent constraint while `sector_constituents` requires
+  `n.parent_id = tn.node_id`. The stock page and the sector page disagree about the same company.
+
 **A PR WITH MERGE CONFLICTS RUNS NO `pull_request` WORKFLOWS AT ALL, AND READS AS ALL-GREEN.**
 Measured 2026-08-28 on muffin-deployment#245: `gh pr checks` reported **4 passing and nothing
 pending** — three CodeQL `Analyze` jobs plus the CodeQL umbrella — while `Quality`, the repo's
