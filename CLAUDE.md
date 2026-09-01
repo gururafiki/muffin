@@ -1911,6 +1911,18 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   calling 9,976 tracked companies untracked. **And a vocabulary is usually carried in more than one
   clause**: the form list appeared BOTH in the eligibility filter and in the annuals-first sort key,
   so replacing only the obvious one leaves a second copy free to drift.
+- **A GUARD THAT ENFORCES UNITS IS BLIND TO SCOPE, AND PAGE ARITHMETIC PASSES IT.** Nine resources
+  computed `remaining` as `wanted.length` minus what the page covered — perfectly good SECURITY
+  counts, so `logic-check`'s per-resource identifier whitelist was satisfied — and the number reads
+  ~0 after any successful run however deep the queue is. Measured 2026-09-01: `security-prices`
+  reported `remaining: 0` against a `pending_prices` of **9,013**, `security-corporate-actions` 60
+  against **2,533**. The other seven agreed ONLY because their backlogs happened to be drained, so
+  the defect was invisible until one of them had real work. CLAUDE.md had carried the rule since
+  `security-statements` was fixed and it was never propagated. Each now reports
+  `backlogSize(market, 'pending_x')` with the page figure kept as `unanswered`, and the new guard
+  asks a structural question instead of an arithmetic one — **a resource that READS a `pending_*`
+  view must report THAT view's size** — so a cursor-driven resource is untouched and there is no
+  exemption list to rot.
 - **ONE OVERSIZED DOCUMENT WEDGED A RESOURCE FOR TWO DAYS, AND A KILLED WORKER IS NOT A FAILED
   ONE.** `security-segments` parsed nothing from 2026-08-30 08:22 to 09-01: the supervisor killed
   the worker on every firing in under two seconds, **even with a page of ONE**. The filing at the

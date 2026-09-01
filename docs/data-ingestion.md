@@ -417,7 +417,11 @@ flowchart TD
    *producing* a number can never *remove* the stale one. Securities served `1d = 0.00%` for four
    days that way.
 5. **`remaining` counts SECURITIES.** Counting rows and subtracting from a count of securities
-   clamps to zero, so a backlog thousands deep reports itself drained.
+   clamps to zero, so a backlog thousands deep reports itself drained. **And it counts the BACKLOG, not
+   what is left of the page** — nine resources computed `wanted.length` minus what the page
+   covered, which is made of correct security counts and still answers the wrong question:
+   `security-prices` reported `remaining: 0` against a `pending_prices` of 9,013. The page figure
+   is `unanswered`; `remaining` is `backlogSize(market, 'pending_x')`.
 6. **A backlog ordered by a property of the ENTITY is depth-first, and that is invisible.**
    `pending_segments` ranked by fund weight, which every filing of a company shares — so the
    accession tiebreak walked one filer's entire history and 440 parsed filings belonged to
