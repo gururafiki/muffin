@@ -628,6 +628,85 @@ both ways: inside a `DO` block the nested statement gets the new value, so the e
 work; at statement level a plain function, a `SET`-decorated function and `set_config` in the body
 are all cancelled identically.)*
 
+#### Coverage: the denominator is a REGULATOR, not a country (2026-09-01)
+
+`sec_filer` answered "does this security have a CIK". That is the same question as "can this have
+segments" only while SEC is the sole source — and DART is already measured viable through the same
+parser and the same axes, so the two diverge the day it ships.
+
+**Capability is not a property of country**, which is what the model turns on: TSMC is Taiwanese and
+files with SEC, as do 787 non-US securities. So capability is *holding a registration with a
+regulator*, and `market.disclosure_source` / `security_filer` / `disclosure_coverage` /
+`filing_form` (migration 163) make a regulator a **row** — the same shape that let Korea cost one
+`segment_axis` row rather than a parser branch.
+
+**Three capability states, and the middle one is the point:**
+
+| state | meaning |
+|---|---|
+| `held` | a filer id is stored — fetchable now |
+| `resolvable` | its jurisdiction has an **enabled** source, id not yet resolved |
+| `none` | no source covers it, so the absence is permanent |
+
+`resolvable` is the addressable backlog and nothing could previously see it: a Korean company and a
+Cayman shell were both "no". `enabled` defaults to **false**, because an enabled source with no
+resource behind it advertises work nothing can do.
+
+**`security.cik` is kept in step by a TRIGGER, not by a rule each writer remembers.** `sec-cik-map`
+writes it at runtime; the migration's backfill runs at deploy time. Without the trigger a company
+that lists tomorrow reads `none` until the next deploy, with the data needed to fetch its filings
+sitting in the next column — the same reasoning that made `derived_at` a trigger.
+
+#### Two completeness numbers, because one was ambiguous (2026-09-01)
+
+`complete %` reads as "we have everything about this" and means "holds the nine facets in
+`required_facet`". **A country can read 100% while not one of its companies has a business line.**
+
+The gate keeps its meaning and is labelled **`core %`**. **`all facets %`** is breadth —
+`present_facets / applicable_facets` over 23 facets, where the four regulator-sourced ones are
+applicable only when some regulator can serve the security. One rule for every type: a bond reads
+low here and that is *true*, because this pipeline knows a maturity and a coupon about it.
+
+**COST, measured, because `sample_coverage` is one PostgREST statement under an 8-second timeout**
+and migration 140 exists because a single added facet took this view to 7.9 s. On a
+production-shaped fixture (27,600 securities / 3,500 filers / 612k segment facts):
+
+| | |
+|---|---|
+| migration 161 baseline | 211, 229, 257 ms |
+| with `LATERAL` `security_disclosure` | 544, 612, 634 ms — **+160%** |
+| …materialised CTEs instead | 326, 326, 385 ms — **+43%** |
+
+The lateral form ran two nested loops **27,600 times each** and cost 204 ms alone; materialised it
+is **15 ms**. PostgreSQL 12+ inlines a CTE by default, so `as materialized` is load-bearing here
+exactly as it already is in `base`.
+
+#### A panel that cannot render is invisible (2026-09-01)
+
+Three defects of one family, none reported by anything:
+
+- **`Sector × facet` showed "No Data"** — it selected `bucket as "sector"` *and*
+  `with_sector … as "sector"`. Postgres permits duplicate output names; Grafana's dataframe
+  conversion does not. Pre-existing since PR #261: that panel had never worked.
+- **A panel titled "Every facet" showed 19 of 23**, which is read as complete.
+- **Four facets rendered as plain numbers**, because the gauge colouring enumerated facet names.
+
+Each is config that *enumerates* something and goes stale as the thing grows.
+`check_dashboards_can_render.py` fails on all three, and **its facet list is parsed out of the
+migration** — a hardcoded list would be the very bug it guards against. It found a fourth on its
+first run: `statements %` and `industry %` on `Country × sector` had no colouring override at all.
+
+**A duplicate-alias check must run PER UNION ARM.** A `UNION ALL` repeats every alias once per arm
+and still yields one set of columns, so a whole-query count cries wolf on every union panel —
+measured, it flagged `Every facet for this scope` on its four legitimate columns.
+
+#### A new sample column is blank until the next sample (2026-09-01)
+
+`alter table … add column` leaves NULL in every historical `coverage_sample` row, and the panels
+read `max(sampled_at)`. So a new column renders **blank for up to twelve hours** with nothing on
+screen saying why — which is exactly what `sec_filers` did the day migration 161 shipped. The
+deploy now takes one sample at the end, non-fatally.
+
 #### Coverage: the denominator is the hard part (2026-08-29)
 
 `coverage_current` gained `segments`, `segment_geography`, `sic` and `weighted_industry` — and a

@@ -1903,6 +1903,54 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   be a COLUMN in every dimension, not just a dimension of its own. The FUNNEL is the one place they
   correctly do not appear: it shows stages that GATE one another, and no CIK is an absence rather
   than a blocked stage.
+- **CAPABILITY IS NOT A PROPERTY OF COUNTRY, AND "HAS A CIK" IS NOT "CAN HAVE SEGMENTS".** The
+  coverage model keyed on the CIK, which is the same question only while SEC is the sole source —
+  and DART is measured viable through the same parser. Measured 2026-08-29, the reach is:
+  **China 2,325 equities / 14 SEC-reachable · Europe 1,438 / 260 · Japan 1,368 / 103 · India 645 /
+  0 · Taiwan 535 / 2 · Korea 466 / 0.** TSMC is Taiwanese and files with SEC (787 non-US securities
+  file a 20-F or 40-F), so "country → source" is wrong: capability is HOLDING A REGISTRATION, which
+  is what `cik` was. `market.disclosure_source` / `security_filer` / `disclosure_coverage` /
+  `filing_form` make a regulator a ROW, and SEC deliberately has NO rows in `disclosure_coverage`.
+  **Three states, not two**: `held`, `resolvable` (jurisdiction has an ENABLED source, id
+  unresolved — the addressable backlog) and `none`. The old yes/no could not tell a Korean company
+  from a Cayman shell. `enabled` defaults to FALSE, or a source with no resource advertises work
+  nothing can do.
+- **A COMPLETENESS LABEL THAT OVER-CLAIMS IS WORSE THAN A MISSING ONE.** `complete %` read as "we
+  have everything about this" and meant "holds the nine facets in `required_facet`" — a country
+  could read **100%** while not one of its companies had a business line. The gate was right and
+  only the LABEL was wrong, so it keeps its meaning as `core %` and a second number carries breadth
+  (`present_facets / applicable_facets` over 23 facets). Applicable EXCLUDES the four
+  regulator-sourced facets where no regulator can serve the security — charging a Cayman shell for
+  a segment it can never have is the ETF/`price` miscalibration that made 74 funds read 0%.
+- **A LATERAL IS EVALUATED PER ROW; `as materialized` IS THE DIFFERENCE BETWEEN 15 ms AND 204 ms.**
+  `security_disclosure` shipped as two LATERAL lookups and ran two nested loops **27,600 times
+  each**, taking `coverage_current` from 228 ms to 596 ms (+160%) against a view that must stay
+  under the role's 8-second timeout. Rewritten as materialised CTEs over small sets (one row per
+  security holding a filer id, one per covered country) it is 15 ms and the view is 326 ms (+43%).
+  PostgreSQL 12+ INLINES a CTE by default, which reintroduces the per-row evaluation — the same
+  reason `coverage_current`'s own `base` is materialised.
+- **A PANEL THAT CANNOT RENDER IS INVISIBLE, AND NOTHING REPORTS IT.** Three defects of one family:
+  `Sector × facet` selected `bucket as "sector"` AND `with_sector … as "sector"` and rendered
+  **"No Data"** — Postgres permits duplicate output names, Grafana's dataframe conversion does not,
+  and that panel had never worked since PR #261 created it; a panel titled *"Every facet"* showed
+  19 of 23 after four were added; and those four rendered as plain numbers because the gauge
+  colouring was a `byRegexp` ENUMERATING facet names. Each is config that enumerates something and
+  goes stale. `check_dashboards_can_render.py` fails on all three and **parses its facet list out
+  of the migration** — a hardcoded list would be the very bug it guards. It found a fourth on its
+  first run. **A duplicate-alias check must run PER UNION ARM**: a `UNION ALL` repeats every alias
+  once per arm and still yields one set of columns, so a whole-query count cries wolf on every
+  union panel.
+- **A COLUMN ADDED TO A SAMPLE TABLE IS NULL IN EVERY ROW THAT CAME BEFORE IT.** The coverage
+  panels read `max(sampled_at)`, so a new column renders BLANK — no error, nothing on screen saying
+  why — until the next scheduled sample, which is up to twelve hours. Measured on `sec_filers` the
+  day migration 161 shipped. The deploy now takes one sample at the end, non-fatally.
+- **A MUTATION THAT RENAMES SOMETHING IS NOT A MUTATION.** Testing whether a trigger was
+  load-bearing, the mutation renamed `security_cik_to_filer` to `..._disabled` — a trigger with a
+  different name still fires, so the harness reported MISSED while the sentinel (checking the old
+  name was gone) reported the mutation had applied. Two further runs were contaminated by rows a
+  PREVIOUS mutation left behind: control tables upsert `do nothing`, so reverting the FILE does not
+  undo the row, and a stray `('sec','KY')` made a later verdict fire for the wrong reason. **A
+  mutation harness against a database must rebuild it**, not restore the file.
 - **A BACKLOG ORDERED BY A PROPERTY OF THE *ENTITY* IS DEPTH-FIRST, AND EVERY COUNTER SAYS
   HEALTHY WHILE IT IS.** `pending_segments` shipped `order by best_weight desc, accession_number`.
   Fund weight belongs to the SECURITY, so every one of a company's filings carries the same sort

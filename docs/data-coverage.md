@@ -35,6 +35,22 @@ pipeline works is a separate document: [data-ingestion.md](data-ingestion.md).
 > **CN 12.8%, JP 15.2%, TW 17.0%** against the 39.9% average — Asian markets are far behind, and
 > that is where provider budget should go.
 
+> **SUPERSEDED 2026-09-01 — the denominator is now a REGULATOR, not a CIK.** `sec_filer` became
+> `segment_source`, with three buckets (`sec`/`dart`/… , `resolvable`, `none`) driven by
+> `market.disclosure_source`. `resolvable` — a jurisdiction with an *enabled* source whose filer id
+> is unresolved — is the addressable backlog, and the old yes/no could not express it: a Korean
+> company and a Cayman shell were both "no". **Capability is not a property of country** (TSMC is
+> Taiwanese and files with SEC, as do 787 non-US securities), so SEC has no rows in
+> `disclosure_coverage` at all and is purely registration-driven. Adding a regulator is a row.
+>
+> **And `complete %` became `core %`, beside a new `all facets %`.** The old label read as "we have
+> everything about this" and meant "holds the nine facets in `required_facet`" — a country could
+> read 100% while not one of its companies had a business line. The gate is unchanged; breadth is
+> the second number, with the four regulator-sourced facets applicable only where a regulator can
+> serve the security.
+>
+> The paragraph below is kept for the reasoning, which still holds.
+
 > **The segment family is measured against `sec_filer`, not against the universe (2026-08-29).**
 > Segment disclosure comes from SEC filings and nowhere else, so **8,834 of 12,350 equities can
 > never have one**. `segments`, `segment_geography`, `sic` and `weighted_industry` are therefore
@@ -314,6 +330,7 @@ flattening it would make the "curve" whichever maturity was written last.
 | ~~**Reporting currency of statements**~~ **DONE 2026-08-20** (deployment#177) | The sixth source has it: `provider=sec` returns `reported_currency` **and** 18 annual periods against yfinance's 4. The five sources checked were price-side providers — the filing was never asked. The real blocker was the backlog: `currency` sat at **0 of 104,972** with column and code both present since migration 29, because `pending_statements` exited on "has no statements at all" and locked out the 8,559 securities already holding four currency-less periods. SEC is **annual-only** here (`period=quarter` → 422), so quarterly depth still needs `companyfacts` |
 | **Symbol changes / renames** | the identifier model tolerates one; nothing detects one |
 | **Sub-industry depth (levels 3–4)** | `taxonomy_node.parent_id` models the full tree; only levels 1–2 are populated |
+| **How far a regulator can reach, measured 2026-08-29** | Segment disclosure comes from a regulator and nowhere else, so this is the ceiling on the feature. **China 2,325 equities / 14 SEC-reachable · Europe 1,438 / 260 · Japan 1,368 / 103 · India 645 / 0 · Taiwan 535 / 2 · Korea 466 / 0 · Hong Kong 383 / 21.** Korea is proven through DART and is the next build; Europe is the second-largest gap and needs its own answer, since ESEF is measured not viable and the SEC 20-F path already covers 260 of its 1,438 |
 | **Business lines — the MACHINERY is complete and the COVERAGE is a week away** | Measured 2026-08-29: 5,426 segment facts across **14 companies**, 440 filings parsed, 33,657 queued. The 14 was not a rate limit and not a vocabulary — `pending_segments` ordered by fund weight, which every filing of a company shares, so the queue walked one filer's whole 20-year history before the next (69, 69, 69, 65, 61, 57, 39, 15, 10, 9, 9, 9, 8, 5 filings each). Fixed in migration 156: `round` first, annuals before quarterlies, so one pass covers every filer's latest annual report — ~3,500 filings, about 15 hours at the current rate. **Nothing could report the defect**: `written` read as 240–450 rows a run, `remaining` fell, `ok` was true, and the reconciliation guard passed, because the rows were correct. They were the wrong rows first |
 | **The shared vocabulary is 50 aliases, and that is now the honest number** | Of 186 distinct member codes, 22 are mapped. The queue was reported as 113 and is really **72**: 41 members are geography (`country:US`, `srt:NorthAmericaMember`) which need a *label*, not a concept, and migration 157 resolves those from `market.countries` with no curation at all. What is left is genuinely editorial — `tsm:WaferMember`, `amzn:NorthAmericaSegmentMember`, six Santander segments — and `market.pending_segment_alias` ranks it by leverage (companies sharing the member, then share of its own company) rather than by revenue, which is denominated in the filer's own currency |
 | **CONFIRMED LIVE, three hours after the ordering fix deployed** | `segments.companies` **14 → 25 → 35 → 38** across consecutive hourly samples, and `segments.comparable_concepts` — concepts on which two or more companies can actually be compared — **1 → 1 → 7**. `written` per run FELL from 240–450 to 70–95 over the same window, which is the trade the fix makes and a neat demonstration of why `written` was never the signal: one filing each from twenty companies produces fewer rows than the twentieth filing of one company, and is worth far more. Coverage by the honest denominator: SEC filers **1.0%** segments / 0.7% geography / 7.0% SIC against non-filers **0.0%** on all three |

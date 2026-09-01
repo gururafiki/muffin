@@ -1119,6 +1119,111 @@ See `muffin-deployment/README.md` § Observability. What was deliberately NOT do
   dashboard chart `classified` for the resources that have it. Only worth doing if a panel actually
   wants it.
 
+## Business lines and the coverage model (recorded 2026-09-01)
+
+The segment pipeline is live — **20,148 facts**, business lines, geography, cross-tab cells and
+segment assets, all parsed from filings' own XBRL instances. Phase 1 (deployment#282) fixed the
+coverage model that measures it. What follows is planned but not built; each phase gets its own
+planning session, and every number here was measured so a later session starts from evidence
+rather than memory.
+
+### Phase 2 — show it (the data exists and nothing reads it)
+
+muffin-ui reads 30 market relations and **not one segment view**. All of this is stored and correct
+today:
+
+- [ ] **Business lines on the stock page** (`src/app/stock/[ticker].tsx`, after `StatementTables`),
+      from `security_segment_current`: revenue, operating income, margin, capex/depreciation,
+      return on segment assets per line. Follow the page's convention — render nothing when empty.
+      Amazon: Online Stores 269bn, 3P Seller 172bn, AWS 129bn, Advertising 69bn.
+- [ ] **Revenue by market** from `security_segment_geography` — the cross-company comparison that
+      works today with **zero curation**, because 18 issuers share `country:US`, 10 `country:CN`,
+      8 `country:JP`. Amazon: US 489.7bn, rest-of-world 107.5bn, DE 45.9bn, GB 43.2bn, JP 30.7bn.
+      **Two caveats to build in:** filers name only material countries (2–15 places, median 4, no
+      Canada for Amazon), and `us-gaap:NonUsMember` is the RESIDUAL after the named countries, not
+      all-foreign — the split sums to exactly 716,924,000,000, matching `reconciled_to`.
+- [ ] **Earnings by market is essentially unavailable and that is not a gap.** 132 of 135 geography
+      rows carry revenue; **5** carry operating income. ASC 280 / IFRS 8 require revenue and
+      long-lived assets by geography, not profit. Profit exists only where the reportable segments
+      are themselves geographic (Amazon North America 426.3bn/29.6bn, International 161.9bn/4.75bn,
+      AWS 128.7bn/45.6bn). Say so in the UI rather than showing an empty column.
+- [ ] **Cross-tab drill-down** from `security_segment_detail` (270 rows): Alphabet's YouTube
+      Advertising 40.4bn (10.6% of Google Services), Search 224.5bn (58.9%); Vale's country ×
+      product (China × Ferrous Minerals 22.2bn, 96%). Nested members sum to their PARENT, never to
+      the company — `security_segment_spine` serves `parent_member is null` for that reason.
+- [ ] **Multi-industry.** `security_industries` holds 20,236 rows (yfinance 18,977, **wikidata 704,
+      filing 514, SIC 36**) and the stock page shows ONE label. This was the first half of the
+      original ask.
+- [ ] **Admin completeness panel**, gated exactly as `security-refresh-button.tsx` gates:
+      `useAuth((s) => s.session?.isAdmin ?? false)` then `if (!isAdmin) return null`.
+- [ ] **`check_anon_read_latency.py` must gain the new conjunctions IN THE SAME CHANGE.** The spine
+      is granted to anon and this pipeline has had four anon-timeout incidents; the guard times the
+      conjunctions the app actually sends, so there is nothing to add until the app sends some.
+- [ ] **Prerequisite: consolidate the four definitions of `security_segment_current`** (141, 148,
+      149, 150 + 157). `create or replace view` can only APPEND, so the earliest definer can never
+      impose the latest shape and must drop — a real window every deploy in which the view and its
+      dependents do not exist. Harmless only while nothing user-facing reads it.
+
+### Phase 3 — DART, and a spike protocol for the rest
+
+- [ ] **Build `security-kr-segments`.** Proven 2026-08-29: a 7.1 MB instance carrying
+      `ifrs-full:ProductsAndServicesAxis` (28), `SegmentConsolidationItemsAxis` (20), `SegmentsAxis`
+      (16), `GeographicalAreasAxis` (8) — the same axes the parser already handles for Diageo.
+      SK Gas reconciles exactly to 7,050,068,258,000 KRW. Bounded by TRANSFER TIME, not a rate
+      limit: 115 s for 1.2 MB from outside Korea (against SEC's 0.37 s for 10.9 MB), so a far
+      smaller page than `security-segments`' 20. Flip `disclosure_source.enabled` when it exists.
+      Unlocks 466 equities.
+- [ ] **Europe — 1,438 equities, 260 SEC-reachable, so a 1,178 gap: the second largest after
+      China.** ESEF is measured NOT viable (ASML, Nokia, Novo Nordisk, TotalEnergies FY2025:
+      431–872 facts, **zero segment axes**; IFRS 8 notes are block-tagged text, and Germany is not
+      indexed). Two prongs instead:
+      - [ ] **Maximise the SEC 20-F path.** Resolving more European ADR CIKs is additive, needs no
+            new source, and 787 non-US securities already arrive this way.
+      - [ ] **Spike UK Companies House iXBRL** — the one free, structured, national European source
+            not yet measured.
+- [ ] **Spike China (2,311), India (645), Taiwan (533)** with the same cheap protocol that settled
+      ESEF, EDINET and DART: fetch one large filer's instance, count segment axes, report. Hours
+      each. **Expect failures — two of four so far — and treat "not viable" as a result**, recorded
+      as a `disclosure_source` row so it is not re-derived.
+
+### Phase 4 — more from what we already fetch
+
+- [ ] **Long-lived assets by geography.** ASC 280 *requires* it beside revenue, so it should
+      already be in instances we download. Verify on Amazon's instance first, then it is an
+      `xbrl_concept` row.
+- [ ] **More segment metrics generally.** The instance carries every dimensioned fact and the
+      parser extracts six (revenue, operating income, capex, depreciation, cost of revenue,
+      assets). Adding one is a control-table row and **zero new provider calls** — the seventh
+      instance of "the answer is already in a response you fetch".
+- [ ] **`equity/estimates/price_target`** (finviz) is measured working for US listings and is not
+      captured; only `equity/estimates/consensus` is.
+- [ ] Re-probe anything recorded as unavailable **only with symbols expected to FAIL** — a 3-symbol
+      probe of mega-caps once justified a feature that could never serve the universe.
+
+### Phase 5 — carried
+
+- [ ] **The concept vocabulary, TARGETED rather than drained.** Measured: 380 distinct members, of
+      which **320 are filer-namespaced extensions and ZERO are shared by two distinct issuers** —
+      that is structural, not small, because an XBRL extension member is minted in the filer's own
+      namespace. The only members two companies share are the standard ones and every one is
+      geography. So the queue can never be prioritised by "how many companies use this", and the
+      right shape is ~6 concepts (cloud, advertising, smartphones, streaming, foundry, payments)
+      mapped by fund weight. `segments.comparable_concepts` is the metric — it went 1 → 7 on the
+      ordering fix alone.
+- [ ] **Six `pending_%` backlogs unclassified** in `backlog_negative_cache` (`pending_news`,
+      `pending_insider`, `pending_filings`, `pending_management`, `pending_eps_history`,
+      `pending_fx_history`). Deliberately not guessed at — naming the wrong column asserts a
+      pairing that does not hold. A CI guard over `pg_class` would stop the list growing.
+- [ ] **`accession_number` → `source_document_id`.** DART's is `rcept_no`; only the NAME is
+      SEC-specific, since `(source_code, accession_number)` is already correct. Its own change:
+      it touches the parser, the reconciliation guard and `market-verify`, and this repo's lesson
+      is that a key widened in the schema gets forgotten in the verify script.
+- [ ] **The spine refresh 8 s cliff.** `refresh_segment_spine` measured 7,242 ms at 1.92M
+      qualifying rows (~5M facts); `duration_ms` is plotted so the approach is visible. The escape
+      is a pg_cron job, which has no PostgREST timeout.
+- [ ] **Sub-industry levels 3–4** — `taxonomy_node.parent_id` models the full tree and only levels
+      1–2 are populated.
+
 ## Other P2
 - [ ] Add new tab to donate to Ukraine with links to different funds
 - [ ] Create agent similiar to criteria analysis, but for hypothesis analysis. The idea is that we firstly define multiple hypothesis and then define which data is needed to compute it's probability -> collect the data and define how probable it is.
