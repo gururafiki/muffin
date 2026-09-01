@@ -700,6 +700,32 @@ first run: `statements %` and `industry %` on `Country × sector` had no colouri
 and still yields one set of columns, so a whole-query count cries wolf on every union panel —
 measured, it flagged `Every facet for this scope` on its four legitimate columns.
 
+#### One 128 MB filing wedged the segment queue for two days (2026-09-01)
+
+`security-segments` parsed nothing between 08-30 08:22 and 09-01. The supervisor killed the worker
+on every firing in under two seconds — **even with a page of one**, which is what ruled out page
+size and memory accumulation. The filing at the head was AEP's 2015 10-K, **127.72 MB**; a JS
+string is UTF-16, so the text alone is ~256 MB against a 256 MB worker.
+
+**It was permanent.** A filing is stamped `segments_parsed_at` only after a successful parse, and a
+killed worker does not throw — it dies. Nothing is stamped, and the same document returns at the
+head of every run. Second head-of-line block in this resource after the depth-first ordering.
+
+The size was in `index.json`, which `findInstanceUrl` already fetches and discarded. Gated at
+**32 MB** (~3× Diageo's 10.92 MB, the largest known to parse), with a second `Content-Length` gate
+for the HTML-index fallback that carries no size, and counted as **`tooLarge`** — a refusal and an
+absence are different facts. Verified live: `written: 964, filings: 20, tooLarge: 1`.
+
+| symptom | what it actually was |
+|---|---|
+| `refresh_run` empty for two days | a killed worker writes **no row** — it goes silent, not red |
+| nightly check said "every resource has succeeded" | it read `refresh_log`: one row per resource, overwritten every run, so a five-minute cron keeps `started_at` fresh and **a resource dying every run looks just-started** |
+| probing the resource returned `skipped` | a killed worker holds the in-flight lock ~2 min, and a skip is stored `ok = true` — so **investigating the alert would have cleared it** |
+
+`market.resource_health` answers when a resource last did *work* (`ok and not skipped`); the alert
+and the nightly check both read it now. `refresh_run.skipped` had existed since migration 127 and
+nothing read it.
+
 #### An industry must belong to the sector it is served under (2026-09-01)
 
 `security_current` picked the industry with `n.level = 2` and no constraint on whose child the node

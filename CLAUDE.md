@@ -1911,6 +1911,39 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   calling 9,976 tracked companies untracked. **And a vocabulary is usually carried in more than one
   clause**: the form list appeared BOTH in the eligibility filter and in the annuals-first sort key,
   so replacing only the obvious one leaves a second copy free to drift.
+- **ONE OVERSIZED DOCUMENT WEDGED A RESOURCE FOR TWO DAYS, AND A KILLED WORKER IS NOT A FAILED
+  ONE.** `security-segments` parsed nothing from 2026-08-30 08:22 to 09-01: the supervisor killed
+  the worker on every firing in under two seconds, **even with a page of ONE**. The filing at the
+  head was American Electric Power's 2015 10-K — `aep-20151231.xml`, **127.72 MB**. A JS string is
+  UTF-16, so the text alone is ~256 MB against a 256 MB worker before parsing. Utilities tag every
+  subsidiary and sit far outside the measured range (AAPL 0.74 MB, AMZN 1.98, Cemex 6.53, Diageo's
+  20-F 10.92 — the largest known to parse). **It was a PERMANENT head-of-line block**: a filing is
+  stamped `segments_parsed_at` only after a successful parse, and a killed worker does not throw,
+  it DIES, so nothing is stamped and the same document returns at the head for ever. Second
+  head-of-line block in this resource after the depth-first ordering. The size was in `index.json`,
+  which `findInstanceUrl` already fetches and was discarding — gated at 32 MB, with a second
+  `Content-Length` gate for the HTML-index fallback that carries no size, and counted as
+  `tooLarge` rather than `noInstance` because a refusal and an absence are different facts.
+- **A RESOURCE THAT DIES ON EVERY RUN LOOKS PERPETUALLY JUST-STARTED.** `check_resource_health.py`
+  read `refresh_log`, which holds ONE ROW PER RESOURCE, overwritten every run, and flagged a null
+  `finished_at` only once `started_at` was an hour old. A five-minute cron restarts it every five
+  minutes, so `started_at` is always fresh and the check reported "every resource has succeeded"
+  throughout a two-day outage. `refresh_log` can only ever catch a worker that died and was NEVER
+  RETRIED. The question belongs to `refresh_run`, via `market.resource_health.last_worked`.
+- **A SKIP IS RECORDED AS A SUCCESS, AND INVESTIGATING AN ALERT MUST NOT BE ABLE TO CLEAR IT.**
+  `{"skipped": true, "reason": "fresh or in flight"}` is a 200 and is stored `ok = true` — correctly,
+  the invocation succeeded. But a killed worker holds the in-flight lock ~2 minutes, so poking a
+  dead resource returns a skip, and the stalled-resource alert asked `max(finished_at) filter (where
+  ok)`. Measured 2026-09-01: the alert was correctly firing on a `last_ok` of 08-30, and three
+  diagnostic calls — all skips — moved `last_ok` to the current minute. `refresh_run.skipped` has
+  existed since migration 127 and **nothing read it**; I first wrote a migration to ADD the column
+  and `add column if not exists` silently did nothing, which my own behaviour test caught.
+- **`draining_by_marking` IS A SHAPE, NOT A VERDICT — CHECK THE MARKS BEFORE BELIEVING IT.**
+  `pending_wikidata` reported it at 678 negative-caches a day against 1,158 of drain, i.e. 59% of
+  its progress. Measured by asking Wikidata directly for six marked ISINs: **zero rows** — it holds
+  no `P946` statement for any of them, so every mark was earned. Wikidata's ISIN coverage is simply
+  thin for Korean, Indian, Philippine, Peruvian and Thai names. The signal is doing its job; only a
+  probe of the offending rows can say whether the marks are honest.
 - **CAPABILITY IS NOT A PROPERTY OF COUNTRY, AND "HAS A CIK" IS NOT "CAN HAVE SEGMENTS".** The
   coverage model keyed on the CIK, which is the same question only while SEC is the sole source —
   and DART is measured viable through the same parser. Measured 2026-08-29, the reach is:
