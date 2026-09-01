@@ -1903,6 +1903,14 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   be a COLUMN in every dimension, not just a dimension of its own. The FUNNEL is the one place they
   correctly do not appear: it shows stages that GATE one another, and no CIK is an absence rather
   than a blocked stage.
+- **A CONTROL TABLE THAT NOTHING READS IS DECORATION, AND CREATING IT IS ONLY HALF THE CHANGE.**
+  Migration 163 created `market.filing_form` explicitly to retire the hardcoded
+  `report_type in ('10-K','10-Q','20-F','40-F')` in `pending_segments` — and left the list in
+  place, so the table shipped and was read by nothing for a release. Same blind spot as
+  `exchange-listings` being deployed, reachable and absent from the cron, and `untracked_listing`
+  calling 9,976 tracked companies untracked. **And a vocabulary is usually carried in more than one
+  clause**: the form list appeared BOTH in the eligibility filter and in the annuals-first sort key,
+  so replacing only the obvious one leaves a second copy free to drift.
 - **CAPABILITY IS NOT A PROPERTY OF COUNTRY, AND "HAS A CIK" IS NOT "CAN HAVE SEGMENTS".** The
   coverage model keyed on the CIK, which is the same question only while SEC is the sole source —
   and DART is measured viable through the same parser. Measured 2026-08-29, the reach is:
