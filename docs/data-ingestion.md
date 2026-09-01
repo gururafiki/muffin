@@ -700,6 +700,22 @@ first run: `statements %` and `industry %` on `Country × sector` had no colouri
 and still yields one set of columns, so a whole-query count cries wolf on every union panel —
 measured, it flagged `Every facet for this scope` on its four legitimate columns.
 
+#### An industry must belong to the sector it is served under (2026-09-01)
+
+`security_current` picked the industry with `n.level = 2` and no constraint on whose child the node
+is, while `sector_constituents` had always required `n.parent_id = tn.node_id`. Uber carries
+`industrials` at level 1 **and** `information-technology--software-application` at level 2, because
+`security_taxonomy` is many-to-many and 499 securities sit in two sectors — so the stock page and
+the sector page disagreed about the same company. **Seven securities**; after the fix they serve no
+industry rather than a wrong one (7,754 → 7,747, measured).
+
+**A correction worth recording, because it was asserted before it was checked.** The odd-looking
+`industrials--software-application` is *not* a bucket "no taxonomy contains" — it is a real level-2
+node whose parent **is** `industrials`. The taxonomy mints a node per **(sector, provider industry
+name)**, so `software-application` legitimately exists under industrials, information-technology
+and financials at once. That fragments the industry dimension into near-duplicate rows on
+`Completeness by industry` — a genuine observation, and a different one from the parent bug.
+
 #### A new sample column is blank until the next sample (2026-09-01)
 
 `alter table … add column` leaves NULL in every historical `coverage_sample` row, and the panels

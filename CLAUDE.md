@@ -1915,6 +1915,22 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   unresolved — the addressable backlog) and `none`. The old yes/no could not tell a Korean company
   from a Cayman shell. `enabled` defaults to FALSE, or a source with no resource advertises work
   nothing can do.
+- **AN INDUSTRY MUST BELONG TO THE SECTOR IT IS SERVED UNDER, AND THE TAXONOMY MINTS ONE NODE PER
+  (SECTOR, PROVIDER INDUSTRY NAME).** `security_current` picked a level-2 node with `n.level = 2`
+  and NO parent constraint, while `sector_constituents` had always required
+  `n.parent_id = tn.node_id`. Uber carries `industrials` (level 1) *and*
+  `information-technology--software-application` (level 2, parented under information-technology),
+  because `security_taxonomy` is many-to-many and 499 securities sit in two sectors — so the stock
+  page showed **sector industrials, industry Software - Application**, an industry from a sector it
+  is not served under. Seven securities; after the fix they show NO industry rather than a wrong
+  one (7,754 → 7,747).
+  **CORRECTION TO THE FIRST DIAGNOSIS: `industrials--software-application` is NOT a fake bucket.**
+  It is a real level-2 node whose parent IS `industrials` — the taxonomy creates a node per
+  (sector, provider industry name), so `software-application` legitimately exists under
+  industrials, information-technology AND financials. That fragments the industry dimension into
+  near-duplicate rows on `Completeness by industry`, which is a separate observation and not a
+  defect in the parent fix. I asserted "industries no taxonomy contains" before checking
+  `taxonomy_node.parent_id`, and it was wrong.
 - **A COMPLETENESS LABEL THAT OVER-CLAIMS IS WORSE THAN A MISSING ONE.** `complete %` read as "we
   have everything about this" and meant "holds the nine facets in `required_facet`" — a country
   could read **100%** while not one of its companies had a business line. The gate was right and
