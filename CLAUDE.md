@@ -2336,6 +2336,59 @@ Note on hardening: **`gh pr merge` merged a workflow-only PR fine** (muffin-depl
 2026-08-10). The "OAuth App … without `workflow` scope" dead end recorded above did not reproduce —
 try the merge before assuming it needs a human click.
 
+- **A SERVING VIEW THAT PICKS THE LATEST PERIOD *PER MEMBER* UNIONS EVERY YEAR THE FILER EVER
+  REPORTED.** `security_segment_current` did exactly that (`distinct on (…, member_code) order by
+  period_ending desc`), so every member spelling a company had ever used survived at its own newest
+  year and the view served a split no filing ever made. Measured 2026-09-02, the day the stock page
+  first read it: Apple's business-segments axis returned **25 members spanning 2008..2025 summing
+  627.3bn** against a filed FY2025 **416.2bn**, and Shell's product split reached **1,201bn against
+  a revenue of 266.9bn**. **129 of 216 (security, axis) groups spanned more than one period — 83 of
+  the 104 securities that have segments at all.** The `partition_id` filter was already correct;
+  this is a level above it, and every individual number was right, which is why nothing downstream
+  could see it. It is **migration 150's ASML lesson one level up** — there two FILINGS of one period
+  disagreed about member names and `dense_rank` fixed it by choosing a whole filing; here it is two
+  PERIODS, and the rule is the same: **choose the period first, then take its members.**
+  `security_segment_detail` had it too, where a stale denominator makes a child's "share of its
+  parent" a percentage of a figure the parent never reported. Fixed in 157 and 150; guarded by
+  `tests/a-split-is-one-period-s-statement.sql`. Reconciling splits went **6 -> 175 of 209**.
+- **THE REMAINING 32 ARE A WRONG RECONCILIATION TARGET, NOT A WRONG SPLIT.** GE Vernova's three
+  segments sum to a correct **$30.1bn** against a recorded `reconciled_to` of **$487m** — the parser
+  matched the wrong consolidated figure. So a consumer must check a split against the company's own
+  `revenue` metric rather than trusting `reconciled_to`, and **over- and under-coverage are
+  different facts**: over the trunk is a defect (draw nothing), under it is the filer's choice
+  (Novo Nordisk discloses geographies covering 37% of revenue) and gets an explicit remainder.
+- **d3-sankey OVERWRITES `node.value` WITH max(inflow, outflow), SO AN UNBALANCED NODE IS SILENTLY
+  RELABELLED.** The income-statement chart anchored its tax stage on pretax income while the links
+  left the operating-income node, so 17.3bn entered from nowhere and the deployed chart read
+  **"Operating income $97.31B"** — Amazon's PRETAX figure, on the wrong block. The offline check
+  asserted the stage summed to `pretax`, which is the number the bug used, and passed throughout.
+  **Assert against the NODE**: inflow equals outflow, and a node's value is the figure the filing
+  reports — never one the layout engine computed. Pretax is now its own stage.
+- **AN EMPTY COLUMN MAKES d3-sankey THROW, AND IT IS THE MAJORITY CASE.** `computeNodeBreadths`
+  indexes `columns` by layer and reads `.length` on every entry, so a layer nobody occupies is a
+  hole: `Cannot read properties of undefined`. A company with no segments starts at column 1 — and
+  that is **8,949 of the 9,015 securities the chart can draw**. Normalise the used columns to
+  0..k-1. Separately, `nodeAlign` must be forced: d3's default pushes a node with no outgoing links
+  to the LAST column, drawing cost of sales as an outcome of the business.
+- **REACT QUERY REPORTS `isPending` FOR A *DISABLED* QUERY**, so the market hooks' idiom
+  `empty: !query.isPending && rows.length === 0` is FALSE while `securityId` is null — and the
+  section renders a card with a heading and nothing under it, which is exactly what the page's
+  convention forbids. Seen in a browser with the instrument unresolved: **every** section on the
+  stock page drew an empty card. `loading` already guards on the id; `empty` must too. Fixed in
+  `use-income-flow`, `use-segments`, `use-industries`; **`use-peers`, `use-leadership` and the rest
+  still carry it.**
+- **A CHART GATED ONLY ON `onLayout` CAN NEVER APPEAR.** Measured: the card rendered 736px wide and
+  34px tall with zero children because the callback never produced a width. Take the window width as
+  the first estimate and let `onLayout` refine it — never block the render on the measurement.
+- **RENDERING IT IS A DISTINCT VERIFICATION AND IT FOUND THREE DEFECTS 57 OFFLINE ASSERTIONS MISSED.**
+  Two of them (the unbalanced node, the empty card) were *encoded* in the checks as requirements.
+  The harness: `expo export --platform web`, serve the output with a `/supabase` proxy to the real
+  instance and a `runtime-config.js` carrying the anon key — which is how nginx serves it, so the
+  app's own default path is exercised rather than a rebuilt bundle. Two traps: `EXPO_PUBLIC_*` set
+  inline on the export command **did not reach Metro** (the bundle kept `supabaseUrl:'/supabase'`),
+  and Node 20.9 has no global `WebSocket`, so the static render of any page constructing a Supabase
+  client dies with *"Node.js detected but native WebSocket not found"* until `ws` is preloaded.
+
 ## Observability (added 2026-08-27)
 
 Grafana at `muffin-grafana.<domain>` and Portainer at `muffin-portainer.<domain>`, both behind

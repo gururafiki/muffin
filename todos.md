@@ -1127,42 +1127,58 @@ coverage model that measures it. What follows is planned but not built; each pha
 planning session, and every number here was measured so a later session starts from evidence
 rather than memory.
 
-### Phase 2 — show it (the data exists and nothing reads it)
+### Phase 2 — show it — DONE 2026-09-02, except the admin panel
 
-muffin-ui reads 30 market relations and **not one segment view**. All of this is stored and correct
-today:
+Shipped on `segments-on-the-stock-page` (muffin-ui + muffin-deployment):
 
-- [ ] **Business lines on the stock page** (`src/app/stock/[ticker].tsx`, after `StatementTables`),
-      from `security_segment_current`: revenue, operating income, margin, capex/depreciation,
-      return on segment assets per line. Follow the page's convention — render nothing when empty.
-      Amazon: Online Stores 269bn, 3P Seller 172bn, AWS 129bn, Advertising 69bn.
-- [ ] **Revenue by market** from `security_segment_geography` — the cross-company comparison that
-      works today with **zero curation**, because 18 issuers share `country:US`, 10 `country:CN`,
-      8 `country:JP`. Amazon: US 489.7bn, rest-of-world 107.5bn, DE 45.9bn, GB 43.2bn, JP 30.7bn.
-      **Two caveats to build in:** filers name only material countries (2–15 places, median 4, no
-      Canada for Amazon), and `us-gaap:NonUsMember` is the RESIDUAL after the named countries, not
-      all-foreign — the split sums to exactly 716,924,000,000, matching `reconciled_to`.
-- [ ] **Earnings by market is essentially unavailable and that is not a gap.** 132 of 135 geography
-      rows carry revenue; **5** carry operating income. ASC 280 / IFRS 8 require revenue and
-      long-lived assets by geography, not profit. Profit exists only where the reportable segments
-      are themselves geographic (Amazon North America 426.3bn/29.6bn, International 161.9bn/4.75bn,
-      AWS 128.7bn/45.6bn). Say so in the UI rather than showing an empty column.
-- [ ] **Cross-tab drill-down** from `security_segment_detail` (270 rows): Alphabet's YouTube
-      Advertising 40.4bn (10.6% of Google Services), Search 224.5bn (58.9%); Vale's country ×
-      product (China × Ferrous Minerals 22.2bn, 96%). Nested members sum to their PARENT, never to
-      the company — `security_segment_spine` serves `parent_member is null` for that reason.
-- [ ] **Multi-industry.** `security_industries` holds 20,236 rows (yfinance 18,977, **wikidata 704,
-      filing 514, SIC 36**) and the stock page shows ONE label. This was the first half of the
-      original ask.
-- [ ] **Admin completeness panel**, gated exactly as `security-refresh-button.tsx` gates:
-      `useAuth((s) => s.session?.isAdmin ?? false)` then `if (!isAdmin) return null`.
-- [ ] **`check_anon_read_latency.py` must gain the new conjunctions IN THE SAME CHANGE.** The spine
-      is granted to anon and this pipeline has had four anon-timeout incidents; the guard times the
-      conjunctions the app actually sends, so there is nothing to add until the app sends some.
-- [ ] **Prerequisite: consolidate the four definitions of `security_segment_current`** (141, 148,
-      149, 150 + 157). `create or replace view` can only APPEND, so the earliest definer can never
-      impose the latest shape and must drop — a real window every deploy in which the view and its
-      dependents do not exist. Harmless only while nothing user-facing reads it.
+- [x] **Business lines on the stock page**, as an income-statement Sankey plus paired donuts.
+      Degrades on purpose: 8,949 equities have the statement half and 66 the streams, so the
+      waterfall draws for nearly everyone. Verified in a browser against production — Amazon's
+      streams reconcile to revenue exactly, and the Segments tab shows AWS at a 35.4% margin
+      against North America's 7.0%.
+- [x] **Revenue by market** — the Geography tab of the same control, with both caveats rendered
+      (filers name only material countries; `NonUsMember` is the residual, labelled as such).
+- [x] **Cross-tab drill-down** — nested members expand under their parent, each labelled
+      "% of &lt;parent&gt;" because those sum to the parent and never to the company.
+- [x] **Multi-industry** — "How it's classified", every source with its weight. The interesting
+      rows are the derived ones: Amazon is consumer discretionary by revenue (61.6%) and
+      information technology by PROFIT (57.0%).
+- [x] **`check_anon_read_latency.py` gained the three new reads in the same change** — 56–61 ms
+      against a 2,000 ms budget.
+- [x] **Prerequisite: one definer per segment view.** 157 owns `security_segment_current`, 150 owns
+      `security_segment_detail` (149's duplicate DDL removed), 158 the spine, 162
+      `pending_segment_alias`.
+
+**Found while building it, and fixed here rather than deferred:**
+
+- [x] **`security_segment_current` served every period's members at once** — Apple 25 members
+      spanning 2008..2025 summing 627.3bn against a filed 416.2bn; 83 of 104 securities affected.
+      Reconciling splits went 6 -> 175 of 209. See CLAUDE.md.
+- [x] **The Sankey drew pretax income and labelled it operating income**, because the graph did not
+      balance and d3 relabels an unbalanced node with its larger side.
+- [x] **Sections rendered empty cards when the query was disabled** (React Query reports
+      `isPending` while switched off).
+
+Still open:
+
+- [ ] **Admin completeness panel.** Deliberately not shipped. The per-security question needs a
+      view: the facet rule lives in `market.required_facet` and re-deriving it in TypeScript is the
+      same-fact-in-two-places mistake this schema has been bitten by repeatedly. `coverage_current`
+      already computes exactly the right shape in its `all_facets` CTE, but it is **universe-scale
+      with `base` declared `as materialized`**, so a filter for one security cannot be pushed down
+      and every stock page would pay the whole 743 ms aggregate. Exposing it needs either a
+      refactor of a carefully tuned view or a second, per-security view built on indexed lookups —
+      and a measurement pass either way, against the 8 s PostgREST ceiling and the 3 s anon one.
+- [ ] **The disabled-query empty-card bug is app-wide.** `use-peers`, `use-leadership`,
+      `use-filings` and the rest carry `empty: !query.isPending && …`, and all three drew empty
+      cards in the same browser session. Fixed only in the three hooks this change touched;
+      sweeping the rest is a separate, mechanical change.
+- [ ] **32 splits carry a wrong `reconciled_to`** — a parser defect, not a view one. GE Vernova's
+      three segments sum to a correct $30.1bn against a recorded target of $487m. The chart defends
+      itself (it checks the split against the company's own revenue metric), so this is now a data
+      quality item rather than a correctness one.
+- [ ] **`security_segment_detail` returned 0 rows for Amazon** — expected (it has no cross-tab), but
+      the nested path has only been exercised offline. Drive it against Alphabet before trusting it.
 
 ### Phase 3 — DART, and a spike protocol for the rest
 
