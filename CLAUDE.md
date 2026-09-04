@@ -2380,6 +2380,23 @@ try the merge before assuming it needs a human click.
 - **A CHART GATED ONLY ON `onLayout` CAN NEVER APPEAR.** Measured: the card rendered 736px wide and
   34px tall with zero children because the callback never produced a width. Take the window width as
   the first estimate and let `onLayout` refine it — never block the render on the measurement.
+- **A GUARD APPLIED TO THE CHART AND NOT TO THE TABLE BESIDE IT IS HALF A GUARD.** `streamsInto`
+  refuses a split that exceeds the company's own revenue, so Alphabet's Sankey correctly drew no
+  streams — while the donuts and list below it reported "66.9%" of a **512.62bn** total against a
+  revenue of **402.84bn**. Both describe the same split; a share is only a share OF something, and
+  when the parts exceed the whole the denominator is fiction. Over revenue: figures without
+  percentages, and say why. Under it: shares against REVENUE with the remainder named. Found by
+  reading the rendered page, not the diff — the chart's half had been proven by mutation.
+- **A SANKEY'S HEIGHTS ARE PROPORTIONAL TO REVENUE AND MOST P&L LINES ARE NOT.** Income tax is ~5%
+  of revenue, so its block is ~12px on a 260px chart and fell under a single 22px label gate —
+  Apple and Amazon both drew a labelled diagram with the tax block blank. A label needs TIERS
+  (stacked, one-line, none), not one threshold.
+- **UNLABELLED IS THE CORRECT RENDERING OF AN UNKNOWN CURRENCY, AND IT LOOKS LIKE A BUG.** TSMC's
+  breakdown shows `NT$3.27T` (the segment rows carry TWD) while its Sankey shows a bare `3.81T`,
+  because `security_metric.currency_code` is null for it. That inconsistency on one page is ugly and
+  is still right — defaulting to the segments' currency would be inferring a reporting currency from
+  a different source, which is how the `$1.02T` Alibaba bug started. Fix the missing metric
+  currency, never the label.
 - **RENDERING IT IS A DISTINCT VERIFICATION AND IT FOUND THREE DEFECTS 57 OFFLINE ASSERTIONS MISSED.**
   Two of them (the unbalanced node, the empty card) were *encoded* in the checks as requirements.
   The harness: `expo export --platform web`, serve the output with a `/supabase` proxy to the real
