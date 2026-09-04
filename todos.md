@@ -1182,15 +1182,16 @@ Still open:
 
 ### Found while finishing Phase 2 — measured, not yet fixed (2026-09-04)
 
-- [ ] **`security-performance` is still marking securities it should not.** 27 securities carry
-      `performance_missing_at` while `security_price` holds bars from the last 7 days whose closes
-      MOVE — so the returns are computable from data already held. Migration 168 clears the known
-      27 once; **11 of them were marked between 2026-08-28 and 09-03**, so the cause is live.
-      The discriminator is the SPREAD: the 437 marks overall are coverage-shaped (TW 115, PH 42,
-      AE 36 — the Philippines and UAE are outside keyless yfinance and earn theirs), while the
-      contradicted 27 span sixteen countries with 1-2 each, which is what a marking bug looks like
-      rather than a provider gap. Finding it means reading `security-performance`'s isolation path
-      against a live throttle.
+- [ ] **Is `security-performance` still marking wrongly? UNCONFIRMED — watch it.** Migration 168
+      cleared the 27 contradicted marks (verified: `one_shot` applied 2026-09-04T21:36, and
+      `data_defect.contradicted_negative_cache` went 27 -> 0). **I earlier wrote that the cause was
+      live because 11 of the 27 were marked in the previous week; that was not evidence.** The
+      marking path is careful — it isolates per symbol, marks only a symbol that answered ALONE with
+      an empty series, refuses to mark on a throttle, and retracts. 6 securities have been marked
+      since 08-27 and NONE is contradicted. The honest position is that the residue is cleared and
+      recurrence is unproven; if `contradicted_negative_cache` climbs off zero again, the thing to
+      check is whether "no returns computable" is being conflated with "the provider has nothing" —
+      a thinly-listed security with bars but too little history legitimately yields no periods.
 - [ ] **52 served segment splits still exceed the company's own revenue, and 707 historical ones
       disagree with their target.** Not a wrong split — a wrong `reconciled_to`: GE Vernova's three
       segments sum to a correct $30.1bn against a recorded $487m, and the extremes reach x388,
