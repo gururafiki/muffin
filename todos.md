@@ -1192,22 +1192,37 @@ Still open:
       recurrence is unproven; if `contradicted_negative_cache` climbs off zero again, the thing to
       check is whether "no returns computable" is being conflated with "the provider has nothing" —
       a thinly-listed security with bars but too little history legitimately yields no periods.
-- [ ] **52 served segment splits still exceed the company's own revenue, and 707 historical ones
-      disagree with their target.** Not a wrong split — a wrong `reconciled_to`: GE Vernova's three
-      segments sum to a correct $30.1bn against a recorded $487m, and the extremes reach x388,
-      which smells like a currency or scale mismatch rather than a double count. The UI already
-      refuses to draw any of them and `check_segments_reconcile` now tripwires both populations, so
-      this is data quality rather than correctness. Characterise the x100+ cases first: if they are
-      all one currency or one filer shape, the parser's target selection is the fix.
-- [ ] **`security-eps-history` (170h) and `instrument-profile` (87h) are genuinely stalled.** They
-      were buried in an alert that also flagged `fund-holdings` and `derive-classifications`, both
-      of which are correctly quiet on long TTLs — now separated by `ttl_hours`, so these two are
-      visible on their own.
-- [ ] **Admin completeness panel — still not built.** `coverage_current`'s `all_facets` CTE is
-      exactly the right shape but the view is universe-scale with `base` declared `as materialized`,
-      so a one-security filter cannot be pushed down and every stock page would pay the whole
-      743 ms aggregate. Needs either a refactor of a tuned view or a second per-security view on
-      indexed lookups, and a measurement pass against the 8s PostgREST ceiling and the 3s anon one.
+- [x] **The bad `reconciled_to` was a parser bug and is FIXED (muffin-deployment#289) — one
+      measurement left.** Not a currency or scale mismatch: both were measured and ruled out (USD
+      2,831 of 3,059 disagreeing splits, in proportion to the population; only 14 ratios near a
+      power of ten; only 13 equal to the member count). The cause was that `segmentFactsFrom` groups
+      candidates by `axis|periodEnding` — one group holding every metric AND both period types
+      sharing a date, since a fiscal-year end is also Q4's end — and stamped the winning bucket's
+      target on all of them. A quarter carried the year's revenue. 3,021 of 11,211 flat revenue
+      splits were affected, and the damage tracked the shape exactly: 47% of older comparatives
+      wrong against 24% of quarters. **The splits themselves were always right**; only the figure
+      recorded beside them was wrong, so nothing served to a reader was incorrect — what it cost was
+      the guard.
+      - [ ] **Re-measure once the re-parse drains.** Migration 169 bumps `segment_parser.version`,
+            which re-queues ~33,000 filings; that is days of cron, not minutes. The count of splits
+            disagreeing with their stored target should fall from 3,021 toward zero, and
+            `check_segments_reconcile`'s served/historical tripwires (23 and 707 at the time of
+            writing) should fall with it. That number is the proof the fix worked.
+- [x] **`security-eps-history` and `instrument-profile` were NOT stalled — I misread the alert.**
+      `security-eps-history` was deliberately **retired** from the cron by migration 138 when
+      `equity/calendar/earnings?provider=nasdaq` replaced it (one 3-day window returns 643 companies
+      against alpha_vantage's 25 calls a DAY); its last recorded error is alpha_vantage's own
+      rate-limit notice, which is why. `instrument-profile` skips on a TTL longer than its 3h cron.
+      Both are now distinguishable: `resource_health` exposes `scheduled` and `ttl_hours`, and the
+      check exempts what nothing schedules and judges the rest by their own schedule.
+- [x] **Admin completeness panel — BUILT** (muffin-deployment#290 + muffin-ui#116).
+      `market.security_facet_status` answers per security via indexed `exists` lookups.
+      `coverage_current` was deliberately left alone: its `base` CTE is `as materialized`, which is
+      load-bearing for the aggregate and a wall for a per-security filter, and its plan cannot be
+      measured until deployed. **So the presence rules exist twice** — the mitigation is that
+      `tests/completeness-agrees-with-coverage.sql` asserts the two report the same totals, so they
+      cannot drift silently. The panel shows three states (present / missing / not applicable) and
+      two numbers (core-complete, and breadth), because a security can be core-complete and thin.
 - [ ] **iOS and Android have never been exercised.** Web only. A single code path was the argument
       for `react-native-svg` over Skia, and it is still unproven on native.
 
