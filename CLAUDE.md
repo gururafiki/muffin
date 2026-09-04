@@ -2406,6 +2406,43 @@ try the merge before assuming it needs a human click.
   and Node 20.9 has no global `WebSocket`, so the static render of any page constructing a Supabase
   client dies with *"Node.js detected but native WebSocket not found"* until `ws` is preloaded.
 
+- **A GUARD THAT EXITS ON ITS OWN SAMPLE SIZE ASSERTS NOTHING, AND IT FAILS SILENTLY BECAUSE THE JOB
+  WAS ALREADY RED.** `check_segments_reconcile` read the whole of `security_segment_latest` against
+  a 60,000-row cap and had been exiting 1 on truncation for at least a day — 105,166 flat rows on
+  2026-09-04 with ~33,000 filings still queued. Two obvious fixes are wrong: a **date filter does
+  not bound it**, because `segment_parser.version` re-queues every filing when bumped (measured, the
+  last 7 days contained all 105,166 rows), and a **row cap manufactures the very failure it
+  reports**, since a half-fetched split can never reconcile. Scope by ENTITY — the 80
+  most-recently-written securities, each fetched whole — so every split stays complete.
+- **`reconciled_to` IS PER (SECURITY, AXIS, PERIOD), NOT PER METRIC, AND ASSERTING OTHERWISE COST
+  2,724 FALSE FAILURES.** Measured: 82 of 83 multi-metric groups carry ONE value, the revenue total.
+  That is deliberate — a split is learned from the metric that reconciles and applied to the rest,
+  because ASC 280 and IFRS 8 require a reconciliation rather than an identity. So Apple's
+  `cost_of_revenue` (220,960m) and `operating_income` (175,677m) were being failed against a revenue
+  total of 416,161m. Revenue-only, as the neighbouring check already was: 2,724 -> 729.
+- **A PERMANENTLY RED GATE IS ONE NOBODY READS, so a known backlog gets a TRIPWIRE and the live
+  half gets zero tolerance.** Of the 729 remaining, 707 are historical and 23 are SERVED (the newest
+  annual period per security and axis — the only split a reader ever sees). Both are counted, both
+  tripwired, and only growth fails. Proven by lowering each.
+- **AN ALERT THAT CANNOT TELL A LONG TTL FROM A DYING WORKER HIDES THE DYING ONES.** The
+  stalled-resource check judged every resource against a flat 12 hours and flagged eight, of which
+  `fund-holdings` (7-day TTL over quarterly filings) and `derive-classifications` (30-day) were
+  behaving exactly as designed — while `security-eps-history` (170h on a short TTL) was genuinely
+  stuck and invisible among them. `begin_refresh` is already handed the interval, so it now RECORDS
+  it and `resource_health` exposes `ttl_hours`; a resource is late only by its own schedule. The
+  alternative was a second copy of `EXTRA_TTL_MINUTES` in SQL or in the checker.
+- **A LATENCY GUARD NEEDS BEST-OF-N, BECAUSE ONE READING MEASURES A MOMENT.** `stock statements`
+  reported 2,166 ms on 2026-09-02 and a hard `57014` on 09-04, both immediately after a deploy, and
+  both re-measured 0.34-0.65 s across five runs and three symbols. The node runs matview refreshes,
+  a PostgREST reload and eight ingestion resources; contention is normal. The failure the guard
+  exists for — a plan flip, a lost index, a view that grew a lateral — is slow EVERY time, so
+  best-of-three still catches it and stops the guard crying wolf.
+- **THE APP'S OWN QUERY IS THE ONE THAT MATTERS, AND A WHOLE-VIEW SCAN IS NOT IT.** After the
+  segment fix, `security_segment_current` filtered to one security answers anon in **80 ms**, while
+  an unfiltered `ORDER BY` over the whole view exceeds the 3 s anon ceiling. Nothing consumes the
+  latter — whole-table access goes through `security_segment_spine` at **166 ms**, which is what the
+  matview exists for. Measure the conjunction the app sends before calling a view slow.
+
 ## Observability (added 2026-08-27)
 
 Grafana at `muffin-grafana.<domain>` and Portainer at `muffin-portainer.<domain>`, both behind

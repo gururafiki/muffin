@@ -1180,6 +1180,36 @@ Still open:
 - [ ] **`security_segment_detail` returned 0 rows for Amazon** — expected (it has no cross-tab), but
       the nested path has only been exercised offline. Drive it against Alphabet before trusting it.
 
+### Found while finishing Phase 2 — measured, not yet fixed (2026-09-04)
+
+- [ ] **`security-performance` is still marking securities it should not.** 27 securities carry
+      `performance_missing_at` while `security_price` holds bars from the last 7 days whose closes
+      MOVE — so the returns are computable from data already held. Migration 168 clears the known
+      27 once; **11 of them were marked between 2026-08-28 and 09-03**, so the cause is live.
+      The discriminator is the SPREAD: the 437 marks overall are coverage-shaped (TW 115, PH 42,
+      AE 36 — the Philippines and UAE are outside keyless yfinance and earn theirs), while the
+      contradicted 27 span sixteen countries with 1-2 each, which is what a marking bug looks like
+      rather than a provider gap. Finding it means reading `security-performance`'s isolation path
+      against a live throttle.
+- [ ] **52 served segment splits still exceed the company's own revenue, and 707 historical ones
+      disagree with their target.** Not a wrong split — a wrong `reconciled_to`: GE Vernova's three
+      segments sum to a correct $30.1bn against a recorded $487m, and the extremes reach x388,
+      which smells like a currency or scale mismatch rather than a double count. The UI already
+      refuses to draw any of them and `check_segments_reconcile` now tripwires both populations, so
+      this is data quality rather than correctness. Characterise the x100+ cases first: if they are
+      all one currency or one filer shape, the parser's target selection is the fix.
+- [ ] **`security-eps-history` (170h) and `instrument-profile` (87h) are genuinely stalled.** They
+      were buried in an alert that also flagged `fund-holdings` and `derive-classifications`, both
+      of which are correctly quiet on long TTLs — now separated by `ttl_hours`, so these two are
+      visible on their own.
+- [ ] **Admin completeness panel — still not built.** `coverage_current`'s `all_facets` CTE is
+      exactly the right shape but the view is universe-scale with `base` declared `as materialized`,
+      so a one-security filter cannot be pushed down and every stock page would pay the whole
+      743 ms aggregate. Needs either a refactor of a tuned view or a second per-security view on
+      indexed lookups, and a measurement pass against the 8s PostgREST ceiling and the 3s anon one.
+- [ ] **iOS and Android have never been exercised.** Web only. A single code path was the argument
+      for `react-native-svg` over Skia, and it is still unproven on native.
+
 ### Phase 3 — DART, and a spike protocol for the rest
 
 - [ ] **Build `security-kr-segments`.** Proven 2026-08-29: a 7.1 MB instance carrying
