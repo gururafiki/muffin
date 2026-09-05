@@ -1245,18 +1245,12 @@ Still open:
       resumes on `(cls, page)`; and `pending_segments` had to be scoped on the **regulator on the
       form**, because scoping it on the filing's own `source_code` — the natural-looking fix —
       matches nothing and silently empties the entire SEC backlog.
-- [ ] **Two filing-discovery resources report no `written`, so the throughput panel draws no line
-      for them.** Measured 2026-09-05 in production: `security-filing-history` (62 runs) and
-      `kr-filings` (42 runs) both report `written = 0` because neither puts `written` in its
-      response — they report `filings` and `mapped` instead — while `security-filings` reports
-      6,909. `refresh_run.written` is a GENERATED column over the report jsonb, so a resource that
-      does not name the key contributes nothing to `Segment facts written per run`.
-      This is mildly at odds with the guard added in #294: `check_dashboards_can_render` now
-      asserts every resource writing `security_segment`/`security_filing` appears in that panel's
-      list, which implies those series are visible. They are listed and flat.
-      Fix is one key per resource (`written: filingsWritten`), not a panel change — the panel is
-      right to plot `written`. Deliberately not done in the Korea PRs to avoid a fourth deploy
-      cycle for a cosmetic gap; it is pre-existing for `security-filing-history`.
+- [x] **`kr-filings` reported no `written`, so the throughput panel drew no line for it.** FIXED
+      2026-09-05. **And the entry that stood here was half wrong**: it named
+      `security-filing-history` as a second offender. It is not — it reports `written: 0` correctly
+      because its backlog is drained (`note: every filer has a walked history`). Only `kr-filings`
+      omitted the key, while writing 118 and 92 filings in its last two runs. Reading the actual
+      `refresh_run.report` rows settled it; the count alone had looked identical for both.
 - [ ] **Europe — 1,438 equities, 260 SEC-reachable, so a 1,178 gap: the second largest after
       China.** ESEF is measured NOT viable (ASML, Nokia, Novo Nordisk, TotalEnergies FY2025:
       431–872 facts, **zero segment axes**; IFRS 8 notes are block-tagged text, and Germany is not
