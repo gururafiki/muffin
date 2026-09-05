@@ -2522,6 +2522,53 @@ try the merge before assuming it needs a human click.
   latter — whole-table access goes through `security_segment_spine` at **166 ms**, which is what the
   matview exists for. Measure the conjunction the app sends before calling a view slow.
 
+- **A RESIDUAL ALONE IS NOT A SPLIT, AND THE TWO OBVIOUS REPAIRS ARE BOTH DISPROVED BY THE SAME
+  FILING.** `bestMap` — which members belong together — is learned from the bucket that places the
+  most members and applied to every metric on the axis, deliberately, because segment ASSETS and
+  PROFIT never reconcile and could not otherwise be placed at all. The cost: a bucket holding only
+  SOME of those members inherits the partition anyway. Chevron FY2025 served
+  `AllOtherSegments 581m` as its revenue breakdown against a consolidated **231,370,000,000** —
+  0.25% of the company — because revenue's bucket inherited partition 1 from `depreciation`
+  (283m + 18,445m + 1,404m = 20,132m, which reconciles exactly). Every number was individually
+  correct, which is why nothing downstream could see it. Requiring the inherited partition to be
+  COMPLETE breaks the same filing's `total_assets`, which reconciles exactly on Upstream +
+  Downstream with **no** residual; requiring it to RECONCILE rejects segment profit everywhere,
+  since ASC 280 and IFRS 8 mandate a reconciliation rather than an identity. The rule that survives
+  is narrower than either: **a partition must contain at least one member that is not a residual.**
+  Measured across the served table — 45 residual-only splits, median **2.82%** of their own target,
+  27 under 10%, against 23,802 splits holding a real member that the rule does not touch. Seeded
+  from the data, not from memory: exactly three member codes account for all 45, while four further
+  plausible ones (`CorporateNonSegment`, `MaterialReconcilingItems`, `SegmentReconcilingItems`,
+  `OtherSegments`) account for **zero** and are deliberately absent — a new one is a row in
+  `market.segment_member_class`. Note a residual reaching ratio **1.000** is still not a breakdown,
+  and a SINGLE-member split is not the signal: `us-gaap:ServiceMember` (127) and `ProductMember`
+  (50) are ordinary partial disclosures.
+- **A PARSER RULE THAT STOPS EMITTING A FACT CAN NEVER RETRACT IT, AND TWO RULES SHIPPED TOGETHER
+  HAD OPPOSITE FATES.** `security_segment` is written by upsert, so the parser only ever ADDS or
+  OVERWRITES. A member it DEMOTES self-heals — it is still emitted, at partition 0, and overwrites
+  its own row on the next read of that filing. A member it DROPS is never seen again, so the last
+  row written survives for ever in a SERVED partition, looking freshly written. Measured the moment
+  the subtotal rule merged: 33 rows of `ReportableSegmentAggregationBeforeOtherOperatingSegmentMember`
+  and 8 of `OperatingSegmentsMember` sat at partition 1 — a subtotal counted beside its own
+  children, i.e. the exact double count the new rule existed to prevent, made permanent BY the fix.
+  **A rule that removes rows needs a retraction in the same change**, per ACCESSION (a filing's rows
+  are its own statement of itself) and never on the upsert's conflict target, which omits the
+  accession deliberately so a newer filing restating a period keeps ownership. Retract even when the
+  parse yields nothing — a filing that now discloses no segments must withdraw what it used to — and
+  never on a throw, or an outage retracts the universe.
+- **A ONE-SHOT REPAIR MUST MIRROR WHAT A RE-READ NOW PRODUCES, OR IT AND THE DRAIN DISAGREE.** The
+  subtotal is DELETED (the parser would never write that row in any partition, so leaving it at 0
+  keeps a row no re-read can produce) while the residual-only split is DEMOTED (those members are
+  still emitted at 0, so deleting discards a fact the filing genuinely states). The same distinction
+  decides the test: the shape that must be UNTOUCHED is a residual sitting beside real segments —
+  Chevron's `depreciation`, which only reconciles with it — and a repair that cannot tell that from
+  a residual-only split is worse than no repair.
+- **ONE CONTROL TABLE, TWO ROLES, BECAUSE THE TREATMENTS ARE OPPOSITE.** A `subtotal` is dropped
+  before partitioning (a split containing one double-counts by construction); a `residual` is KEPT
+  — Chevron's `depreciation` partition needs it to reconcile — and only barred from being the whole
+  of a split. Listing both in one exclusion set silently deletes correct data, which the fixture
+  proves by mutation.
+
 ## Observability (added 2026-08-27)
 
 Grafana at `muffin-grafana.<domain>` and Portainer at `muffin-portainer.<domain>`, both behind

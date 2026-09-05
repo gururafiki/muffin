@@ -507,6 +507,23 @@ eliminations sit outside the segments exactly as unallocated cost does for profi
 bucket can earn a partition on its own. The split is **learned** per (metric, period type, span) and
 **applied** per (axis, period end); an instant at a date with no duration bucket stays unplaced.
 
+**A MEMBER'S ROLE DECIDES WHETHER IT CAN BE A SPLIT, AND THE TWO ROLES NEED OPPOSITE TREATMENT.**
+`market.segment_member_class` classifies the members that are not business lines. A `subtotal` is
+dropped before partitioning — a split containing one double-counts by construction, which is how
+Chevron's "aggregation before other operating segments" (230,789m) reconciled perfectly beside
+`AllOtherSegments` (581m) and was served as a breakdown. A `residual` is **kept**, because it is a
+genuine part of any split that also names real segments, but may never be the whole of one.
+
+That second rule exists because *applying* the learned split to every bucket means a bucket holding
+only some of its members inherits it anyway. Chevron's revenue bucket inherited partition 1 from
+`depreciation` and served `AllOtherSegments 581m` against a consolidated **231,370,000,000**. The
+two obvious repairs are disproved by that same filing: requiring the inherited partition to be
+COMPLETE discards `total_assets`, which reconciles exactly on Upstream + Downstream with no
+residual, and requiring it to RECONCILE rejects segment profit everywhere. So the rule is only that
+**a partition must contain at least one non-residual member** — 45 splits affected, median 2.82% of
+their own target, against 23,802 left untouched. Adding a member is a row, never a deploy; the
+`segment_parser.version` bump beside it re-reads every filing.
+
 `security-filing-history` exists because **the filing index was shallow by a `limit=40`**, not
 because SEC is: `security_filing` held 8,450 accounts filings for 2026 and **four** for 2015, and
 segment depth is exactly filing depth. SEC's submissions API returns the complete history in one
