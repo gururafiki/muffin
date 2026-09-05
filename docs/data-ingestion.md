@@ -583,6 +583,21 @@ addressed by `corp_code`, not a CIK) and **transport** (a ZIP, and slow).
   Korean companies keep filing, and once phase A finishes this is the only path by which a new
   annual report is discovered, so a permanent mark would freeze the Korean universe.
 
+- **AN ELIMINATION COLUMN IS NOT A SEGMENT SPLIT, and leaving the qualifier open stored it as one.**
+  A Korean segment table has two COLUMNS on `ifrs-full:SegmentConsolidationItemsAxis` — the operating
+  segments and the intersegment eliminations — and they differ by exactly the consolidated figure.
+  Hyundai Mobis FY2025: operating 76,544,947,000,000, elimination −15,426,820,000,000, consolidated
+  61,118,127,000,000. With the qualifier open both are admitted and the parser stored the
+  **elimination** column: a served split summing to minus 15.4 trillion won for a company with 61
+  trillion of revenue, with geography corrupted the same way (71,697,297,000,000, one elimination
+  member mixed into four operating ones). Every individual number was correct; the wrong column was
+  chosen. Fixed by pinning `required_member = OperatingSegmentsMember` — a control-table row, which
+  only rejects when the axis is PRESENT, so a filer omitting it is untouched. **Not applied to the
+  us-gaap consolidation axes**: 200+ served `sec-segments` rows carry a negative revenue and the
+  sampled ones are legitimate (Visa's client incentives, Coca-Cola's eliminations are negative lines
+  that make those splits *reconcile*). A negative value is not the defect; a split that does not
+  reconcile is.
+
 - **A Korean filing must never enter `pending_segments`.** That view's only scope was
   `security_disclosure.capability = 'held'`, and enabling DART makes every Korean security exactly
   that — they would have entered the SEC queue at the head of a breadth-first ordering, where

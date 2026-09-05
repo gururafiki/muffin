@@ -2355,6 +2355,29 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   eligibility clause **and** the sort key, since a vocabulary carried in two clauses drifts
   (migration 163 left exactly that second copy). Found only because the guard's fixture kept an
   ordinary SEC filing as a CONTROL — an over-tight scope fails there, and nothing else could see it.
+- **A QUALIFIER AXIS CAN CARRY THE TWO COLUMNS OF ONE TABLE, AND LEAVING IT OPEN PICKS THE WRONG
+  ONE.** Korean filers tag both the operating segments and the intersegment ELIMINATIONS on
+  `ifrs-full:SegmentConsolidationItemsAxis`; the two differ by exactly the consolidated figure
+  (Hyundai Mobis FY2025: 76,544,947,000,000 − 15,426,820,000,000 = 61,118,127,000,000). With the
+  qualifier unpinned both are admitted and the parser stored the ELIMINATION column — a served split
+  of **minus 15.4 trillion won** for a company with 61 trillion of revenue, and a geography split
+  silently mixing one elimination member into four operating ones. Every individual number was
+  correct and correctly attributed; the wrong COLUMN was chosen, which is why nothing but the
+  reconciliation guard could see it — and that was inside its tripwire, so CI was green. Migration
+  155 had asserted in writing that this axis "narrows a fact without changing what it measures, so
+  it is open"; it does change what it measures. **Do not generalise the fix**: the us-gaap
+  equivalents carry legitimately negative lines (Visa's client incentives, Coca-Cola's eliminations)
+  that make those splits reconcile, so pinning there would delete the line that makes the arithmetic
+  work. A negative value is not the defect; a split that does not reconcile is.
+- **WHEN A FIXTURE CANNOT REACH THE DEFECT, DELETE THE ASSERTION AND RECORD THE REAL MEASUREMENT.**
+  Three synthetic reconstructions of the above (two members; then the zero-valued member present in
+  both columns; then the elimination facts first in document order) each produced a DIFFERENT answer
+  and none the production one — the mechanism needs more of the instance than a fixture rebuilds. The
+  honest artifact was running the shipped parser against the REAL document under both configs and
+  pinning the four numbers in a comment. Tuning a synthetic check until it goes green makes it pass
+  for a reason unrelated to the cause, which is the decorative-guard failure one step worse: it is
+  now believed.
+
 - **A GUARD'S FIXTURE MUST BE HOSTILE TO THE GUARD'S OWN OTHER RULE.** `pending_segments` also
   requires `s.cik is not null`, so a Korean fixture with no CIK would be excluded by *that* and the
   regulator scope could be deleted unnoticed. Giving the Korean security a CIK — which is realistic,
