@@ -507,6 +507,18 @@ eliminations sit outside the segments exactly as unallocated cost does for profi
 bucket can earn a partition on its own. The split is **learned** per (metric, period type, span) and
 **applied** per (axis, period end); an instant at a date with no duration bucket stays unplaced.
 
+**A CROSS-TAB IS ALSO A FLAT SPLIT, SUMMED THE OTHER WAY.** A cell reconciles to its *parent's*
+value, so a filer publishing the grid without stating that parent's total leaves every cell
+unplaceable — Chevron FY2025 discloses US/non-US × upstream/downstream revenue and no flat regional
+revenue, so a complete split sat at partition 0 and appeared nowhere (19,990 such cells, 153
+securities, 93 with nothing served). Summing across the parent axis recovers it, and the marginal is
+offered to the ORDINARY partition search: it survives only if it reconciles to the filing's own
+total. Novo Nordisk shows why that test is the whole design — its members nest, so flat they reach
+DKK 1,307,626m against revenue of 309,064m, and the search instead finds the disjoint level
+(US + International Operations = 309,064). A member the filer states flatly is never replaced by the
+sum; the marginal keeps the grid's qualifier; and a marginal earning no partition is dropped rather
+than stored at 0.
+
 **A MEMBER'S ROLE DECIDES WHETHER IT CAN BE A SPLIT, AND THE TWO ROLES NEED OPPOSITE TREATMENT.**
 `market.segment_member_class` classifies the members that are not business lines. A `subtotal` is
 dropped before partitioning — a split containing one double-counts by construction, which is how

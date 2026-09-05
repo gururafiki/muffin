@@ -2621,6 +2621,42 @@ try the merge before assuming it needs a human click.
   leaves the derivation still seeing the mapping it is being asked to forget. Refresh after the
   change the test is making, not merely before the call.
 
+- **A CROSS-TAB IS ALSO A FLAT SPLIT, SUMMED THE OTHER WAY — AND RECONCILIATION IS THE ONLY RULE
+  THAT SEPARATES A GOOD ONE FROM A DOUBLE COUNT.** A cell reconciles to its PARENT's value, so a
+  filer publishing the grid without stating that parent's total leaves every cell unplaceable:
+  Chevron FY2025 discloses US/non-US x upstream/downstream revenue and no flat regional revenue, so
+  a complete, exactly-reconciling business-line split sat at partition 0 and appeared on no page —
+  19,990 such cells across 153 securities, 93 with nothing served. Summing across the parent axis
+  recovers it (Upstream 88,379 + Downstream 142,410 + the FILED AllOther 581 = 231,370, the
+  filing's own total). The marginal is offered to the ORDINARY partition search as a flat candidate
+  and survives only if it reconciles. **Novo Nordisk is why nothing weaker works**: its members
+  NEST — Ozempic inside TotalGLP1 inside TotalDiabetesCare, and EUCAN/CN/APAC/Emerging Markets all
+  inside International Operations — so flat its cells reach DKK 1,307,626m against revenue of
+  309,064m, **4.2x**. `assignPartitions` finds the disjoint level unaided (US + International
+  Operations = 309,064). Three guards fell out, each mutation-proven: a FLATLY STATED member is
+  never replaced by our sum; the marginal KEEPS the grid's qualifier (Chevron tags
+  `ConsolidationItemsAxis`, whose total is 231,370m against a bare 184,432m — blanking it
+  reconciled against the wrong total and served nothing); and a marginal earning NO partition is
+  DROPPED rather than stored at 0, since an unplaced marginal is ours and merely duplicates its
+  cells.
+- **A SHARE IS A SHARE OF SOMETHING THE READER CAN NAME, AND THERE ARE THREE BASES.** Chevron's
+  page rendered **77.2% + 47.9% + 0.3% = 125.4%** under a caption correctly saying the shares were
+  of the $231.37B the filing totals those lines to — the caption right, the arithmetic using
+  reported revenue. The rule's own comment described the correct behaviour and the code did the
+  opposite: `revenue > 0 && !overCovered ? revenue : disclosed` takes revenue whenever the split
+  reconciles, because reconciling is exactly what makes `overCovered` false. The bases are
+  **filed** (the lines add to a published total, which may EXCEED revenue because segments are
+  disclosed before intersegment eliminations), **revenue** (a partial disclosure — Novo covers 37%
+  by geography — so the gap can be named), and **none** (over revenue and reconciling to nothing;
+  show figures, withhold every percentage). `security_segment_current.revenue_share_pct` was
+  correct all along at 61.55/38.20/0.25; the UI recomputed it against a different denominator.
+- **`innerText` UNDER-REPORTS A REACT-NATIVE-WEB PAGE, AND I NEARLY REPORTED A UI DEFECT THAT DID
+  NOT EXIST.** The Business lines section was absent from `document.body.innerText` for Chevron,
+  Apple AND Amazon, which reads as the whole feature being broken. It was rendered and visible the
+  whole time — `textContent` contained it and the heading measured 89x16 with `display: block`,
+  `visibility: visible`. Probe a rendered RNW page with `textContent` plus a
+  `getBoundingClientRect`, and treat an `innerText` miss as a question rather than an answer.
+
 ## Observability (added 2026-08-27)
 
 Grafana at `muffin-grafana.<domain>` and Portainer at `muffin-portainer.<domain>`, both behind
