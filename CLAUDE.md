@@ -2589,6 +2589,38 @@ try the merge before assuming it needs a human click.
   of a split. Listing both in one exclusion set silently deletes correct data, which the fixture
   proves by mutation.
 
+- **A WHOLE-UNIVERSE DERIVATION IS NOT A STATEMENT, AND A DAILY RESOURCE THAT DIES LOOKS EXACTLY
+  LIKE ONE THAT HAS NOT RUN YET.** `derive-classifications` failed on EVERY daily run from
+  2026-09-02 to 09-05 with `canceling statement due to statement timeout`, having last succeeded on
+  09-01. **The guard DID catch it — `check_resource_health` reported
+  `derive-classifications: no work in Nh` in every market-verify run back to 09-04 — and nobody saw
+  it, because market-verify was ALREADY RED on an unrelated assertion and had been for six days.**
+  That is this file's own "a permanently red gate is one nobody reads", demonstrated: the gate was
+  failing on `contradicted_negative_cache`, which CLAUDE.md had already reclassified as a GAUGE
+  while the workflow still asserted it, so a genuine four-day outage sat inside a job that was red
+  for a reason nobody was acting on. **The cost of leaving a gate red is not the ignored check; it
+  is every real failure that lands behind it.** Fix a red gate the day it goes red, or the next
+  true positive is invisible. Nothing in the function changed; the segment backlog began
+  draining on 08-29 and its input grew past the PostgREST role's 8-second ceiling. Measured:
+  the function **> 45,000 ms**, `security_segment_current` **2,586 ms**, `security_segment_spine`
+  **2.8 ms** — and the function joined the VIEW three times (twice in the CTE chain, once in the
+  retraction `not exists`), paying the whole-table cost three times in one statement, when
+  migration 158 had already materialised the spine because "whole-table access goes through the
+  spine". It also carried a correlated `max(period_ending)` PER ROW over 191,098 rows where one
+  aggregate CTE answers it once. Together **> 45,000 ms -> 102 ms**. Both rewrites were PROVEN
+  equivalent on live data before shipping — spine vs view is 0 rows in either direction of an
+  `EXCEPT`, and the two period selections return 29 rows with 0 disagreeing. **When a serving view
+  has a materialised twin, every whole-table reader must use the twin**, and the guard for it is
+  structural (it reads `pg_get_functiondef`): on a fixture the table is tiny, both forms complete
+  instantly, and a behavioural test cannot tell them apart.
+- **A MATERIALISED TWIN MAKES ITS READERS' TESTS SNAPSHOT TESTS, AND THE REFRESH GOES AFTER THE
+  MUTATION, NOT BEFORE.** Switching that function to the spine broke an existing behaviour test,
+  correctly. Adding `refresh materialized view` before each derivation fixed five assertions and
+  not the sixth: that one UNMAPS a member by deleting a `segment_alias` row, and an alias decides
+  the member's `concept_code`, which the spine SNAPSHOTS — so a refresh placed before the delete
+  leaves the derivation still seeing the mapping it is being asked to forget. Refresh after the
+  change the test is making, not merely before the call.
+
 ## Observability (added 2026-08-27)
 
 Grafana at `muffin-grafana.<domain>` and Portainer at `muffin-portainer.<domain>`, both behind
