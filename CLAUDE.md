@@ -887,6 +887,20 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   REA.AX, 1803.T and MRP.JO kept serving `1d/1w/1m = 0.00%` written four days earlier while their
   prices moved daily. The guard that stopped PRODUCING a number could never REMOVE it. Marking now
   requires the symbol to be asked ALONE, and marking retracts.
+- **A MARK CONTRADICTED BY OUR OWN BARS IS NOT NECESSARILY A WRONG MARK, AND I SPENT AN AFTERNOON
+  ASSUMING IT WAS.** `data_defect.contradicted_negative_cache` reported 10-12 for two days and
+  every one was INNOCENT. I diagnosed it as yfinance throttling PROGRESSIVELY — some symbols
+  answered, so the control probe gated on `isolatedAnswered === 0` never fired — shipped that fix,
+  and **it did not work**: a forced run re-marked the same ten Thai securities and the counter went
+  0 → 10. Only then did I drive the real code against a captured payload. `SCCC-R.BK` returns 272
+  bars and **ONE distinct close** (146.5 for 400 days), `loadEquityReturns` produces ZERO rows, and
+  the mark is honest — migration 055's money-market case exactly. Our own `security_price` for the
+  same security holds bars that MOVE, written when the provider still served them. **Two correct
+  records that disagree, because the guard reads STORED bars while the mark records a FRESH
+  fetch.** No threshold reconciles that: excluding the newest bar left all ten firing, and
+  excluding two sessions disabled the check outright (its own moving fixture caught that). It is a
+  GAUGE now, recorded and not asserted. The lesson is the order: I theorised, fixed, and shipped
+  before reproducing — and the reproduction took one captured payload and ten minutes.
 - **A BURST IS A PROVIDER EVENT — compare a rate against its own steady state.** The same incident
   hit `statements_missing_at`, where no contradiction is available (a security with no statements
   has none, so holding the data cannot disprove the mark). The RATE settles it: 518 + 725 + 1,032

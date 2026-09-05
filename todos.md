@@ -1251,25 +1251,35 @@ Still open:
       because its backlog is drained (`note: every filer has a walked history`). Only `kr-filings`
       omitted the key, while writing 118 and 92 filings in its last two runs. Reading the actual
       `refresh_run.report` rows settled it; the count alone had looked identical for both.
-- [ ] **20 SERVED segment splits disagree with their reconciliation target, and it is NOT one
-      bug.** Measured 2026-09-05 (tripwire 35, so the guard passes). Characterised rather than
-      guessed at: **10 exceed** the target and **10 fall short**, ratios spanning 0.0 to 13.49 with
-      no single signature, across five axes. Two obvious causes were RULED OUT: an annual split
-      matched against a quarterly total (three ratios sit at 3.58/3.98/3.98, which is a year over a
-      quarter — but the parser's target key is `metric|periodType|periodStart|periodEnding`, so it
-      cannot cross period types), and a currency mismatch (the guard already counts and skips
-      those; it reported 0).
-      CLAUDE.md records one confirmed cause — GE Vernova's three segments sum to a correct $30.1bn
-      against a `reconciled_to` of $487m, the parser having matched the wrong consolidated figure —
-      so the remaining work is the TARGET SELECTION in `segments.ts` (`totalsByQualifier` /
-      `totalsByConceptQualifier` / the four-level precedence), not the split.
-      **The user-visible impact is already mitigated at the consumer**: the Sankey refuses a split
-      exceeding the company's own `revenue` metric and names the remainder when one falls short, so
-      no wrong chart is drawn. That is why this is a backlog and not an outage — and why a
-      speculative parser change across ~3,000 splits, in the area that has caused this repo's
-      largest incidents, is the wrong next move. Start by picking ONE case, pulling its instance,
-      and running `segmentFactsFrom` against it both ways, exactly as the Mobis fix was verified.
+- [ ] **The remaining SERVED segment disagreements are TWO causes, both now diagnosed.** Measured
+      2026-09-05. The count went 19-20 -> **18** and became DETERMINISTIC once the guard's paging
+      was fixed (PR #300 — offset paging over tied keys was duplicating and displacing rows, which
+      accounted for ~200 historical failures and the "no single signature" I had recorded here).
+      What remains splits cleanly:
 
+      **(a) THE GROUP'S TARGET IS CHOSEN BY MEMBER COUNT, SO A BIGGER SPLIT WINS — 9 of 18.**
+      `reconciled_to` is ONE value per (security, axis, period), shared across metrics: a split is
+      learned from the metric that reconciles and applied to the rest. Which metric wins is
+      `bestPlaced` — the bucket that placed the most members. Hershey Q2 2026: the DEPRECIATION
+      split has 4 members and revenue has 3, so depreciation's total (136,095,000 = 80,358 +
+      26,203 + 7,670 + 21,864) was stamped on every metric in the group, including a revenue split
+      that sums to **2,787,306,000 — exactly the company's own filed revenue**. The split is
+      perfect; only the target is wrong. Same shape at Atmos (target = `operating_income` total),
+      NatWest x2 (`total_assets`), and the ratio-3.98/5.26/13.49 cases.
+      **The fix is to prefer REVENUE when choosing the group's target**, not the bucket with the
+      most members — revenue is the metric that reconciles by construction (ASC 280 and IFRS 8
+      require a reconciliation of revenue, not of profit), which is why the code already learns
+      from it everywhere else. Not attempted yet: it governs partition selection for all 2,536
+      splits and needs its own change with a fixture where the two rules DISAGREE (a group whose
+      non-revenue metric has more members than its revenue one — Hershey is exactly that).
+
+      **(b) TARGET CORRECT, SPLIT GENUINELY OFF — the rest.** YPF, CoStar, Equinor, Welltower and
+      Southern Copper have a `reconciled_to` that DOES match their filed revenue, so those are real
+      split defects and a separate investigation. Southern Copper is the mildest (ratio 1.013) and
+      therefore the best first case.
+
+      Neither is user-visible: the Sankey checks a split against the company's own `revenue` metric
+      rather than trusting `reconciled_to`, and refuses one that exceeds it.
 - [ ] **Europe — 1,438 equities, 260 SEC-reachable, so a 1,178 gap: the second largest after
       China.** ESEF is measured NOT viable (ASML, Nokia, Novo Nordisk, TotalEnergies FY2025:
       431–872 facts, **zero segment axes**; IFRS 8 notes are block-tagged text, and Germany is not
