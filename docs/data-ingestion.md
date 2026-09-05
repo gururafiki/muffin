@@ -363,6 +363,8 @@ stopped price ingestion for three days while every signal said "healthy".
 | `security-xbrl` | 10 min | **SEC XBRL direct**, not openbb | `pending_xbrl` | `security_metric` (`sec-xbrl`) |
 | **`security-segments`** | 10 min | **SEC filing XBRL instance**, not the API | `pending_segments` — **breadth-first**, see below | `security_segment` — revenue, operating income, capex, depreciation, cost of revenue and assets PER BUSINESS LINE |
 | **`security-filing-history`** | 10 min | SEC submissions API | `pending_filing_history` | `security_filing` (full history) + `security.sic` + `filer_profile` + `security_former_name` |
+| **`kr-filings`** | 15 min | **DART `list.json`** (Korea) | `dart_discovery_cursor` (phase A, a resumable window sweep) → `pending_kr_history` (phase B) | `security_filer` (`dart`, `corp_code`) + `security_filing` (`사업보고서`) |
+| **`security-kr-segments`** | 5 min | **DART `fnlttXbrl.xml`** — a ZIP | `pending_kr_segments` | `security_segment`, via the SAME `segmentFactsFrom` the SEC path uses |
 | `security-price-history` | 10 min | yfinance `interval=1W` | `pending_price_history` | `security_price` (`grain = 'weekly'`) |
 | **`security-daily-history`** | 10 min | yfinance `interval=1d`, `start_date=1970-01-01` | `pending_daily_history` | `security_price` (`grain = 'daily'`) — **20+ years**, whole universe |
 | **`earnings-history`** | 10 min | nasdaq `calendar/earnings`, walked BACKWARD | `earnings_history_cursor` | `security_eps_history` (`source_code = 'nasdaq'`) |
@@ -523,6 +525,73 @@ foreign companies — `TSMWF`, `ASMLF`, `BUDFF` — which cost 621 of 1,015 rows
 against a 25-calls-a-day provider. **Nothing is re-pointed on it yet**: `market.ticker_disagreement`
 reports where SEC and OpenFIGI differ, weighted by fund holding, and that number should be read in
 production before five backlogs change what they ask for.
+
+### Korea, via DART (added 2026-09-05)
+
+Segment disclosure was SEC-only: **3,516 securities could have it and 8,834 equities could not**.
+Korea is the largest addressable gap, and DART is the opposite of ESEF and EDINET — it publishes
+a full dimensioned XBRL instance carrying `ifrs-full:ProductsAndServicesAxis`, `SegmentsAxis`,
+`GeographicalAreasAxis` and `SegmentConsolidationItemsAxis`, **the same axes the parser already
+handled for Diageo**.
+
+**Almost none of this is new parsing.** The axes were already in `market.segment_axis`,
+`xbrl_concept` already carried the IFRS elements, and `parseFacts` matches on the LOCAL name, so
+`ifrs-full:Revenue` matches the catalogued `Revenue`. `segmentFactsFrom` is untouched, as are
+`security_segment`, every serving view and the whole UI. What is new is **discovery** (a filer is
+addressed by `corp_code`, not a CIK) and **transport** (a ZIP, and slow).
+
+- **The mapping costs no download.** Every `list.json` row carries `stock_code` — the six digits in
+  front of muffin's `.KS` / `.KQ` symbols. `corpCode.xml`, the 3.6 MB archive that timed out twice
+  at 240 s in the spike, is not needed and is deliberately not used. Measured live: **443 of 466**
+  Korean equities map, 400 annual reports, Samsung at `corp_code=00126380`.
+
+- **DENO CANNOT REACH DART DIRECTLY, ON ANY PLATFORM — the cache is required for CORRECTNESS.**
+  Measured 2026-09-05: DART serves TLS 1.2 only (a forced 1.3 handshake is refused with `tlsv1
+  alert protocol version`) and offers only the static-RSA suite `AES128-GCM-SHA256`, rejecting
+  every ECDHE suite tried. Deno's TLS is rustls, which implements forward-secret key exchange
+  **only** and has never supported static RSA, so a direct `fetch` fails with `received fatal
+  alert: HandshakeFailure` — naming nothing. Every other origin's default in `origins.ts` is the
+  real host precisely so http-cache stays removable without an outage; **DART is the one where that
+  is false.** The proxy hop is what makes Korea reachable: the function speaks plain HTTP to nginx
+  and OpenResty's OpenSSL does the TLS. Verified from inside the running container — `wget
+  https://opendart.fss.or.kr/` answers 200 there while Deno cannot handshake. So
+  `http_cache_enabled: false` does not degrade Korea, it disables it, and `fetchFailure()` in
+  `dart.ts` says exactly that rather than surfacing the alert.
+
+- **One filing per run, and `proxy_ignore_client_abort on` is what makes that converge.** A filing
+  is **802 KB and 73.5 s** from outside Korea against a 90 s worker. Without that directive nginx
+  abandons the upstream fetch when the worker gives up, so a run that dies at 73 s caches nothing
+  and the next one pays the full cost again — for ever, since it can never finish inside the
+  budget. With it, nginx completes and stores the response regardless. A filed document is
+  immutable, so the TTL is 90 days.
+
+- **THE SWEEP MUST RESUME MID-WINDOW.** `list.json` is capped at a **three-month window** whenever
+  `corp_code` is absent, so phase A walks windows — and one window is ~35 calls while DART answers
+  in **~3.5 s from the node** (measured: 3.45 / 3.51 / 3.45), so a 70 s run affords ~15 and cannot
+  finish one. The first version advanced `window_end` when the deadline cut the page loop short,
+  recording a window as swept with two thirds of its pages never read, and phase A never returns to
+  a window: **a refused sweep reading as a finished one**, the `exchange-listings` 429 defect.
+  `dart_discovery_cursor` therefore carries `cls` and `page`; a window advances only once both share
+  classes reach their last page; a fetch error stops the run *at* that page rather than past it; and
+  `mapped_at` is gated on having exhausted a window, so running out of budget cannot declare
+  discovery complete. The response reports `at` — `windows: 0` is the normal case for a run that
+  made real progress, and without the position that reads as a stall.
+
+- **Phase B is an anti-join and a CURSOR, not a negative cache.** Reading `security_filer … limit 8`
+  returns the same eight companies every run for ever, with `filings` reading as throughput — this
+  repo's own headline bug. `pending_kr_history` excludes what was walked in the last 90 days:
+  Korean companies keep filing, and once phase A finishes this is the only path by which a new
+  annual report is discovered, so a permanent mark would freeze the Korean universe.
+
+- **A Korean filing must never enter `pending_segments`.** That view's only scope was
+  `security_disclosure.capability = 'held'`, and enabling DART makes every Korean security exactly
+  that — they would have entered the SEC queue at the head of a breadth-first ordering, where
+  `findInstanceUrl(cik, accession)` fails on every one. The scope is the **regulator on the form**
+  (`filing_form.source_code`), in the eligibility clause *and* the sort key. Not the filing's own
+  `source_code`: measured, `security_filing.source_code` holds the RESOURCE that wrote the row
+  (`sec-submissions` 984, `sec-filings` 16) while `filing_form.source_code` holds the regulator
+  (`sec`) — two vocabularies in one column name, and scoping on the filing's own would match
+  nothing and silently empty the entire SEC backlog.
 
 Two traps found by running it rather than reading the schema: SEC returns `""` for a field it does
 not hold (Apple's `lei`, `website`), stored as NULL so "no website" stays distinguishable from an

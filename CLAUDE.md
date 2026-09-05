@@ -2321,6 +2321,46 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   issued at `https://api.edinet-fsa.go.jp/api/auth/index.aspx?mode=1` — `.aspx`, not `.html`, which
   redirect-loops — behind Azure B2C, and the registration screen needs pop-ups allowed for that host.
 
+- **A PROVIDER CAN BE UNREACHABLE FROM DENO AND FINE FROM EVERYTHING ELSE, AND THE CACHE IS THEN A
+  CORRECTNESS DEPENDENCY.** Measured 2026-09-05: DART serves **TLS 1.2 only** (a forced 1.3
+  handshake is refused with `tlsv1 alert protocol version`) and offers only the **static-RSA** suite
+  `AES128-GCM-SHA256`, rejecting every ECDHE suite tried. Deno's TLS is **rustls, which implements
+  forward-secret key exchange ONLY** and has never supported static RSA — so a direct `fetch` fails
+  with `received fatal alert: HandshakeFailure` on every platform, naming neither cause nor fix,
+  while `curl`, `openssl s_client` and the OpenResty container all answer 200. This breaks the rule
+  recorded above that "every default is the real origin, which is what makes the cache removable
+  without an outage": for DART the default **cannot work**, so `http_cache_enabled: false` does not
+  degrade Korea, it disables it. The proxy hop is what makes it reachable — the function speaks
+  plain HTTP to nginx and OpenSSL does the TLS. **Diagnose a "fetch failed" against a provider by
+  trying curl from the same host before believing the network**, and where a runtime cannot reach a
+  provider at all, say so in the error rather than passing the alert through.
+- **A WINDOWED SWEEP MUST RESUME INSIDE THE WINDOW, OR IT ADVANCES PAST PAGES IT NEVER READ.**
+  DART's `list.json` is capped at a three-month window without a `corp_code`, so discovery walks
+  windows — one window is ~35 calls and DART answers in **~3.5 s from the node** (3.45/3.51/3.45
+  measured), so a 70 s run affords ~15 and **cannot finish one**. The first version advanced
+  `window_end` when the deadline cut the page loop short, recording a window as swept with two
+  thirds of it unread, and a sweep never returns to a window: the `exchange-listings` 429 defect
+  again — **a refused sweep must not read as a finished one**. The cursor now carries `(cls, page)`,
+  a window advances only when both share classes reach their last page, a fetch error stops the run
+  *at* that page, and the "mapping complete" flag is gated on having exhausted a window so running
+  out of budget cannot declare discovery done. Report the POSITION, not just the tally —
+  `windows: 0` is the normal case for a run that made real progress, and without `at` it reads as a
+  stall.
+- **THE SAME COLUMN NAME CAN HOLD TWO VOCABULARIES, AND THE PLAUSIBLE FIX SILENTLY EMPTIES A
+  BACKLOG.** `security_filing.source_code` holds the RESOURCE that wrote the row (`sec-submissions`
+  984, `sec-filings` 16); `filing_form.source_code` holds the REGULATOR (`sec`). Scoping
+  `pending_segments` on the filing's own `source_code = 'sec'` — which is what "scope it to SEC"
+  naturally means — matches **zero rows** and disables the entire SEC segment pipeline while
+  reading as a tightening. The honest key is the regulator on the FORM, and it has to go in the
+  eligibility clause **and** the sort key, since a vocabulary carried in two clauses drifts
+  (migration 163 left exactly that second copy). Found only because the guard's fixture kept an
+  ordinary SEC filing as a CONTROL — an over-tight scope fails there, and nothing else could see it.
+- **A GUARD'S FIXTURE MUST BE HOSTILE TO THE GUARD'S OWN OTHER RULE.** `pending_segments` also
+  requires `s.cik is not null`, so a Korean fixture with no CIK would be excluded by *that* and the
+  regulator scope could be deleted unnoticed. Giving the Korean security a CIK — which is realistic,
+  KEPCO and POSCO both file 20-F — is what makes the rule under test the only thing excluding it.
+  Same discipline as making candidate rules disagree, applied to two rules in one view.
+
 **A PR WITH MERGE CONFLICTS RUNS NO `pull_request` WORKFLOWS AT ALL, AND READS AS ALL-GREEN.**
 Measured 2026-08-28 on muffin-deployment#245: `gh pr checks` reported **4 passing and nothing
 pending** — three CodeQL `Analyze` jobs plus the CodeQL umbrella — while `Quality`, the repo's

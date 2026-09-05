@@ -1228,13 +1228,23 @@ Still open:
 
 ### Phase 3 — DART, and a spike protocol for the rest
 
-- [ ] **Build `security-kr-segments`.** Proven 2026-08-29: a 7.1 MB instance carrying
-      `ifrs-full:ProductsAndServicesAxis` (28), `SegmentConsolidationItemsAxis` (20), `SegmentsAxis`
-      (16), `GeographicalAreasAxis` (8) — the same axes the parser already handles for Diageo.
-      SK Gas reconciles exactly to 7,050,068,258,000 KRW. Bounded by TRANSFER TIME, not a rate
-      limit: 115 s for 1.2 MB from outside Korea (against SEC's 0.37 s for 10.9 MB), so a far
-      smaller page than `security-segments`' 20. Flip `disclosure_source.enabled` when it exists.
-      Unlocks 466 equities.
+- [x] **Build `security-kr-segments`.** DONE 2026-09-05 (PR #294), as `kr-filings` (discovery) plus
+      `security-kr-segments` (parse). The parser needed NO change — the four DART axes were already
+      in `market.segment_axis` and `parseFacts` matches on the local name, so `segmentFactsFrom`,
+      `security_segment`, every serving view and the whole UI are untouched. Bounded by TRANSFER
+      TIME as predicted: one filing is 802 KB / 73.5 s against a 90 s worker, hence a page of ONE
+      against `security-segments`' 20, and `proxy_ignore_client_abort on` so a run that gives up
+      still leaves the next one a warm cache entry.
+      **Unlocks 443 equities, not the 466 written here** — 457 of 466 carry a 6-digit DART
+      `stock_code` and 443 matched a DART filing in the live sweep.
+      Three things only measurement could have found, all recorded in
+      [docs/data-ingestion.md](docs/data-ingestion.md) § Korea: **Deno cannot reach DART at all**
+      (static-RSA TLS vs rustls), so http-cache is a correctness dependency rather than an
+      optimisation and `http_cache_enabled: false` disables Korea outright; the **window sweep
+      advanced past pages it never read** (~35 calls per window, ~15 affordable per run) and now
+      resumes on `(cls, page)`; and `pending_segments` had to be scoped on the **regulator on the
+      form**, because scoping it on the filing's own `source_code` — the natural-looking fix —
+      matches nothing and silently empties the entire SEC backlog.
 - [ ] **Europe — 1,438 equities, 260 SEC-reachable, so a 1,178 gap: the second largest after
       China.** ESEF is measured NOT viable (ASML, Nokia, Novo Nordisk, TotalEnergies FY2025:
       431–872 facts, **zero segment axes**; IFRS 8 notes are block-tagged text, and Germany is not
