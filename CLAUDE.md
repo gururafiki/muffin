@@ -2300,8 +2300,14 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   between the two totals is still worth reporting; it is a SOURCE-AGREEMENT observation, not a
   defect in the split.
 - **OVER-COUNTING AND UNDER-COUNTING ARE DIFFERENT FACTS AND MUST NOT SHARE A VERDICT.** A split
-  exceeding the company's own revenue can only be a member counted twice — that is a defect and
-  fails. A split falling SHORT is the filer choosing how much of itself to disaggregate: Novo
+  exceeding the company's own revenue is usually a member counted twice — that is a defect and
+  fails. **CORRECTION, measured 2026-09-05: "can only be" was wrong.** Segment revenue INCLUDES
+  intersegment sales that consolidation removes, so a correct split legitimately exceeds the
+  consolidated figure by exactly the elimination — Southern Copper FY2018 states segments of
+  7,176,000,000, an `IntersegmentEliminationMember` of -79,300,000 and a consolidated 7,096,700,000,
+  which reconciles exactly. Reconciled against the consolidated figure it reads as a 1.01x
+  over-count on data that is right. The target for such a split is the consolidated figure LESS the
+  elimination, derived by the parser; see the derived-column-total rule below. A split falling SHORT is the filer choosing how much of itself to disaggregate: Novo
   Nordisk discloses geographies covering 37% of revenue and segment revenue at 93%. Failing on that
   makes the guard cry wolf on correct data, which is how a guard gets disabled.
 - **AND THE SAME GUARD SUMMED TWO LEVELS AS ONE.** Its group key omitted `parent_member`, so
@@ -2543,6 +2549,20 @@ try the merge before assuming it needs a human click.
   `market.segment_member_class`. Note a residual reaching ratio **1.000** is still not a breakdown,
   and a SINGLE-member split is not the signal: `us-gaap:ServiceMember` (127) and `ProductMember`
   (50) are ordinary partial disclosures.
+- **A SEGMENT COLUMN OFTEN HAS NO STATED TOTAL, AND THE ONE ADJUSTMENT CAN WEAR TWO MEMBER NAMES.**
+  Southern Copper publishes consolidated revenue and an intersegment elimination and nothing in
+  between, so the operating-segments total has to be DERIVED. Two things defeated the narrow
+  derivation, both measured: its segment facts carry **no qualifier axis** (the filer tags the plain
+  `StatementBusinessSegmentsAxis` facts beside the qualified ones), so a derivation keyed on the
+  candidates' own qualifier never ran; and the same **-79,300,000 is tagged under BOTH**
+  `us-gaap:IntersegmentEliminationMember` **and** `scco:CorporateAndEliminationsMember` — one line,
+  stated once in the segment table and once in the geography table — so summing every member of the
+  axis double-counts it and derives 7,255,300,000, matching nothing. The parser now walks every
+  qualifier axis with totals for the metric and period and OFFERS both the every-member and the
+  distinct-VALUE sum. **Offering rather than choosing is what makes a derived target safe**: a
+  candidate is accepted only if the members' own sum already matches it, so it can never select a
+  wrong target, only rescue a split that would otherwise fall back to one — and the FALLBACK stays
+  the old narrow form, so a split that reconciles to nothing is described exactly as before.
 - **A PARSER RULE THAT STOPS EMITTING A FACT CAN NEVER RETRACT IT, AND TWO RULES SHIPPED TOGETHER
   HAD OPPOSITE FATES.** `security_segment` is written by upsert, so the parser only ever ADDS or
   OVERWRITES. A member it DEMOTES self-heals — it is still emitted, at partition 0, and overwrites
