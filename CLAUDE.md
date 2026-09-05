@@ -2437,9 +2437,11 @@ try the merge before assuming it needs a human click.
   `empty: !query.isPending && rows.length === 0` is FALSE while `securityId` is null — and the
   section renders a card with a heading and nothing under it, which is exactly what the page's
   convention forbids. Seen in a browser with the instrument unresolved: **every** section on the
-  stock page drew an empty card. `loading` already guards on the id; `empty` must too. Fixed in
-  `use-income-flow`, `use-segments`, `use-industries`; **`use-peers`, `use-leadership` and the rest
-  still carry it.**
+  stock page drew an empty card. `loading` already guards on the id; `empty` must too. **All of them now carry the guard** —
+  verified 2026-09-05, every `empty:` in `src/features/markets/api/` reads
+  `!(query.isPending && !!<id>) && …`. This line previously said `use-peers`, `use-leadership`
+  "and the rest still carry it", which stopped being true and would have sent a later session to
+  re-fix work already done: a stale TODO in a rules file is read as a current fact.
 - **A CHART GATED ONLY ON `onLayout` CAN NEVER APPEAR.** Measured: the card rendered 736px wide and
   34px tall with zero children because the callback never produced a width. Take the window width as
   the first estimate and let `onLayout` refine it — never block the render on the measurement.
