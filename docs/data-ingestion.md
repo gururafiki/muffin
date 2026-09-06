@@ -587,6 +587,18 @@ Assets siblings, and the annual column reconciles to the rupee:
 | Oil and Gas | 244,390,000,000 |
 | **sum** | **11,094,900,000,000** = the undimensioned total |
 
+**The period is NOT in the context — corrected 2026-09-06 after a second look.** A first reading
+recorded that `One*` is the three-month column and `Four*` the twelve-month one, which is right, but
+the mechanism is worse than that implies: **all twelve facts carry the IDENTICAL context**,
+`2024-01-01 → 2024-03-31`, 90 days — including both undimensioned totals. This is a Q4 filing, which
+in India reports the quarter *and* the full year, and the filer tags both against the same 90-day
+context. `One*` sums to 2,916,250,000,000 and `Four*` to 11,094,900,000,000, and **each matches its
+own undimensioned total exactly**, so both are complete, correct, disjoint splits that XBRL alone
+cannot tell apart. `periodTypeFor(start, end)` classifies both as `quarter`, so the existing parser
+would place them in one bucket, union them to 14,011,150,000,000, and face two competing
+undimensioned totals for the same key. **Period disambiguation has to come from the member-code
+prefix**, which is the one place it exists.
+
 **Two structural traps, both of which would produce confident wrong numbers.** The members are
 ANONYMOUS POSITIONAL SLOTS — `OneReportableSegmentRevenue01Member` through
 `FourReportableSegmentRevenue05Member` — so unlike SEC and DART the code carries no meaning at all;
