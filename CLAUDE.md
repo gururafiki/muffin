@@ -2007,6 +2007,24 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   minutes, so `started_at` is always fresh and the check reported "every resource has succeeded"
   throughout a two-day outage. `refresh_log` can only ever catch a worker that died and was NEVER
   RETRIED. The question belongs to `refresh_run`, via `market.resource_health.last_worked`.
+- **A GATE THAT GOES RED FOR A DAY AFTER EVERY DEPLOY IS A GATE NOBODY READS — and the fix is a
+  BETTER DISCRIMINATOR, not a looser threshold.** `check_spine_refresh_succeeds` failed if ANY of
+  the last 12 `facets-refresh` runs carried a `segment_spine_error`, while its own comment on
+  `SAMPLE` said "enough rows to see a run of failures rather than a single blip" — a different rule
+  from the one it implemented. Measured 2026-09-06: 1 of 24 runs in a day, at 2026-09-05 22:14, in
+  the gap between a **failed** deploy that ended 22:06 and the successful one that restored the
+  spine at 22:39. **A mid-chain migration failure is not atomic**, so a failed deploy leaves a
+  dropped matview until the next pass, and the very next refresh corrected it. The check is now
+  "failing NOW, or twice in the window", which still catches a spine that stops refreshing (the
+  newest run fails), an intermittent one (two failures), a stale one (age) and no runs at all —
+  only the already-corrected blip is downgraded, and it is REPORTED as a notice rather than
+  swallowed. This matters here more than the individual check: market-verify had already sat red
+  for six days on an assertion this file had reclassified as a GAUGE, and a four-day
+  `derive-classifications` outage went unseen behind it. **The cost of a red gate is never the
+  ignored check; it is the next true positive.** Guarded by a `--self-test` over six synthetic
+  histories, wired into `quality.yml` so it needs no database — and it caught a defect in ITSELF on
+  its first run, because `main()`'s new BASE/SRV guard made the two passing cases fail for a reason
+  unrelated to the rule.
 - **A SKIP IS RECORDED AS A SUCCESS, AND INVESTIGATING AN ALERT MUST NOT BE ABLE TO CLEAR IT.**
   `{"skipped": true, "reason": "fresh or in flight"}` is a 200 and is stored `ok = true` — correctly,
   the invocation succeeded. But a killed worker holds the in-flight lock ~2 minutes, so poking a
