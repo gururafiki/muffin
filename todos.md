@@ -584,6 +584,31 @@ change, unless noted. Free/paid marked where a provider is involved.
       in the web bundle or the app, and exploiting either needs malicious input into our own repo.
       Revisit when Expo bumps `metro` or `@expo/config-plugins`.
 
+      **VERIFIED ON NATIVE 2026-09-06 (muffin-ui PR #125) — and the risk was not where this entry
+      said it was.** The `uuid` v7 -> v11 jump was called "a real risk to `expo prebuild`"; it is
+      fine. Driven for real: `expo prebuild` succeeds on both platforms, `Info.plist` lints clean
+      with the right identifiers, and `project.pbxproj` parses through the `xcode` library with its
+      target and build phases intact. `uuid@11` is also dual-published (its `exports` map carries a
+      `require` condition), so the CJS consumer loads it without interop trouble.
+
+      The override that IS hazardous is the one this entry does not mention. `decode-uri-component`
+      is pinned to `^0.5.0` because that is the **only** version without the live *"DoS via
+      exponential decoding"* advisory (vulnerable `<= 0.4.2`) — and 0.5.0 is **ESM-only** while its
+      consumer `query-string` uses `require()`, so `node -e "require('query-string')"` throws
+      `ERR_REQUIRE_ESM` today. Safe here only because Metro transpiles it, verified across every
+      path this app uses: the web static render of **27 pre-rendered pages** (which runs app code in
+      Node), the web bundle, and the iOS bundle. *(I twice concluded this override was unnecessary,
+      reasoning from an older GHSA fixed in 0.2.2. Removing it took the tree from 5 advisories to 8.
+      Read `npm audit`'s current `range`.)*
+
+      **The real gap was that no PR check had ever exercised a native path at all.** `quality.yml`
+      built and rendered only the WEB bundle; the sole native build is in `build.yml`, which runs on
+      push-to-main and whose android job never gates the deploy. Closed in PR #125: `expo prebuild`
+      for both platforms plus an iOS `expo export`, all on Linux (no Xcode, no Mac, no secret), with
+      a separately mutation-proven assertion that the generated config is well-formed — because a
+      prebuild that writes garbage still exits 0. That PR also pins `ios.bundleIdentifier`, which
+      was unset and therefore INVENTED by whoever ran prebuild.
+
 **OPEN (2026-08-13) — known limits, not bugs**
 - [ ] **`market_cap` is stored in the security's own currency**, so ordering by it mixes ¥, ₩ and $ —
       191 securities exceed "5T" purely for that reason. Correct per security, wrong for ranking.
@@ -1265,30 +1290,36 @@ Still open:
       Cause (b) named five cases; **Southern Copper and Equinor are fixed** (PRs #307 and earlier —
       the intersegment-elimination target and the derived column total). Still open and unchecked:
       YPF, CoStar, Welltower, plus Hershey's `cost_of_revenue` at ratio 1.068.
-- [ ] **The CIK gap is 122 US equities, and only 15 of them are addressable — I costed this wrong
-      twice before measuring it out.** 122 US equities report `capability = 'none'` (Air Lease,
-      Akero, Alight, American Woodmark, Amicus, Apellis) and every one is an obvious SEC registrant.
-      The first diagnosis was that `market.apply_cik_map` could not reach them because it joins
-      SEC's `company_tickers.json` to `security_identifier` where `kind_code = 'ticker'`. Measured
-      2026-09-06, that is only part of it, and the resource is not broken: forcing a run returned
-      **10,388 filers and `updated: 0`**, and `sec-cik-map` had simply never come due — it has a
-      30-day TTL and `refresh_run` holds no non-skipped run for it at all.
+- [x] **DONE 2026-09-06 (PR #318) — the CIK gap was worth ONE security, and it was Berkshire
+      Hathaway. I costed this wrong THREE times before running the join.** The estimates went
+      122 -> 15 -> **1**, and every wrong one came from counting SHAPES in the schema (does this
+      security have a listing? does it lack a ticker?) instead of joining to SEC's actual
+      10,412-entry `company_tickers.json`. Of 253 equities that have a US listing and no CIK,
+      exactly one gains a CIK from widening `apply_cik_map` to the US listing symbol — with no
+      ambiguity and no collisions. **An estimate of a join's yield is worthless next to running
+      the join.**
 
-      The 122 split three ways, and only the third is work:
+      It still shipped, because the one is **Berkshire Hathaway on a 12.46% fund weight** — the
+      heaviest holding in the universe with **0 filings and 0 segments**. OpenFIGI spells the B
+      share `BRK/B`; SEC and the market spell it `BRK-B`. `sec-cik-map` reported
+      `{"filers": 10388, "updated": 0}` throughout: working perfectly, asking with the wrong
+      spelling, and no count anywhere could show it.
 
-      | | n | why |
-      |---|---|---|
-      | neither a ticker nor a US listing | **77** | no symbol at all — blocked on the rate-limited OpenFIGI `pending_ticker` backlog, which is an existing slow path, not new work |
-      | ticker + US listing | **30** | the ticker is an OTC ADR line (`AUOTY` for AUO Corp) that is genuinely not in SEC's registrant map — correctly unresolved |
-      | **US listing only** | **15** | `apply_cik_map` never looks at `market.listing`, so these are reachable by widening the join |
+      Shipped as migration 188 + `a-cik-map-must-meet-the-verified-symbol.sql`, five mutations each
+      caught against a fingerprint taken from the DATABASE. The fallback is consulted only when the
+      ticker identifier matched nothing, so it is strictly additive and cannot re-assign the 3,516
+      CIKs that already resolve. Two guards: only US venues (via `exchange.country_iso2`, never the
+      literal `exch_code`), and an ambiguous match is REFUSED rather than broken with `min()`.
 
-      So widening `apply_cik_map` to a US `listing.symbol` is worth **15 securities**, not 122 —
-      ~10 lines of SQL, and it must refuse an ambiguous match (`having count(distinct cik) = 1`),
-      since an UPDATE ... FROM with two candidate CIKs picks one arbitrarily. Do it as a small
-      change or skip it; it is not the cheap headline win it first looked like. The same widening
-      touches the non-US side, where 8,642 equities lack a CIK and **174** have a US listing — but
-      treat 174 as a CEILING, since the `TSMWF`/`BUDFF` lesson says most such listings are OTC lines
-      rather than registrations, exactly as the 30 above turned out to be.
+      Verified live end to end: CIK 1067983 -> **111 filings** (1999-03-30 .. 2026-08-10) ->
+      **611 XBRL facts** -> metrics **174 -> 734**. Its 69 XBRL filings are queued for segments
+      behind the re-parse drain, which is the deliberate `already_read DESC` ordering.
+
+      Two things the earlier entry got wrong, corrected here: `sec-cik-map` is NOT overdue (a
+      non-skipped run exists), and the residual 121 US equities without a CIK are genuinely not in
+      SEC's registrant map or have no symbol at all — the OpenFIGI `pending_ticker` backlog, an
+      existing slow path. The non-US ceiling of 174 was likewise a shape count; the real
+      measurement across the whole universe found the same single security.
 - [ ] **Coverage: prioritise by SECURITIES PER SOURCE, not by region.** Measured 2026-09-06 from
       `security_disclosure.capability = 'none'` over equities. Korea now reads **held 443**, which
       is this phase's DART work paying off.

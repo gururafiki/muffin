@@ -440,6 +440,41 @@ Things that are easy to get wrong here:
   carries it* and say so; don't restate the cap locally where it can drift or mislead.
 - **Don't cancel `main` builds.** `cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}`, not
   `true` — two merges seconds apart used to kill the first one's verification run.
+- **AN npm OVERRIDE'S TARGET IS SET BY THE ADVISORY'S *CURRENT* RANGE, NOT BY THE CVE YOU
+  REMEMBER — and I twice concluded a necessary override was decorative.** `muffin-ui` pins
+  `decode-uri-component` to `^0.5.0`. `query-string@7` asks for `^0.2.2`, and the DoS advisory I
+  had in mind was fixed in 0.2.2, so the override read as a pointless four-version jump. It is
+  not: the LIVE advisory is *"DoS via exponential decoding of malformed percent-encoded input"*
+  with a vulnerable range of **`<= 0.4.2`**, so **0.5.0 is the only fixed version there is**.
+  Measured the only way that settles it — removing the override and re-auditing took the tree from
+  **5 advisories to 8**. Read `npm audit --json`'s `range`, never reason from the fix version of a
+  half-remembered GHSA.
+- **AND THAT OVERRIDE IS BOTH NECESSARY AND HAZARDOUS, WHICH IS A STATE WORTH NAMING.** 0.5.0 is
+  **ESM-only** (`type: module`, and its `exports` map has no `require` condition) while its consumer
+  `query-string` loads it with `require()` — so `node -e "require('query-string')"` throws
+  `ERR_REQUIRE_ESM` today. It is safe here only because **Metro transpiles it**, verified across
+  every path this app actually uses: the web static render of **27 pre-rendered pages** (which runs
+  app code in Node), the web bundle, and the iOS bundle. That is a property of the bundler, not a
+  given, which is why `quality.yml` now exports the iOS bundle rather than trusting it. **The
+  hazard is not `type: module`** — `uuid@11` is also `type: module` and loads fine under `require`,
+  because it is dual-published with a `require` condition. Check the `exports` map, not the type.
+- **NO PULL-REQUEST CHECK IN `muffin-ui` HAD EVER EXERCISED A NATIVE PATH.** `quality.yml` builds
+  and renders the WEB bundle — added precisely so a PR could not make the app unbuildable — while
+  the only native build lives in `build.yml`, which runs on **push-to-main** and whose android job
+  *"never gates the deploy"* by design. So iOS and Android could break completely and every PR
+  check stayed green. Three of the five npm overrides are reachable ONLY through native tooling
+  (`uuid` via `xcode`, which writes `project.pbxproj`; `@xmldom/xmldom` twice via `plist`, which
+  writes `Info.plist`), so the web build cannot see a bad bump in any of them. Both halves of the
+  fix run on **Linux** — `expo prebuild` only writes files and `expo export` runs Metro, so neither
+  needs Xcode, a Mac, a device or a secret, which is what makes it gate material rather than a
+  nightly. **A prebuild that writes garbage still exits 0**, so the config assertion is a separate
+  step and is mutation-proven three ways.
+- **AN iOS BUNDLE IDENTIFIER LEFT UNSET IS INVENTED BY WHOEVER RUNS `prebuild`.** `android.package`
+  was explicit in `app.json` and `ios.bundleIdentifier` was not, so prebuild DERIVED one from the
+  account — it happened to match, and it is the app's permanent identity: the App Store record, the
+  keychain group, and whether an update replaces the installed app or installs a second copy beside
+  it. A fork or a transferred repo would silently mint a different one. The tell that the pin works
+  is that prebuild stops rewriting `app.json`, because it no longer has to invent anything.
 
 Full rationale, the per-repo ecosystem table, and the #145 post-mortem:
 [docs/superpowers/specs/2026-08-08-repo-hardening-and-typing-design.md](docs/superpowers/specs/2026-08-08-repo-hardening-and-typing-design.md).
@@ -2826,6 +2861,29 @@ runbook: **[muffin-deployment/README.md § Observability](muffin-deployment/READ
   Replacing the ticker test with the CIK was ALSO wrong and the behaviour test caught it in one
   run: the resource passes `us_ticker` and skips SEC when it is null, so a CIK-holder with no US
   line would be queued for a fetch that cannot be made. **The ticker is HOW, the CIK is WHETHER.**
+- **AND THE CIK ITSELF WAS RESOLVED WITH THE WRONG SPELLING — BERKSHIRE HATHAWAY HAD NO SEC DATA AT
+  ALL.** `apply_cik_map` joined SEC's map to `security_identifier` where `kind_code = 'ticker'`,
+  which is OpenFIGI's US lookup, and OpenFIGI spells the B share **`BRK/B`** while SEC and the
+  market spell it **`BRK-B`**. The join missed, `security.cik` stayed null, and every SEC-gated
+  resource skipped it in silence: measured 2026-09-06, **0 filings and 0 segments on a 12.46% fund
+  weight** — the heaviest holding in the universe with no SEC data. `sec-cik-map` reported
+  `{"filers": 10388, "updated": 0}` throughout; it was working perfectly and asking with the wrong
+  spelling, so no count anywhere could show it. Migration 039 had already established that the
+  ticker identifier and the listing symbol are **different answers to different questions**, and
+  `BRK/B` was already named in this file as a symbol that 400s — the two halves had simply never
+  been put together. Fixed in migration 188 by falling back to the **US listing symbol**, which is
+  the one `security-symbol-repair` proved a provider accepts. Verified live end to end: CIK
+  1067983, then 111 filings (1999-03-30 .. 2026-08-10), 611 XBRL facts, metrics 174 -> 734.
+  **The fallback is consulted only when the identifier matched nothing**, so it is strictly
+  additive and cannot re-assign the 3,516 CIKs that already resolve. Two guards, both proven by
+  mutation: only **US venues** (via `exchange.country_iso2`, never the literal `exch_code`) since a
+  foreign symbol colliding with a US ticker would attribute another company's filings, and an
+  **ambiguous match is refused** rather than broken with `min()` — a wrong CIK is far worse than
+  none, because it makes every downstream number look populated and fiction.
+  **I costed this at 122 securities, then at 15, before measuring it against SEC's real 10,412-entry
+  map: the honest answer is ONE.** Both earlier numbers came from counting shapes in the schema
+  rather than joining to the actual map. It still shipped, because the one is Berkshire — but the
+  ratio is the lesson: *an estimate of a join's yield is worthless next to running the join.*
 - **THE ENDPOINT YOU ALREADY CALL MAY ANSWER WHAT YOU ARE BUYING ELSEWHERE — ask it a different
   question before adding a provider.** `security-eps-history` bought actual-vs-estimate from
   alpha_vantage at **25 calls a DAY**, one symbol per call, reaching 79 securities in weeks — all
