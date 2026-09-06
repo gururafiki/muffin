@@ -1391,13 +1391,32 @@ Still open:
 
 ### Phase 4 — more from what we already fetch
 
-- [ ] **Long-lived assets by geography.** ASC 280 *requires* it beside revenue, so it should
-      already be in instances we download. Verify on Amazon's instance first, then it is an
-      `xbrl_concept` row.
-- [ ] **More segment metrics generally.** The instance carries every dimensioned fact and the
-      parser extracts six (revenue, operating income, capex, depreciation, cost of revenue,
-      assets). Adding one is a control-table row and **zero new provider calls** — the seventh
-      instance of "the answer is already in a response you fetch".
+- [x] **VERIFIED 2026-09-06 on Amazon's FY2022 instance — and the first find was a MISSING SPELLING
+      of a metric we already have, not a new metric.** Enumerated every concept on a segment axis in
+      `amzn-20221231_htm.xml` (2.46 MB, 98 dimensioned segment contexts). Shipped as migration 191
+      (PR #322): `us-gaap:PropertyPlantAndEquipmentAdditions`, **223 filers**, per-segment additions
+      to PP&E at $23,682,000,000 for one segment — capex tagged as an accrual disclosure states it
+      rather than as the cash flow statement does. Priority 70, so it can only ADD a series.
+      **No parser version bump**: the corpus is mid-drain at v20 (3,101 of 210,751 re-read), so the
+      204,000 still queued pick it up on the pass they are already making. A bump is for a change in
+      how we READ a document, not for widening what we look for while the read is in progress.
+- [ ] **Long-lived assets by geography — CONFIRMED PRESENT, still to build.** `us-gaap:NoncurrentAssets`,
+      **722 filers**; Amazon reports US **$180bn** and non-US **$61.3bn** as INSTANTS on
+      `StatementGeographicalAxis`, which is exactly what ASC 280 requires beside revenue. It is NOT
+      "an `xbrl_concept` row" as this item used to say — it is a NEW metric: a metric code, a
+      pivoted column in `security_segment_current`, a column on `security_segment_spine`, and a UI
+      that reads it. `us-gaap:Goodwill` (**3,347 filers**) is the same shape and the same size of
+      change.
+- [ ] **More segment metrics generally — and "adding one is a control-table row" is OPTIMISTIC.**
+      True for a new SPELLING of an existing metric (migration 191 above, one row). False for a new
+      METRIC: the serving views pivot metrics into COLUMNS, so each one needs the view recreated,
+      the spine matview rebuilt and the UI taught to read it. Also note every metric added to
+      `xbrl_concept` is read by `security-xbrl` for the WHOLE universe, and `security_metric`
+      already holds 3.29M rows — migration 146 records that as a deliberate decision about table
+      growth. **Measured and deliberately NOT added:** `us-gaap:CostsAndExpenses` (1,404 filers) is
+      TOTAL operating cost, not cost of goods sold — North America $318,727,000,000, because revenue
+      less this is operating income. Mapping it to `cost_of_revenue` would put a different
+      measurement under an existing name.
 - [ ] **`equity/estimates/price_target`** (finviz) is measured working for US listings and is not
       captured; only `equity/estimates/consensus` is.
 - [ ] Re-probe anything recorded as unavailable **only with symbols expected to FAIL** — a 3-symbol
