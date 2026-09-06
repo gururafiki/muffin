@@ -1295,9 +1295,9 @@ Still open:
 
       | market | none | candidate source (UNVERIFIED) | prior expectation |
       |---|---|---|---|
-      | China | **2,311** | CNINFO / CSRC | unknown — biggest single prize |
+      | China | 2,311 | CNINFO / CSRC | **SPIKED 2026-09-06 — NOT viable, all PDF** |
       | Japan | 1,265 | EDINET | **measured NOT viable — do not re-derive** |
-      | India | **645** | BSE / NSE / SEBI XBRL | SEBI mandates XBRL for results |
+      | India | **645** | NSE XBRL | **SPIKED 2026-09-06 — VIABLE, reconciles exactly** |
       | Taiwan | **533** | TWSE MOPS | publishes XBRL |
       | Hong Kong | **362** | HKEX | low — annual reports largely PDF |
       | Australia | **273** | ASX | low — no XBRL mandate |

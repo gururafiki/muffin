@@ -555,6 +555,51 @@ against a 25-calls-a-day provider. **Nothing is re-pointed on it yet**: `market.
 reports where SEC and OpenFIGI differ, weighted by fund holding, and that number should be read in
 production before five backlogs change what they ask for.
 
+### China and India, spiked 2026-09-06 — opposite answers
+
+Both run with the protocol that settled ESEF, EDINET and DART: the market's largest holding by fund
+weight, a machine-readable route, reachability **from the node**, one annual instance, count the
+segment axes.
+
+**China — NOT viable. The route exists; the format does not.** Subject: China Yangtze Power
+(600900), 5.876% fund weight, a genuine Shanghai A-share rather than an OTC line. CNINFO — the
+CSRC-designated national platform — *does* have a usable API: POST `hisAnnouncement/query` keyed
+`stock=<code>,<orgId>`, with the orgId from POST `topSearch/query` (`600900` → `gssh0600900`). Both
+answer in about a second, and CNINFO is reachable from the node (HTTP 200 in 2.8 s), so unlike DART
+there is no transport problem. But **2,771 announcements for the subject are all `adjunctType: PDF`**,
+including all 61 annual reports, and the FY2025 report begins `%PDF-1.7`. Extracting an IFRS 8 table
+from that is PDF table extraction with Chinese labels — EDINET's text-block problem in another form.
+
+**India — VIABLE, reconciling exactly.** Subject: Reliance Industries, 6.23%. NSE publishes XBRL:
+`api/corporates-financial-results?index=equities&symbol=<sym>&period=Annual` returns 39 filings,
+each with an `INDAS_*` URL on `nsearchives.nseindia.com`. It needs a browser User-Agent and a cookie
+handshake against `nseindia.com` — **and the handshake itself answers 403 while still setting the
+cookie the API then accepts**, so a naive "did the handshake succeed?" check would abandon a working
+route. The instance carries `in-bse-fin:ReportableSegmentsAxis` plus FinanceCosts / Liabilities /
+Assets siblings, and the annual column reconciles to the rupee:
+
+| segment | revenue (INR) |
+|---|---|
+| Oil to Chemicals (O2C) | 5,647,490,000,000 |
+| Retail | 3,068,480,000,000 |
+| Digital Services | 1,329,380,000,000 |
+| Others | 805,160,000,000 |
+| Oil and Gas | 244,390,000,000 |
+| **sum** | **11,094,900,000,000** = the undimensioned total |
+
+**Two structural traps, both of which would produce confident wrong numbers.** The members are
+ANONYMOUS POSITIONAL SLOTS — `OneReportableSegmentRevenue01Member` through
+`FourReportableSegmentRevenue05Member` — so unlike SEC and DART the code carries no meaning at all;
+the name is a separate dimensioned text fact, `in-bse-fin:DescriptionOfReportableSegment`, on the
+same context, and a parser reading only the member code would serve five unnamed segments. And the
+`One`/`Four` prefix is the **period**, not a segment: `One*` is three months and `Four*` twelve, so
+summing all ten members gives 14,011,150,000,000 against a true 11,094,900,000,000 — a 26%
+overstatement that reads like an ordinary reconciliation failure rather than two periods added
+together.
+
+Both are recorded as `market.disclosure_source` rows (`cninfo`, `nse`) with `enabled = false`, so
+neither finding is re-derived and no row advertises work no resource can do.
+
 ### Korea, via DART (added 2026-09-05)
 
 Segment disclosure was SEC-only: **3,516 securities could have it and 8,834 equities could not**.
