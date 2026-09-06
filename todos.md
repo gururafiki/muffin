@@ -1298,7 +1298,7 @@ Still open:
       | China | 2,311 | CNINFO / CSRC | **SPIKED 2026-09-06 — NOT viable, all PDF** |
       | Japan | 1,265 | EDINET | **measured NOT viable — do not re-derive** |
       | India | **645** | NSE XBRL | **SPIKED 2026-09-06 — VIABLE, reconciles exactly** |
-      | Taiwan | **533** | TWSE MOPS | publishes XBRL |
+      | Taiwan | 533 | TWSE MOPS | **SPIKED 2026-09-06 — NOT viable, statements tagged, note not** |
       | Hong Kong | **362** | HKEX | low — annual reports largely PDF |
       | Australia | **273** | ASX | low — no XBRL mandate |
       | UK | 206 | Companies House iXBRL (free API, key) | largest single European |
@@ -1316,6 +1316,28 @@ Still open:
       measured dead for segments. So Europe gets ONE spike asking whether any pan-European route
       exists at all; if not, record that it is fourteen integrations for ~1,100 securities and
       ranks below China, India and Taiwan on effort per security.
+- [x] **THREE SPIKES RUN 2026-09-06 — and the discriminator is not "does it publish XBRL".**
+      | jurisdiction | XBRL? | segment axes? | verdict |
+      |---|---|---|---|
+      | SEC | yes | **yes** | live |
+      | DART (Korea) | yes | **yes** | live, 443 held |
+      | **NSE (India)** | yes | **yes** | **VIABLE — 645 equities** |
+      | ESEF | yes | none | not viable |
+      | EDINET (Japan) | yes | none | not viable |
+      | **TWSE MOPS (Taiwan)** | yes | **none** | **not viable** |
+      | **CNINFO (China)** | **no — PDF** | n/a | **not viable** |
+
+      **Four of six fail on "publishes XBRL" vs "publishes DIMENSIONED XBRL"**, which is the only
+      distinction that matters here — ESEF, EDINET and Taiwan all tag the PRIMARY STATEMENTS
+      properly and leave the IFRS 8 note outside as block text. China fails one step earlier: its
+      route works and is reachable from the node, but every filing is a PDF.
+      **India is the win: it reconciles to the rupee** (11,094,900,000,000 for Reliance) and is the
+      largest addressable market found since Korea. Its implementation is its own phase, with two
+      traps recorded that would each produce confident wrong numbers — anonymous positional members
+      whose names live in a sibling `DescriptionOfReportableSegment` fact, and a `One`/`Four` prefix
+      that is the PERIOD, so summing all ten members overstates by 26%.
+      Still unspiked: Hong Kong (362), Australia (273), UK/Europe (~1,100 across fourteen
+      regulators), Turkey (190), Thailand (186), Brazil (148).
 - [ ] **The spike protocol, unchanged from what settled ESEF, EDINET and DART.** Pick the market's
       largest holding by fund weight; find a machine-readable route (no route IS the result); check
       reachability FROM THE NODE with `curl` — not optional, since DART serves TLS 1.2 static-RSA
