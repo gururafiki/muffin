@@ -936,6 +936,22 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   excluding two sessions disabled the check outright (its own moving fixture caught that). It is a
   GAUGE now, recorded and not asserted. The lesson is the order: I theorised, fixed, and shipped
   before reproducing — and the reproduction took one captured payload and ten minutes.
+- **A PROVIDER STATES "THIS SYMBOL HAS NO DATA" IN MORE THAN ONE WORDING, AND CLASSIFYING ONLY THE
+  TIDY ONE STALLS A BACKLOG FOR EVER.** `security-dividends` returned `ok: false, failed: 60,
+  written: 0` on every run from 2026-09-05, against a backlog of 9,221 — and it is NOT batched, so
+  all 60 were failing individually and the same 60 returned every run. openbb's yfinance adapter
+  says `No dividend data found for TSLA` for a US non-payer (classified) and
+  `'NoneType' object has no attribute 'empty'` for a venue it does not cover (NOT classified) —
+  the adapter dereferencing a frame it never received, which reads like a bug in our code and is a
+  statement about the SYMBOL. The head of the weight-ordered backlog was ICT.PS, FAB.AE, BDO.PS,
+  WARBABAN.KW, ANDINAB.SN — the Philippines, the UAE, Kuwait, Chile, all already recorded here as
+  outside keyless yfinance. Measured before fixing: AAPL and KO return full dividend histories in
+  the same seconds those five fail, so the provider is healthy and the symbols are not. The
+  vocabulary now lives in `noDataForSymbol` beside `throttled`, with a guard asserting the two
+  **share no vocabulary** — marking a throttled symbol absent is the 1,369-security incident. And
+  **no run-level tally is stacked on the per-symbol evidence**: each call is already isolated to
+  one symbol, so gating on `anyAnswer` would reproduce the `security-profile-detail` stall where,
+  once the answerable head drains, the tally can never become true.
 - **A BURST IS A PROVIDER EVENT — compare a rate against its own steady state.** The same incident
   hit `statements_missing_at`, where no contradiction is available (a security with no statements
   has none, so holding the data cannot disprove the mark). The RATE settles it: 518 + 725 + 1,032
@@ -2100,6 +2116,28 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   predicate AFTER it. The live head went from repeated filings of a few large caps to **200 distinct
   companies in the first 200 rows**. So: **anything in that `where` clause describing the STATE OF
   OUR WORK rather than the nature of the row will renumber the round.**
+- **AN UNKNOWN SYMBOL GETS AN EMPTY 200 FROM NSE, SO ASKING WRONGLY LOOKS EXACTLY LIKE SUCCESS —
+  and I shipped India on a probe of three symbols that happened to match.** `pending_in_history`
+  was built on `market.listing.symbol` because RELIANCE, HDFCBANK and INFY all work. Measured
+  2026-09-06 against NSE's published equity list, only **239 of 645** Indian equities carry a
+  listing symbol NSE recognises; the rest hold a vendor abbreviation — `SUEL` for SUZLON, `HUVR`
+  for HINDUNILVR, `BAF` for BAJFINANCE, `MSIL` for MARUTI, `KMB` for KOTAKBANK, `HNDL` for
+  HINDALCO. Confirmed against the provider: `SUEL` returns 0 results and `SUZLON` 39; `HUVR` 0 and
+  `HINDUNILVR` 38. `in-filings` therefore reported `walked: 6, mapped: 0, failed: 0` — a resource
+  succeeding at asking the wrong question, with **no count in the system able to show it**. This
+  is "probe an endpoint with symbols you expect to FAIL" broken while implementing the feature that
+  rule protects, and the FOURTH time provider-symbol-versus-something-else has decided a resource
+  (after the OTC foreign-ordinary line, `BRK/B` vs `BRK-B`, and the Bloomberg `*`//` spellings).
+  Fixed in migration 190 by joining NSE's own keyless `EQUITY_L.csv` on **ISIN** — measured to hold
+  2,570 rows with 2,570 DISTINCT ISINs, no blanks and no ISIN claimed by two symbols, which is what
+  makes it a safe key rather than an assumption. Coverage 37% -> **97%**; live, `in-filings` went
+  from `mapped: 0/6` to `6/6` with 221 filings. **The resolved id is a PREFERENCE over the listing
+  symbol, never a filter** — replacing it silently drops the 17 companies NSE does not list.
+- **AND THE NORMALISER GENERALISES PAST `INDAS_`, WHICH WAS UNVERIFIED WHEN IT SHIPPED.** Indian
+  filers use at least three taxonomies — `INDAS_*`, `BANKING_*` and `NBFC_INDAS_*` — and the first
+  real run parsed Axis Bank's BANKING instance into Corporate/Wholesale Banking, Retail Banking,
+  Treasury and Other Banking Business. Nothing had tested that; it happens to work because the
+  normaliser keys on the segment axes rather than the taxonomy prefix.
 - **A QUEUE TEST THAT INSPECTS ONE PAGE CANNOT SEE A QUEUE THAT FAILS TO ADVANCE.**
   `a-queue-must-reach-every-company.sql` asserted that a page of three spans three companies — and
   passed throughout the above, because its fixture has NOTHING PARSED. At t=0 the renumbering has

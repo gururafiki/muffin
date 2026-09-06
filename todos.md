@@ -1339,7 +1339,7 @@ Still open:
       |---|---|---|---|
       | China | 2,311 | CNINFO / CSRC | NOT viable for segments; **filing LINKS shipped (PR #317)** |
       | Japan | 1,265 | EDINET | **measured NOT viable — do not re-derive** |
-      | India | **645** | NSE XBRL | **IMPLEMENTED 2026-09-06 (PR #316)** |
+      | India | **645** | NSE XBRL | **IMPLEMENTED 2026-09-06 (PR #316), symbol resolution fixed same day (PR #321)** |
       | Taiwan | 533 | TWSE MOPS | **SPIKED 2026-09-06 — NOT viable, statements tagged, note not** |
       | Hong Kong | **362** | HKEX | low — annual reports largely PDF |
       | Australia | **273** | ASX | low — no XBRL mandate |
