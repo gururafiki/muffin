@@ -952,6 +952,32 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   **no run-level tally is stacked on the per-symbol evidence**: each call is already isolated to
   one symbol, so gating on `anyAnswer` would reproduce the `security-profile-detail` stall where,
   once the answerable head drains, the tally can never become true.
+- **THE SAME DEFECT IN THREE PROVIDERS IN ONE DAY, AND A SWEEP FINDS THEM FASTER THAN A BUG
+  REPORT.** "A request that FAILED and a request that ANSWERED NOTHING are different facts" is the
+  most-repeated rule in this file, and on 2026-09-06 it was live in three resources at once, each
+  stalling a weight-ordered backlog on its own head:
+  `security-dividends` (yfinance: `'NoneType' object has no attribute 'empty'`, 9,221 pending,
+  `failed: 60, written: 0` every run), `security-statements` (SEC via openbb:
+  `ContentTypeError -> 404` and `Could not find CIK for symbol`, 5,972 pending, and
+  `statement_currency_missing_at` set on **0 securities ever** — the marking branch was unreachable
+  in practice), and `security-kr-segments` (DART: `<status>014</status>`, 6,393 pending,
+  **143 byte-identical runs** over twelve hours). **The provider states the absence in whatever
+  wording AND WHATEVER FORMAT it likes** — DART answers `.json` endpoints in JSON and
+  `document.xml` in XML, so a classifier matching only `"status":"014"` misses
+  `<status>014</status>` entirely.
+  **The sweep is the reusable part**: group `refresh_run.report` (minus the timing keys) by
+  resource and count consecutive identical values. Most hits are legitimately idle at
+  `remaining: 0`, which is exactly what makes a non-zero failure count next to an identical report
+  stand out. It found two of the three in one query, after the first had cost an afternoon.
+- **AND FIXING ONE CAN BREAK ANOTHER: CHECK THE SPELLING BEFORE RECORDING AN ABSENCE.** Teaching
+  `security-statements` that a SEC 404 is an absence was correct AND would have negative-cached
+  Berkshire for 30 days, because the resource asks with `security_identifier.ticker` — OpenFIGI's
+  `BRK/B`, which SEC has never used. Measured: `symbol=BRK/B` returns *Could not find CIK*,
+  `symbol=BRK-B` returns full statements, and a CIK is refused outright. Two individually correct
+  changes that together record our typo as the company's absence, on the security whose SEC data
+  had been restored that same morning. Caught by re-reading the fix before it deployed, not by a
+  failure. **The order is: rule out the name, then record the absence** — this file already says a
+  wrong name is not a missing security, and that rule has to run FIRST.
 - **A BURST IS A PROVIDER EVENT — compare a rate against its own steady state.** The same incident
   hit `statements_missing_at`, where no contradiction is available (a security with no statements
   has none, so holding the data cannot disprove the mark). The RATE settles it: 518 + 725 + 1,032
