@@ -1251,47 +1251,79 @@ Still open:
       because its backlog is drained (`note: every filer has a walked history`). Only `kr-filings`
       omitted the key, while writing 118 and 92 filings in its last two runs. Reading the actual
       `refresh_run.report` rows settled it; the count alone had looked identical for both.
-- [ ] **The remaining SERVED segment disagreements are TWO causes, both now diagnosed.** Measured
-      2026-09-05. The count went 19-20 -> **18** and became DETERMINISTIC once the guard's paging
-      was fixed (PR #300 — offset paging over tied keys was duplicating and displacing rows, which
-      accounted for ~200 historical failures and the "no single signature" I had recorded here).
-      What remains splits cleanly:
+- [x] **The remaining SERVED segment disagreements — cause (a) is FIXED, and this entry was wrong
+      about it.** Re-measured 2026-09-06 by driving the CURRENT parser against Hershey's real
+      instance: revenue gets its OWN target of 2,787,306,000, not depreciation's 136,095,000. The
+      "target chosen by member count" defect is not live — `targetByBucket` is keyed per
+      (metric, period type, span) and the emit reads that bucket's own value. Production still
+      showed the old shape only because Hershey's rows were written by an older parser and had not
+      been re-read; four version bumps on 09-05/09-06 restarted the drain each time.
+      **A trap worth keeping**: the first re-measurement summed across BOTH axes and reported
+      revenue at exactly 2x, which looks exactly like a double count. Per axis Hershey is correct —
+      business revenue and geography revenue each sum to 2,787,306,000. One grid is two splits, and
+      a combined sum is always 2x by construction.
+      Cause (b) named five cases; **Southern Copper and Equinor are fixed** (PRs #307 and earlier —
+      the intersegment-elimination target and the derived column total). Still open and unchecked:
+      YPF, CoStar, Welltower, plus Hershey's `cost_of_revenue` at ratio 1.068.
+- [ ] **The CIK gap is 122 US equities, and only 15 of them are addressable — I costed this wrong
+      twice before measuring it out.** 122 US equities report `capability = 'none'` (Air Lease,
+      Akero, Alight, American Woodmark, Amicus, Apellis) and every one is an obvious SEC registrant.
+      The first diagnosis was that `market.apply_cik_map` could not reach them because it joins
+      SEC's `company_tickers.json` to `security_identifier` where `kind_code = 'ticker'`. Measured
+      2026-09-06, that is only part of it, and the resource is not broken: forcing a run returned
+      **10,388 filers and `updated: 0`**, and `sec-cik-map` had simply never come due — it has a
+      30-day TTL and `refresh_run` holds no non-skipped run for it at all.
 
-      **(a) THE GROUP'S TARGET IS CHOSEN BY MEMBER COUNT, SO A BIGGER SPLIT WINS — 9 of 18.**
-      `reconciled_to` is ONE value per (security, axis, period), shared across metrics: a split is
-      learned from the metric that reconciles and applied to the rest. Which metric wins is
-      `bestPlaced` — the bucket that placed the most members. Hershey Q2 2026: the DEPRECIATION
-      split has 4 members and revenue has 3, so depreciation's total (136,095,000 = 80,358 +
-      26,203 + 7,670 + 21,864) was stamped on every metric in the group, including a revenue split
-      that sums to **2,787,306,000 — exactly the company's own filed revenue**. The split is
-      perfect; only the target is wrong. Same shape at Atmos (target = `operating_income` total),
-      NatWest x2 (`total_assets`), and the ratio-3.98/5.26/13.49 cases.
-      **The fix is to prefer REVENUE when choosing the group's target**, not the bucket with the
-      most members — revenue is the metric that reconciles by construction (ASC 280 and IFRS 8
-      require a reconciliation of revenue, not of profit), which is why the code already learns
-      from it everywhere else. Not attempted yet: it governs partition selection for all 2,536
-      splits and needs its own change with a fixture where the two rules DISAGREE (a group whose
-      non-revenue metric has more members than its revenue one — Hershey is exactly that).
+      The 122 split three ways, and only the third is work:
 
-      **(b) TARGET CORRECT, SPLIT GENUINELY OFF — the rest.** YPF, CoStar, Equinor, Welltower and
-      Southern Copper have a `reconciled_to` that DOES match their filed revenue, so those are real
-      split defects and a separate investigation. Southern Copper is the mildest (ratio 1.013) and
-      therefore the best first case.
+      | | n | why |
+      |---|---|---|
+      | neither a ticker nor a US listing | **77** | no symbol at all — blocked on the rate-limited OpenFIGI `pending_ticker` backlog, which is an existing slow path, not new work |
+      | ticker + US listing | **30** | the ticker is an OTC ADR line (`AUOTY` for AUO Corp) that is genuinely not in SEC's registrant map — correctly unresolved |
+      | **US listing only** | **15** | `apply_cik_map` never looks at `market.listing`, so these are reachable by widening the join |
 
-      Neither is user-visible: the Sankey checks a split against the company's own `revenue` metric
-      rather than trusting `reconciled_to`, and refuses one that exceeds it.
-- [ ] **Europe — 1,438 equities, 260 SEC-reachable, so a 1,178 gap: the second largest after
-      China.** ESEF is measured NOT viable (ASML, Nokia, Novo Nordisk, TotalEnergies FY2025:
-      431–872 facts, **zero segment axes**; IFRS 8 notes are block-tagged text, and Germany is not
-      indexed). Two prongs instead:
-      - [ ] **Maximise the SEC 20-F path.** Resolving more European ADR CIKs is additive, needs no
-            new source, and 787 non-US securities already arrive this way.
-      - [ ] **Spike UK Companies House iXBRL** — the one free, structured, national European source
-            not yet measured.
-- [ ] **Spike China (2,311), India (645), Taiwan (533)** with the same cheap protocol that settled
-      ESEF, EDINET and DART: fetch one large filer's instance, count segment axes, report. Hours
-      each. **Expect failures — two of four so far — and treat "not viable" as a result**, recorded
-      as a `disclosure_source` row so it is not re-derived.
+      So widening `apply_cik_map` to a US `listing.symbol` is worth **15 securities**, not 122 —
+      ~10 lines of SQL, and it must refuse an ambiguous match (`having count(distinct cik) = 1`),
+      since an UPDATE ... FROM with two candidate CIKs picks one arbitrarily. Do it as a small
+      change or skip it; it is not the cheap headline win it first looked like. The same widening
+      touches the non-US side, where 8,642 equities lack a CIK and **174** have a US listing — but
+      treat 174 as a CEILING, since the `TSMWF`/`BUDFF` lesson says most such listings are OTC lines
+      rather than registrations, exactly as the 30 above turned out to be.
+- [ ] **Coverage: prioritise by SECURITIES PER SOURCE, not by region.** Measured 2026-09-06 from
+      `security_disclosure.capability = 'none'` over equities. Korea now reads **held 443**, which
+      is this phase's DART work paying off.
+
+      | market | none | candidate source (UNVERIFIED) | prior expectation |
+      |---|---|---|---|
+      | China | **2,311** | CNINFO / CSRC | unknown — biggest single prize |
+      | Japan | 1,265 | EDINET | **measured NOT viable — do not re-derive** |
+      | India | **645** | BSE / NSE / SEBI XBRL | SEBI mandates XBRL for results |
+      | Taiwan | **533** | TWSE MOPS | publishes XBRL |
+      | Hong Kong | **362** | HKEX | low — annual reports largely PDF |
+      | Australia | **273** | ASX | low — no XBRL mandate |
+      | UK | 206 | Companies House iXBRL (free API, key) | largest single European |
+      | Turkey | 190 | KAP | |
+      | Thailand | 186 | SET | |
+      | Brazil | 148 | CVM | |
+
+      **Europe totals ~1,100 and is genuinely second after China** — UK 206, Sweden 145, France 132,
+      Germany 125, Switzerland 102, Italy 70, Norway 53, Netherlands 52, Spain 50, Belgium 36,
+      Denmark 35, Greece 34, Finland 32, Poland 30, plus the tail. An earlier draft of this plan
+      dismissed Europe as "UK 206" by filtering to countries above 100 equities, which hid Germany,
+      France, Switzerland and the Nordics; that was wrong.
+      **But it does not follow that Europe is next.** China is 2,311 behind ONE regulator; Europe's
+      ~1,100 sits behind FOURTEEN at 30–206 each, and ESEF — the pan-European route — is already
+      measured dead for segments. So Europe gets ONE spike asking whether any pan-European route
+      exists at all; if not, record that it is fourteen integrations for ~1,100 securities and
+      ranks below China, India and Taiwan on effort per security.
+- [ ] **The spike protocol, unchanged from what settled ESEF, EDINET and DART.** Pick the market's
+      largest holding by fund weight; find a machine-readable route (no route IS the result); check
+      reachability FROM THE NODE with `curl` — not optional, since DART serves TLS 1.2 static-RSA
+      only and Deno's rustls cannot do it at all, which made `http-cache` a correctness dependency;
+      fetch one annual instance, count distinct dimensions and check them against the four segment
+      kinds in `market.segment_axis`; record a `market.disclosure_source` row with `enabled = false`
+      and the measurement in the note. **If viable, STOP** — implementation is its own phase, as
+      DART was.
 
 ### Phase 4 — more from what we already fetch
 
