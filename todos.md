@@ -1331,6 +1331,60 @@ Still open:
       SEC's registrant map or have no symbol at all — the OpenFIGI `pending_ticker` backlog, an
       existing slow path. The non-US ceiling of 174 was likewise a shape count; the real
       measurement across the whole universe found the same single security.
+- [ ] **PDF SEGMENTS ARE GENUINELY PARSEABLE — measured 2026-09-06 on real CNINFO annual reports,
+      and this is the most promising unbuilt thing in the market pipeline.** China's reports are
+      TEXT PDFs, not scans, and the CSRC MANDATES the breakdown table
+      (`主营业务分行业/分产品/分地区情况`) in every A-share annual report — so it is a standard
+      form, not per-company scraping. `pdfplumber` extracts it as structured rows:
+
+      | | measured |
+      |---|---|
+      | China Yangtze Power | 259p / 1.5 MB, table on p13, industry split **reconciles to 99.7%** of consolidated revenue |
+      | LONGi Green Energy | 320p / 5.5 MB, table on p23, **product split reconciles EXACTLY** to the industry total (129,497,674,192.20), plus a geography split |
+      | cost of extraction | **0.6 s / 74 MB** and **1.1 s / 111 MB** — the table is early in the document so the scan stops there, well inside the 90s/256MB worker |
+
+      Each row carries segment name, revenue (`营业收入`), cost (`营业成本`) and gross margin — two
+      of our six metrics plus a geography dimension.
+
+      **THREE THINGS THAT MAKE IT NOT A SMALL JOB, all measured:**
+
+      * **The heading and table FORMAT vary.** Of 8 sampled companies, CATL publishes the same
+        facts under `营业收入构成` with percentage columns instead of cost (EV batteries 74.70%,
+        storage 14.74%), and Kweichow Moutai's extracted text contains none of the variants at all.
+        This needs a control table of heading variants and per-format parsers, with reconciliation
+        as the correctness gate — the same shape as the XBRL parser on a less regular substrate.
+      * **`pdfplumber` is PYTHON and the edge functions are DENO.** Raw text extraction (which Deno
+        can do via `pdfjs-dist`) is NOT equivalent: Yangtze Power wraps a segment NAME across two
+        lines (`境内水电` / `行业 75,661,...`), which the table extractor handles and a naive line
+        regex silently mis-parses. Doing this in Deno means reconstructing rows from text
+        POSITIONS, i.e. reimplementing the part of pdfplumber that matters.
+      * **`cn-filings` is storing the wrong document for most companies.** 4 of the 8 sampled URLs
+        are 5-16 page files — `年度报告摘要`, the annual report SUMMARY, which CNINFO returns
+        alongside the full report and which the resource records under `年度报告` all the same.
+        That is a defect in the shipped resource regardless of whether segments are ever parsed,
+        and it must be fixed first or any parser sees the wrong file. Some older URLs are `.js`
+        rather than `.PDF` too.
+
+      Worth **2,311 Chinese equities** (plus possibly Hong Kong, Australia and Thailand, whose
+      substrate is also PDF). Do the `cn-filings` document-type fix first — it is small, it is a
+      real bug, and it is a precondition for everything else here.
+- [x] **SPIKED AND REJECTED FOR SEGMENTS 2026-09-06: Brazil, Hong Kong, Australia, Thailand,
+      Turkey.** Bringing the tally to **1 viable of 11 jurisdictions** (India), which is the number
+      to plan against rather than the hope.
+      * **Brazil (CVM)** — the most substantial result. `dados.cvm.gov.br` publishes the COMPLETE
+        annual financial statements of every listed company as keyless CSV (`BPA`/`BPP` balance
+        sheet, `DRE` income, `DFC` cash flow, `DMPL` equity, `DVA`, consolidated AND individual;
+        `dfp_cia_aberta_2025.zip` is 12.8 MB). Verified the income statement's shape directly: it
+        is keyed `CD_CONTA`/`DS_CONTA` with **no segment dimension**, and there is no notes file in
+        the archive. Excellent for STATEMENTS, useless for segments — and Brazil already reads 88%
+        on statements, so it would add little.
+      * **Hong Kong (HKEXnews)** — a PDF announcement portal; no XBRL mandate for annual reports.
+      * **Australia (ASX)** — the documented announcements endpoint 404s; filings are PDF.
+      * **Thailand (SET)** — returns **403** with an anti-bot page to any automated request.
+      * **Turkey (KAP)** — reachable, and it does publish structured financial tables in its UI,
+        but no JSON API is discoverable by guessing (three candidate paths returned 404/000). It is
+        the ONE of the five worth revisiting, and it needs the endpoints read out of the browser
+        rather than guessed. 190 equities.
 - [ ] **Coverage: prioritise by SECURITIES PER SOURCE, not by region.** Measured 2026-09-06 from
       `security_disclosure.capability = 'none'` over equities. Korea now reads **held 443**, which
       is this phase's DART work paying off.
