@@ -609,6 +609,17 @@ change, unless noted. Free/paid marked where a provider is involved.
       prebuild that writes garbage still exits 0. That PR also pins `ios.bundleIdentifier`, which
       was unset and therefore INVENTED by whoever ran prebuild.
 
+- [ ] **`pending_segments` is defined by SIX migrations (166, 172, ..., 189) and is therefore
+      dropped and recreated six times on every deploy.** CLAUDE.md's own rule says "consolidating
+      the definitions is the fix; adding a fifth definer is not" — 189 is the sixth, added
+      deliberately with a byte-identical column list so the drop/recreate window is one that
+      already existed. The harm is real and already observed: a resource querying inside that
+      window fails with `relation "market.pending_*" does not exist`, which is what the
+      resource-stalled alert caught on its first day. Consolidating means editing shipped
+      migrations, which has a different blast radius and needs the four-pass test plus a check that
+      no intermediate migration depends on an older column list. Do it as its own change; do not
+      add a seventh definer.
+
 **OPEN (2026-08-13) — known limits, not bugs**
 - [ ] **`market_cap` is stored in the security's own currency**, so ordering by it mixes ¥, ₩ and $ —
       191 securities exceed "5T" purely for that reason. Correct per security, wrong for ranking.

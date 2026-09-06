@@ -2084,6 +2084,32 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   company, because the serving view is annual. Reproduce offline before changing it — at 245,000
   filings a page of 20 returned twenty filings of one company and now returns twenty companies, and
   the window function cost 323 → 489 ms.
+- **…AND THAT FIX ONLY HELD FOR ONE PAGE, BECAUSE A `row_number()` IS COMPUTED AFTER THE `where`
+  THAT SHRINKS ITS INPUT.** `round` sat in the SAME subquery as `pending_segments`' "not yet parsed
+  at the current parser version" predicate. SQL applies `where` BEFORE window functions, so the
+  window saw only OUTSTANDING filings — and as a company drained, its remaining ones RENUMBERED.
+  Parse its round 1 and the old round 2 becomes round 1 on the very next query, putting it straight
+  back at the head where `best_weight desc` hands it the page again. `round` was a moving target,
+  not a position in a round-robin. Measured 2026-09-06 mid-drain at parser v20: **106 securities of
+  3,967 had had any filing re-read, median 15.5 each, Procter & Gamble at 131 of its 164**, while
+  3,861 companies had had none — so the parser corrections a version bump exists to deliver were
+  reaching **3%** of companies, at a month per drain. Every counter read healthy again (~240
+  filings/hour, thousands of rows written, `ok` true, `remaining` falling) for the same reason as
+  the first time: **the rows being written were correct — they were the wrong rows first.**
+  Fixed in migration 189 by computing the window over every ELIGIBLE filing and applying the work
+  predicate AFTER it. The live head went from repeated filings of a few large caps to **200 distinct
+  companies in the first 200 rows**. So: **anything in that `where` clause describing the STATE OF
+  OUR WORK rather than the nature of the row will renumber the round.**
+- **A QUEUE TEST THAT INSPECTS ONE PAGE CANNOT SEE A QUEUE THAT FAILS TO ADVANCE.**
+  `a-queue-must-reach-every-company.sql` asserted that a page of three spans three companies — and
+  passed throughout the above, because its fixture has NOTHING PARSED. At t=0 the renumbering has
+  nothing to renumber and the broken view is genuinely breadth-first; the defect exists only ACROSS
+  SUCCESSIVE PAGES. The test now drives the loop the resource runs — a page of one, three times,
+  marking each filing parsed exactly as the handler does — and fails on the shipped view with
+  *"covered 1 companies rather than 3 (T96 Heavy, T96 Heavy, T96 Heavy)"*. Same family as
+  `a-page-must-advance.sql`, and the generalisation is: **a backlog guard must simulate the DRAIN,
+  not photograph the queue.** Ask what the fixture's state is after one page, and whether any
+  assertion would notice if the answer were "identical".
 - **A MEMBER'S KIND IS NOT ITS AXIS'S KIND.** A company whose reportable segments are GEOGRAPHIC
   files countries on `us-gaap:StatementBusinessSegmentsAxis`, because that is what it reports.
   Measured there: `country:TW` 299.4bn, `srt:NorthAmericaMember` 178.2bn, `srt:AsiaPacificMember`
