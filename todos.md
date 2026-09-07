@@ -1331,43 +1331,41 @@ Still open:
       SEC's registrant map or have no symbol at all — the OpenFIGI `pending_ticker` backlog, an
       existing slow path. The non-US ceiling of 174 was likewise a shape count; the real
       measurement across the whole universe found the same single security.
-- [ ] **PDF SEGMENTS ARE GENUINELY PARSEABLE — measured 2026-09-06 on real CNINFO annual reports,
-      and this is the most promising unbuilt thing in the market pipeline.** China's reports are
-      TEXT PDFs, not scans, and the CSRC MANDATES the breakdown table
-      (`主营业务分行业/分产品/分地区情况`) in every A-share annual report — so it is a standard
-      form, not per-company scraping. `pdfplumber` extracts it as structured rows:
+- [x] **DONE 2026-09-07 — CHINA'S SEGMENTS ARE READ OUT OF THE PDF (PRs #327, and the parser).**
+      Migration 183 recorded CNINFO as NOT VIABLE because every filing is a PDF; that was measured
+      on the TRANSPORT, not the DOCUMENTS. The reports are TEXT PDFs and the CSRC MANDATES
+      `主营业务分行业/分产品/分地区情况` in every A-share annual report, so it is a standard form.
+      **`capability = 'none'` for CN went 2,311 -> 0.**
 
-      | | measured |
+      | measured | |
       |---|---|
-      | China Yangtze Power | 259p / 1.5 MB, table on p13, industry split **reconciles to 99.7%** of consolidated revenue |
-      | LONGi Green Energy | 320p / 5.5 MB, table on p23, **product split reconciles EXACTLY** to the industry total (129,497,674,192.20), plus a geography split |
-      | cost of extraction | **0.6 s / 74 MB** and **1.1 s / 111 MB** — the table is early in the document so the scan stops there, well inside the 90s/256MB worker |
+      | China Yangtze Power | industry split reconciles to **99.7%** of consolidated revenue — the gap is 其他业务, which is exactly the 主营业务/营业收入 distinction |
+      | LONGi Green Energy | product split reconciles **exactly** to the industry total (129,497,674,192.20), plus geography |
+      | cost | **166-168 ms, under 140 MB** against a 90s/256MB worker |
 
-      Each row carries segment name, revenue (`营业收入`), cost (`营业成本`) and gross margin — two
-      of our six metrics plus a geography dimension.
+      **POSITIONS, NOT TEXT, AND THE DIFFERENCE IS SILENT.** One Yangtze row occupies THREE visual
+      lines with the money in the middle (`境内水电` / `75,661,563,315.43 …` / `行业`), so read as
+      lines it yields the segment `行业` — "industry" — with the right number beside it. Column
+      boundaries are MIDPOINTS between header labels, because a right-aligned money value begins
+      LEFT of its own header label; using the label's x put revenue in the name column and shifted
+      every metric one place.
 
-      **THREE THINGS THAT MAKE IT NOT A SMALL JOB, all measured:**
+      **Nothing downstream changed**: `cn-pdf.ts` produces `SegmentFact[]`, so `assignPartitions`,
+      the reconciliation, the per-accession retraction and the serving layer are reused. LONGi's
+      geography lands at partition 0 unaided — it covers 118.4bn of 129.5bn and is a partial
+      disclosure, not a split of the whole.
 
-      * **The heading and table FORMAT vary.** Of 8 sampled companies, CATL publishes the same
-        facts under `营业收入构成` with percentage columns instead of cost (EV batteries 74.70%,
-        storage 14.74%), and Kweichow Moutai's extracted text contains none of the variants at all.
-        This needs a control table of heading variants and per-format parsers, with reconciliation
-        as the correctness gate — the same shape as the XBRL parser on a less regular substrate.
-      * **`pdfplumber` is PYTHON and the edge functions are DENO.** Raw text extraction (which Deno
-        can do via `pdfjs-dist`) is NOT equivalent: Yangtze Power wraps a segment NAME across two
-        lines (`境内水电` / `行业 75,661,...`), which the table extractor handles and a naive line
-        regex silently mis-parses. Doing this in Deno means reconstructing rows from text
-        POSITIONS, i.e. reimplementing the part of pdfplumber that matters.
-      * **`cn-filings` is storing the wrong document for most companies.** 4 of the 8 sampled URLs
-        are 5-16 page files — `年度报告摘要`, the annual report SUMMARY, which CNINFO returns
-        alongside the full report and which the resource records under `年度报告` all the same.
-        That is a defect in the shipped resource regardless of whether segments are ever parsed,
-        and it must be fixed first or any parser sees the wrong file. Some older URLs are `.js`
-        rather than `.PDF` too.
+      Two things this also fixed. `cn-filings` was storing the WRONG DOCUMENT: of 8 companies
+      sampled, four held the `年度报告摘要` summary and one Kweichow Moutai's ENGLISH edition —
+      which is the real reason no Chinese heading could be found in it. And `pending_kr_segments`
+      and `pending_in_segments` both carried migration 189's renumbering defect; Korea's 6,393-deep
+      backlog would have walked one company's history at a time.
 
-      Worth **2,311 Chinese equities** (plus possibly Hong Kong, Australia and Thailand, whose
-      substrate is also PDF). Do the `cn-filings` document-type fix first — it is small, it is a
-      real bug, and it is a precondition for everything else here.
+      **Still open for China:** the heading VARIES. CATL publishes the same facts under
+      `营业收入构成` with percentage columns instead of cost, and that variant is not yet read — the
+      heading list is a constant in `cn-pdf.ts` and should become a control table when the second
+      format is added. Measure how many of the 2,311 use it before building for it.
+
 - [x] **SPIKED AND REJECTED FOR SEGMENTS 2026-09-06: Brazil, Hong Kong, Australia, Thailand,
       Turkey.** Bringing the tally to **1 viable of 11 jurisdictions** (India), which is the number
       to plan against rather than the hope.

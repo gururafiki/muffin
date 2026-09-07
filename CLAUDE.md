@@ -2295,6 +2295,40 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   number the feature exists to serve. The split is a property of the axis and the filing, so it is
   inferred from the metric that does reconcile and applied to the rest. The market-verify guard
   asserts revenue only, for the same reason.
+- **"PDF" IS A STATEMENT ABOUT THE TRANSPORT, NOT ABOUT THE DOCUMENT — and China was rejected on
+  the wrong one.** Migration 183 recorded CNINFO as not viable for segments because every filing is
+  a PDF, which was measured by checking `adjunctType` and never by opening one. Measured on the
+  documents 2026-09-07: they are **TEXT PDFs**, and the **CSRC MANDATES**
+  `主营业务分行业/分产品/分地区情况` in every A-share annual report — a standard form, not
+  per-company scraping. Yangtze Power's industry split reconciles to **99.7%** of consolidated
+  revenue (the gap is 其他业务, which is exactly the 主营业务/营业收入 distinction, not an error);
+  LONGi's five-member product split reconciles **exactly** to its industry total. Extraction costs
+  **166-168 ms and under 140 MB** against the 90s/256MB worker, because the table sits on page
+  13-23 and the scan stops there. **`capability = 'none'` for CN went 2,311 -> 0.**
+- **AND IT HAS TO BE READ FROM POSITIONS, NOT TEXT, WHICH IS THE WHOLE DIFFICULTY.** One Yangtze
+  row occupies THREE visual lines with the money in the MIDDLE — `境内水电` / `75,661,563,315.43
+  25,881,578,129.36` / `行业` — so a line-based regex yields the segment `行业` ("industry") with
+  the right number beside it: a wrong answer that looks entirely ordinary. Rows are rebuilt from
+  item coordinates, and **column boundaries are MIDPOINTS between the header labels**, because a
+  money value is right-aligned and therefore begins to the LEFT of its own header label; using the
+  label's x put revenue in the name column and shifted every metric one place, finding every member
+  and reporting all of them wrong. A name-only line is a PREFIX before the money and a SUFFIX after
+  it, bounded by adjacency — handling only one of the two loses the row or merges two.
+- **Nothing downstream needed to change, which is the test of the segment architecture.**
+  `cn-pdf.ts` produces `SegmentFact[]`, so `assignPartitions`, the reconciliation, the
+  per-accession retraction, the dedupe and the serving layer are reused unaltered — LONGi's
+  geography split lands at partition 0 unaided, because it covers 118.4bn of 129.5bn and is a
+  partial disclosure rather than a split of the whole. **The heading still VARIES**: CATL publishes
+  the same facts under `营业收入构成` with percentage columns instead of cost, and that variant is
+  not read yet.
+- **CNINFO FILES THREE DOCUMENTS UNDER ONE CATEGORY AND WE STORED THEM AS ONE.**
+  `category_ndbg_szsh` returns the full report, `年度报告摘要` (the SUMMARY — 5-16 pages against
+  194-320, and it omits the mandated table entirely) and an ENGLISH edition. Of 8 companies
+  sampled, only THREE held a full Chinese-language report; four were summaries and one was Kweichow
+  Moutai's English edition, **which is the real reason no Chinese heading could be found in it** —
+  not that Moutai discloses nothing. Attribution was sound throughout; only the document choice was
+  wrong. `security_filing` has no title column, so `report_type` is the classification's only
+  carrier and it has to be decided at ingest.
 - **EUROPE HAS NO EDGAR EQUIVALENT FOR SEGMENTS, AND filings.xbrl.org LOOKS LIKE ONE.** It indexes
   25,675 ESEF filings with pre-converted xBRL-JSON that genuinely carries dimensions — and ASML,
   Nokia, Novo Nordisk and TotalEnergies FY2025 carry **431-872 facts and ZERO segment axes**
