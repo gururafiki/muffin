@@ -1361,10 +1361,25 @@ Still open:
       and `pending_in_segments` both carried migration 189's renumbering defect; Korea's 6,393-deep
       backlog would have walked one company's history at a time.
 
+      **Two defects found by driving it over production filings (PR #330), both invisible to the
+      fixtures it shipped with.** The scan bound was 45 pages, measured on two documents with the
+      table on page 13 and 23 — Canadian Solar's 327-page report puts it on page **68**, so the
+      filing was stamped as disclosing nothing. Now 90 (298 ms / 124 MB per document against
+      90 s / 256 MB), with migration 198 clearing the 16 filings read under the old bound. And
+      justified CJK is typeset with spaces INSIDE one item — `"光 伏 组 件 产"` — which matters
+      because the member name is the UPSERT KEY, so the same segment set differently next year
+      would arrive as a second member. That fixture was wrong twice before the harness accepted it.
+
       **Still open for China:** the heading VARIES. CATL publishes the same facts under
       `营业收入构成` with percentage columns instead of cost, and that variant is not yet read — the
-      heading list is a constant in `cn-pdf.ts` and should become a control table when the second
-      format is added. Measure how many of the 2,311 use it before building for it.
+      heading list is a constant in `cn-pdf.ts` and should become a control table when a second
+      format is added.
+
+      **And the yield is NOT yet a measurement of that.** Of the first 17 filings read, 3 produced
+      segments and 14 did not — but of six sampled failures, FOUR were summaries still typed
+      `年度报告` from before migration 193 and awaiting the re-walk (self-healing), one was Canadian
+      Solar (the page-68 case, now fixed) and one an 8-page announcement, also pre-fix. Re-measure
+      once the re-walk has run and the `noTable` count is honest.
 
 - [x] **SPIKED AND REJECTED FOR SEGMENTS 2026-09-06: Brazil, Hong Kong, Australia, Thailand,
       Turkey.** Bringing the tally to **1 viable of 11 jurisdictions** (India), which is the number
@@ -1472,12 +1487,16 @@ Still open:
       foreign key that only an EMPTY database exercises (`market.currency` is populated by the
       ingest, so USD does not exist in CI).
 
-- [ ] **NOTHING RENDERS THE INSTANT SEGMENT METRICS — one decision, three metrics.** `total_assets`
-      has been selected by `use-segments.ts` and displayed nowhere since migration 148, and
-      `long_lived_assets` and `goodwill` now join it. The breakdown draws two donuts (revenue and
-      operating income); a third, or a per-line detail row, is a design choice rather than a
-      mechanical addition. Deliberately not half-wired into the hook, because a column fetched and
-      unread is the shape this repo keeps recording.
+- [x] **DONE 2026-09-07 (muffin-ui #126) — a business line's holdings render on selection.**
+      `total_assets` had been selected by the hook and shown nowhere since migration 148;
+      `long_lived_assets` and `goodwill` joined it. ON SELECTION rather than always, because these
+      are STOCKS and the donuts are FLOWS — a ring of assets beside a ring of revenue invites
+      reading one as a share of the other, and the per-line row already carries revenue, share and
+      margin. Each field renders only if the filing carries it: `Assets 12.5B · Long-lived — ·
+      Goodwill —` reads as an incompletely MEASURED line rather than an incompletely disclosed one.
+      The rule lives in `segment-holdings.ts`, pure, because `segment-breakdown.tsx` imports
+      react-native and `tsx` cannot transform it — the same split that would have caught the
+      Chevron 125.4% bug offline.
 
 - [ ] **More segment metrics generally — and "adding one is a control-table row" is OPTIMISTIC.**
       True for a new SPELLING of an existing metric (migration 191 above, one row). False for a new
