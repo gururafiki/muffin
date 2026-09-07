@@ -2847,6 +2847,70 @@ try the merge before assuming it needs a human click.
   `visibility: visible`. Probe a rendered RNW page with `textContent` plus a
   `getBoundingClientRect`, and treat an `innerText` miss as a question rather than an answer.
 
+- **SEGMENT COLLECTION FINISHING IS NOT SEGMENT DATA BEING USABLE, AND THE GAP IS A VOCABULARY.**
+  Measured 2026-09-07: 357,732 segment rows over 2,418 securities from four regulators, and
+  `segments.comparable_concepts` — concepts held by 2+ issuers — sampled at **7**, the largest
+  being `digital-advertising` at **four**. 11,123 of 11,170 served members (99.6%) carried no
+  concept. That is structural, not neglect: migration 162 measured 380 members of which 320 were
+  filer-namespaced and **zero shared by two issuers**, so members never collide by construction and
+  comparability can only come from MAPPING, never from collecting another market. **Commodities are
+  the one cluster where the mapping is sound rather than editorial** — copper is copper whoever
+  mines it, which is not true of "Services" or "Solutions". Migrations 200/202 took it 7 -> ~24.
+- **KEYWORD GENERATES, SECTOR FILTERS, REVIEW ADOPTS — a keyword rule can never BE the mapping.**
+  Matching commodity names over unmapped members finds `mbuu:CobaltMember` (**Cobalt is a BOAT
+  BRAND**, Malibu Boats), `hood:GoldSubscriptionRevenuesMember` (Robinhood Gold, a subscription
+  tier), `nse:GoldLoanAndOtherMember` (gold-backed *lending*), `samg:SilvercrestFundsMember` (an
+  asset manager), `cp:CoalRevenueMember` and `csx:CoalServicesMember` (railroads **hauling** coal),
+  `cnx:CoalbedMethaneMember` (natural gas), `form:DRAMProductGroupMember` (test probes FOR DRAM).
+  The raw tally said 17 gold issuers; the honest number is 12. Every false positive sat outside the
+  concept's sector and every true one inside it, so the issuer's own sector is the filter — the
+  same rule as `security-symbol-repair`: generate candidates, verify each, never pattern-match and
+  rewrite. **Read the matched ROWS, never the count.**
+- **…BUT THAT SECTOR RULE IS A CURATION FILTER AND NOT AN INVARIANT, WHICH ONLY MEASURING SHOWED.**
+  The plan called for shipping it as a standing plausibility tripwire. Run against production
+  BEFORE writing it, it returns **twelve groups and every one is innocent** — Amazon's cloud and
+  physical retail, Alphabet's cloud, Microsoft's gaming and advertising, Meta's wearables, Tesla's
+  energy storage. A diversified company reporting a segment outside its own sector is the entire
+  reason segment data exists. It was deliberately NOT shipped: a guard that is ~100% false
+  positives on correct data gets disabled, and then hides the true positive behind it. **The same
+  measurement did find a real defect in the seed** — `coal` pinned to `energy` disagreed with four
+  of its own five issuers (BHP, Vale, Sasol, Alpha are `materials`; only Peabody is `energy`).
+- **A STANDARD MEMBER NAMING A SUBSTANCE MAY BE GENERIC; ONE NAMING A ROLE MUST BE SCOPED.**
+  `us-gaap:GoldMember` means the metal for SSR Mining, Royal Gold, Freeport and Coeur alike, so one
+  unscoped alias covers all four and every future filer. `us-gaap:ProductMember` (142 issuers) and
+  `ServiceMember` (127) mean Apple Services in one filing and Cisco support contracts in another,
+  and migration 145 correctly scopes those per CIK. The distinction is substance versus role.
+- **A SHARED TAXONOMY IS COMPARABILITY FOR FREE, AND `nse:` IS NOT FILER-NAMESPACED.** India's NSE
+  vocabulary is shared, so `nse:CopperMember` is filed by both Hindalco and Vedanta and
+  `nse:IronOreMember` by both Vedanta and NMDC. Likewise `srt:` and `us-gaap:`: six generic aliases
+  in migration 202 reach ~30 issuers where 200 needed 67 rows for ~60. **When looking for cheap
+  comparability, rank unmapped members by how many ISSUERS file them and start with the shared
+  prefixes** — but exclude the baskets (`us-gaap:OilAndGasMember` is two substances with different
+  prices), the transport (`...MidstreamMember` — moving gas is not selling gas), the services and
+  the regulatory qualifiers (`...UsRegulatedMember`), all on the same rule that rejected
+  `rio:CopperAndDiamondsMember`.
+- **A COUNTRY-NAME MATCHING RULE IS UNSAFE, SO THE 43 ARE LITERAL ROWS.** Migration 157 resolves
+  the PUBLISHED geography members; it cannot see a country a filer names in its own namespace, and
+  43 of the queue's 9,020 business rows are exactly that — MercadoLibre's Argentina/Brazil/Mexico
+  at 20.3% fund weight, Apple's Japan at 13.6, Costco's US and Canada at 9.6, all being offered for
+  a *product* concept. Deriving them from `market.countries` at migration time is the obvious shape
+  and is wrong: **`Georgia` is a US state far more often than a country in an American filing,
+  `Jordan` is a Nike brand, `Turkey` is a bird.** None appears in the 43 — but a standing rule
+  would adopt them the moment a poultry producer or a US regional bank filed one. Note this is a
+  DATA change: `segment_member` is a control table whose row overrides its axis's kind, so nothing
+  needed a new view definer. A looser "contains a place word" test suggests several hundred and is
+  a different mechanism — `scco:PeruvianOperationsMember` is an adjective and `bud:EMEAMember` a
+  region, and inventing a rule for those would be guessing.
+- **AND THAT BROKE A GUARD THAT WAS RIGHT: TWO POPULATIONS, ONLY ONE DERIVED.**
+  `a-country-is-not-a-business-line.sql` asserts country members are derived from
+  `market.countries` rather than typed out, counted as `country_iso2 is not null` — so 43 authored
+  members took it from 229 to 272 and it failed on correct data. The fix counts the `country:%`
+  PREFIX, which still fails the mutation it exists to catch (replacing the derivation with a
+  literal list drops the count) where loosening it to `>=` would not, plus a second assertion that
+  an authored member may never wear the `country:` prefix so the two populations cannot blur.
+  Proven necessary AND sufficient against production rather than merely green: old form 271 vs 228
+  countries (fails), new form 228 (passes).
+
 ## Observability (added 2026-08-27)
 
 Grafana at `muffin-grafana.<domain>` and Portainer at `muffin-portainer.<domain>`, both behind
