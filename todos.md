@@ -1452,13 +1452,33 @@ Still open:
       **No parser version bump**: the corpus is mid-drain at v20 (3,101 of 210,751 re-read), so the
       204,000 still queued pick it up on the pass they are already making. A bump is for a change in
       how we READ a document, not for widening what we look for while the read is in progress.
-- [ ] **Long-lived assets by geography — CONFIRMED PRESENT, still to build.** `us-gaap:NoncurrentAssets`,
-      **722 filers**; Amazon reports US **$180bn** and non-US **$61.3bn** as INSTANTS on
-      `StatementGeographicalAxis`, which is exactly what ASC 280 requires beside revenue. It is NOT
-      "an `xbrl_concept` row" as this item used to say — it is a NEW metric: a metric code, a
-      pivoted column in `security_segment_current`, a column on `security_segment_spine`, and a UI
-      that reads it. `us-gaap:Goodwill` (**3,347 filers**) is the same shape and the same size of
-      change.
+- [x] **DONE 2026-09-07 (PR #328) — long-lived assets by geography, and goodwill per segment.**
+      `us-gaap:NoncurrentAssets` (**722 filers**) and `us-gaap:Goodwill` (**3,347**), both already
+      in every instance `security-segments` downloads, so **no new provider call**. Driven through
+      the real parser against Amazon's real FY2022 instance: US **$180,000,000,000** / non-US
+      **$61,300,000,000** as instants on `StatementGeographicalAxis`, and goodwill per segment
+      (NA 12,527m, International 1,288m, AWS 1,202m) — all partition 1.
+
+      The cost was measured rather than assumed, because migration 146 records it as the reason two
+      concepts were deliberately NOT added: `security_metric` holds 3,552,556 rows and
+      `total_assets` accounts for 48,322; scaled by adoption these add ~10,000 and ~46,000, under
+      2%. Both are INSTANTS, so they take the lateral shape `total_assets` uses rather than the
+      duration pivot, and the columns are APPENDED at the end of the view's select list — `create
+      or replace view` can only add at the end, and putting them where they belong would force the
+      drop fallback and open a window on every deploy.
+
+      **Three guards fired and each was right**: SQLSTATE 21000 (IFRS spells both concepts exactly
+      as us-gaap and the PK is `(metric_code, concept)`), the missing statement vocabulary, and a
+      foreign key that only an EMPTY database exercises (`market.currency` is populated by the
+      ingest, so USD does not exist in CI).
+
+- [ ] **NOTHING RENDERS THE INSTANT SEGMENT METRICS — one decision, three metrics.** `total_assets`
+      has been selected by `use-segments.ts` and displayed nowhere since migration 148, and
+      `long_lived_assets` and `goodwill` now join it. The breakdown draws two donuts (revenue and
+      operating income); a third, or a per-line detail row, is a design choice rather than a
+      mechanical addition. Deliberately not half-wired into the hook, because a column fetched and
+      unread is the shape this repo keeps recording.
+
 - [ ] **More segment metrics generally — and "adding one is a control-table row" is OPTIMISTIC.**
       True for a new SPELLING of an existing metric (migration 191 above, one row). False for a new
       METRIC: the serving views pivot metrics into COLUMNS, so each one needs the view recreated,
