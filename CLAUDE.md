@@ -2321,6 +2321,19 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   partial disclosure rather than a split of the whole. **The heading still VARIES**: CATL publishes
   the same facts under `营业收入构成` with percentage columns instead of cost, and that variant is
   not read yet.
+- **A ONE-SHOT REPAIR THAT RUNS BEFORE THE CODE IT DEPENDS ON REPAIRS NOTHING, AND SPENDS ITS OWN
+  KEY DOING SO.** Migration 193 re-queued the CNINFO companies already walked so a re-walk would
+  retype their documents; the classifier that does the retyping shipped in the same PR. I applied
+  the migration BY HAND hours before that function deployed, and `cn-filings` kept running on its
+  cron throughout — walking company after company with the OLD code and stamping
+  `history_walked_at` as it went. The re-queue was spent on walks that could not classify, and
+  because a one-shot records its key, it could not simply be run again. Measured 2026-09-07 with
+  the classifier live since 15:15 UTC: **77 filers walked before it, carrying 1,879 filings all
+  typed `年度报告`, against 22 walked since and correctly split** — and those 22 were exactly the 22
+  companies holding both a full report and a summary. **Applying a migration ahead of its own
+  deploy breaks the ordering the deploy exists to guarantee**; if you do it, the repair half has to
+  wait for the code, and the scope has to be re-derivable (here: which filers were walked before
+  the deploy timestamp, since nothing records which code classified a row).
 - **CNINFO FILES THREE DOCUMENTS UNDER ONE CATEGORY AND WE STORED THEM AS ONE.**
   `category_ndbg_szsh` returns the full report, `年度报告摘要` (the SUMMARY — 5-16 pages against
   194-320, and it omits the mandated table entirely) and an ENGLISH edition. Of 8 companies
