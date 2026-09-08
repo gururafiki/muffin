@@ -1508,8 +1508,28 @@ Still open:
       TOTAL operating cost, not cost of goods sold — North America $318,727,000,000, because revenue
       less this is operating income. Mapping it to `cost_of_revenue` would put a different
       measurement under an existing name.
-- [ ] **`equity/estimates/price_target`** (finviz) is measured working for US listings and is not
-      captured; only `equity/estimates/consensus` is.
+- [ ] **`equity/estimates/price_target`** (finviz) — **PROBED 2026-09-07 against the deployed
+      openbb-api, with symbols expected to FAIL rather than mega-caps.** It returns
+      `published_date`, `price_target`, `adj_price_target`, `status`, `rating_change` and
+      `analyst_company` per analyst action.
+      **It is a US-LISTINGS-ONLY feature and nothing in its name says so**: every suffixed symbol
+      returns **400** (`SAP.DE`, `005930.KS`, `BHP.AX`, `7203.T`, `SHEL.L`, `NESN.SW` — finviz has
+      no quote page for them), while every US line works including ADRs (`TSM`, `NVO`) and
+      mid-caps (`EXC` $46bn, `ESS` $19bn). So the backlog must be scoped on **a US listing in
+      `market.listing`**, never on the symbol's shape and never on the company's country — the same
+      rule migration 123 needed for `security-eps-history`.
+      **It BATCHES** (`symbol=AAPL,MSFT` returns both), which is what makes it affordable: the
+      addressable population is **3,277 US-listed equities** (521 of them a >=0.5% holding of a
+      tracked fund), so at 20 symbols a call the whole universe is ~164 requests — no quota, unlike
+      `historical_eps`'s 25 a DAY. Use `fetchWithIsolation`, because a delisted US symbol will
+      still poison a batch.
+      **A price target is a CURSOR, not a negative cache** — analysts re-rate constantly, so "no
+      target today" is never a permanent fact about a company (same reasoning as
+      `insider_fetched_at`).
+      Still a PHASE rather than a task: ingestion is the easy half, and this repo's definition of
+      done also wants the `origins.ts` cache entry, a Grafana panel, a guard and somewhere in the
+      UI to show it. Note it is analyst OPINION, unlike everything else in `market`, which is
+      filings-derived fact — decide deliberately how it is labelled before it reaches a page.
 - [ ] Re-probe anything recorded as unavailable **only with symbols expected to FAIL** — a 3-symbol
       probe of mega-caps once justified a feature that could never serve the universe.
 
