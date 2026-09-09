@@ -2911,6 +2911,44 @@ try the merge before assuming it needs a human click.
   Proven necessary AND sufficient against production rather than merely green: old form 271 vs 228
   countries (fails), new form 228 (passes).
 
+- **CHECK WHAT YOU ALREADY STORE BEFORE BUILDING A FETCH — SEVENTH INSTANCE, and this time the
+  answer was a whole feature.** `equity/estimates/price_target` was carried as an open Phase 4 item
+  reading *"measured working for US listings and is not captured"*. `market.security_estimate` has
+  held consensus price targets since migration 110 and is GLOBAL: measured 2026-09-07, **26,676
+  rows over 9,009 securities** (US 2,652, CN 1,244, JP 927, IN 567, KR 340, HK 333, AU 289, GB
+  254). So the honest description was never "we have no price targets" — it is "we have no
+  per-ANALYST actions". Both are worth having and they are different GRAINS: a daily consensus
+  LEVEL versus the event stream behind it. Say which one is missing before costing the work.
+- **`adj_price_target` IS THE NEW TARGET AND `price_target` IS THE PREVIOUS ONE, which is the
+  opposite of what the names say.** Measured over 160 rows across eight symbols: both present 90,
+  **`adj_price_target` alone 55** (Initiated/Resumed actions, which have no prior target),
+  **`price_target` alone ZERO**, neither 15 — and where both appear they **always differ** (48 of
+  48), which is what rules out `adj` meaning split-adjusted. Storing `price_target` as "the price
+  target" persists the SUPERSEDED number and is null 40% of the time, while looking entirely
+  ordinary on a page. Columns are `target_from` / `target_to`, pinned in `logic-check.ts` the way
+  `surprise_percent`'s `* 100` is — third field-semantics trap in this schema after the
+  fraction/percent pair and mixed units inside one response.
+- **finviz IS US-LISTINGS-ONLY AND THE OTC FOREIGN-ORDINARY LINES FAIL TOO.** Probed with symbols
+  expected to FAIL: `SAP.DE`, `005930.KS`, `BHP.AX`, `7203.T`, `SHEL.L`, `NESN.SW` all **400**, and
+  so do `ASMLF`, `BUDFF`, `TSMWF`, `SAPGF` — the very symbols OpenFIGI's US lookup returns for a
+  foreign company. Every genuine US line answers, including ADRs (`TSM`, `NVO`) and mid-caps (`EXC`
+  $46bn, `ESS` $19bn). Scope on **a US listing in `market.listing`**, never the symbol's shape:
+  verified that filter already excludes all four OTC lines while keeping the TSM ADR, which is
+  exactly what `pending_eps_history` needed after 621 of its 1,015 rows turned out to be OTC lines
+  burning a 25-a-day quota. Live backlog 3,265 of 12,350 equities.
+- **A CURSOR MUST ADVANCE ON A SUCCESSFUL ASK, NOT ON ROWS — the sixth version of the head-of-line
+  stall.** A US small cap with no analyst coverage legitimately returns nothing; advancing only for
+  symbols that answered leaves it at the head of a weight-ordered backlog for ever, which is the
+  shape that has already cost `security-profile-detail`, `security-prices`, `security-dividends`,
+  `security-share-stats` and `security-industries`. `fetchWithIsolation` returns a null error only
+  when the provider demonstrably answered — with rows, or after isolating each symbol and proving
+  the provider healthy with a control — so it is the honest gate, and a transport failure advances
+  nothing because a thirty-second outage must not cost a week of staleness.
+- **finviz IS DELIBERATELY NOT IN `origins.ts`.** Its calls happen INSIDE openbb-api, which
+  `stack/proxy/nginx.conf` already records as a known blind spot; the edge function's hop is
+  `OPENBB_API_URL`, which is cached. Adding a finviz origin would fail
+  `http-cache-covers-every-provider` in the other direction — an origin no caller uses.
+
 ## Observability (added 2026-08-27)
 
 Grafana at `muffin-grafana.<domain>` and Portainer at `muffin-portainer.<domain>`, both behind
