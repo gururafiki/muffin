@@ -3309,6 +3309,85 @@ runbook: **[muffin-deployment/README.md § Observability](muffin-deployment/READ
   container-memory alert watches. Re-measure before adding services; this node's documented failure
   mode is an OOM kill (openbb-api died at its 1 GB limit to a single exploratory request).
 
+### Phase 0 of the ingestion rework, and the third worker limit (2026-09-09)
+
+Six Grafana alerts had been firing for up to twelve days and `market-verify` was red five nights of
+eight. Triaged one at a time: **three were false, one was a threshold meeting its first legitimate
+exception, and two were real.** The design this precedes is
+[docs/superpowers/specs/2026-09-09-ingestion-rework-design.md](docs/superpowers/specs/2026-09-09-ingestion-rework-design.md).
+
+- **THE WORKER HAS THREE LIMITS AND ONLY TWO WERE EVER SET.** `memoryLimitMb` and
+  `workerTimeoutMs` are tuned in `functions/main/index.ts` and documented as "ours, not the
+  platform's". **`cpuTimeSoftLimitMs` and `cpuTimeHardLimitMs` are equally ours and were never
+  passed**, so every worker has run on the runtime's default — and a CPU budget is not a wall
+  clock. `security-cn-segments` died on every invocation from 2026-09-07, and it took THREE wrong
+  fixes to find out why, each inferring a cause rather than reading what the worker said: a page of
+  six documents (true, not it), one 9.15 MB document costing 129 MB of RSS (measured, not it), then
+  a 384 MB isolate and a 12 MB gate (still died, in **2.87 s** against a 70-second handler
+  deadline). The log had said it throughout — `CPU time soft limit reached` / `CPU time hard limit
+  reached` — which is also why `OOMKilled` was false and the kernel logged nothing. Set to 20 s
+  soft / 60 s hard, under the 90 s wall clock so the wall clock stays the bound every handler's own
+  deadline reasons about. **Verify an option name against the runtime binary's own symbols**: an
+  unrecognised key is silently ignored. Measured scope, stated honestly: in the retained log window
+  the only CPU-limit kills were the CN invocations driven by hand, so whether other CPU-heavy
+  resources hit it is plausible and UNPROVEN — `security-segments`' 128 MB AEP filing was
+  attributed to memory on exactly the evidence that misled me here.
+- **A SUB-TWO-SECOND SUPERVISOR KILL IS NOT AUTOMATICALLY MEMORY.** This file already said it was,
+  from the AEP incident, and that reading cost three fixes above. The three causes are
+  distinguishable in the log and nowhere else: `memory limit`, `wall clock duration reached`, and
+  `CPU time hard limit reached`. Read which one before sizing anything.
+- **`sample_universe` WRITES ONE SWEEP UNDER TWO TIMESTAMPS**, so a query pinned to
+  `max(sampled_at)` OVER THE WHOLE TABLE reads the wrong group. Measured: an hourly sweep lands
+  **239 rows at 20:05:33 and 49 at 20:05:34**, the later group holding `defect.*` and
+  `provenance.*`. The scheduler alert asked for `scheduler.minutes_since_tick` at the newest
+  instant, found none, and `coalesce(..., 9999)` turned that absence into 9999 > 30 — so **the one
+  alarm that says INGESTION HAS STOPPED cried wolf continuously while the scheduler ticked 65 times
+  an hour** (old query 9999, corrected query 0.6). `backlog_sample` is immune because
+  `sample_backlog` takes one `p_sampled_at` per sweep, and `coverage_sample` is fine (1,120 rows,
+  12 dimensions, one timestamp). **`universe_sample` is the only one, and three alert rules read
+  it.**
+- **A GUARD THAT NEEDS `sudo` AND DOES NOT HAVE IT REFUSES FOR EVER, AND READS AS THE THING IT
+  GUARDS AGAINST.** `maintenance.yml`'s `reclaim-old-docker-root` tested
+  `[ -f /mnt/data/docker/.migrated ]` without `sudo` against a `drwx--x--- root:root` directory, so
+  it was false whether the marker existed or not and the step always printed "not migrated —
+  refusing". Every other check in the same block already said `sudo`. Cost: **7.6 GB on a root
+  filesystem at 93%** for the two weeks since the migration. Its comment also promised "renames
+  first" while the code went straight to `rm -rf`.
+- **`sudo cmd /dir/*` EXPANDS THE GLOB AS THE UNPRIVILEGED USER, so it silently matches nothing** —
+  an empty listing that reads as "the directory is empty" while `sudo du -sh /var/lib/docker`
+  reported 7.6 G. Use `sudo bash -c '...'`. And **`docker exec` WITHOUT `-i` DISCARDS STDIN**, so a
+  heredoc of SQL runs nothing and prints nothing; it cost two round trips here. Both are silent
+  no-ops, never errors.
+- **THE GAUGE SETS DRIFTED BETWEEN `market-verify.yml` AND THE GRAFANA RULE.**
+  `contradicted_negative_cache` was reclassified as a gauge in the workflow on 2026-09-05 and not in
+  `rules.yml`, so the data-quality alert went red that day against correct data — 65 marks against
+  the workflow's own tripwire of 200, with migration 134's comment already saying it "is not
+  evidence of a defect". The same fact in two places drifts, and the second copy was an alert nobody
+  could act on.
+- **"THREE WINDOWS AT 0.00%" WAS A PROXY FOR "FLAT ON EVERY WINDOW", AND AN ILLIQUID LINE REACHED
+  THREE.** `PTSB.IR` (Permanent TSB, Euronext Dublin) reports 1w, 1m and 3m at exactly zero while 6m
+  reads −4.84%, ytd +3.15% and 1y +29.39% — **98 stored bars carrying fourteen distinct closes**,
+  a stock resting on one price for a quarter rather than a dead one. The check now asks what it
+  meant, floor of three kept. Proven both ways before changing it: the tightened predicate returns
+  nothing for PTSB, and an instrument seeded flat on all seven periods is still caught.
+- **A REDUNDANT INDEX CAN BE HEAVILY USED, so "drop what nothing scans" will never find it.**
+  `security_price_grain_date_idx (security_id, grain, date DESC)` had **7,079,656 scans** and was
+  the planner's choice — and it is the primary key's own columns with the last reversed, which a
+  btree scans backwards anyway. Proven by dropping it inside a rolled-back transaction and
+  re-planning the query the app actually sends, warmed, best of four: daily **0.580 → 0.311 ms**,
+  weekly **0.849 → 0.572 ms**. It cost **1.54 GB** and write amplification on a table taking 25.8
+  million inserts, and the queries are FASTER without it.
+- **POSTGRES WAS ON THE IMAGE'S DEFAULTS AGAINST AN 11 GB DATABASE**, and nothing reported it
+  because nothing asserts a setting. `shared_buffers` 128 MB (heap cache hit **27%** on
+  `security_metric`, 51% on `security_statement`; 3.4 TB read from disk since 2026-07-20),
+  `effective_cache_size` also 128 MB so the planner believed there was no cache at all, `work_mem`
+  4 MB having spilled **77,526 temp files totalling 491 GB**, `random_page_cost` 4 on block storage.
+  The container limit was never the constraint — 246 MB used of 1.5 GB.
+- **A DEDICATED pg_cron JOB PLUS A ROTATION ROW SCHEDULES THE SAME RESOURCE TWICE.**
+  `security-in-segments` had both since migration 186, so the rotation slot arrived to find its own
+  TTL fresh and returned `skipped`, spending one of 49 slots for nothing. Every resource moved onto
+  its own job from migration 142 onward had its row disabled; this one was missed.
+
 ### Coverage metrics (added 2026-08-27)
 
 `market.coverage_current` is a VIEW over the `security_facets` matview joined to the per-facet
