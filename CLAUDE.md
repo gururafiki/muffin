@@ -2928,6 +2928,13 @@ try the merge before assuming it needs a human click.
   ordinary on a page. Columns are `target_from` / `target_to`, pinned in `logic-check.ts` the way
   `surprise_percent`'s `* 100` is — third field-semantics trap in this schema after the
   fraction/percent pair and mixed units inside one response.
+  **CONFIRMED IN PRODUCTION, not left as an inference.** The first live run wrote 654 actions from
+  40 securities: both targets 240, **only `target_to` 323, only `target_from` ZERO**, neither 91.
+  A zero there at 654 rows is the whole proof — if the mapping were backwards that column would be
+  the populated one. Checked against a named action too: Apple's 2026-08-17 Rothschild upgrade
+  stores `target_from` null, `target_to` 400, status `Upgrade`, exactly as the provider shows it.
+  The status vocabulary held at the five measured values (Upgrade 178, Reiterated 173, Downgrade
+  156, Initiated 115, Resumed 32).
 - **finviz IS US-LISTINGS-ONLY AND THE OTC FOREIGN-ORDINARY LINES FAIL TOO.** Probed with symbols
   expected to FAIL: `SAP.DE`, `005930.KS`, `BHP.AX`, `7203.T`, `SHEL.L`, `NESN.SW` all **400**, and
   so do `ASMLF`, `BUDFF`, `TSMWF`, `SAPGF` — the very symbols OpenFIGI's US lookup returns for a
