@@ -19,3 +19,6 @@
 [submodule "langchain-opensandbox"]
 	path = langchain-opensandbox
 	url = git@github.com:gururafiki/langchain-opensandbox.git
+[submodule "muffin-ingest"]
+	path = muffin-ingest
+	url = git@github.com:gururafiki/muffin-ingest.git
