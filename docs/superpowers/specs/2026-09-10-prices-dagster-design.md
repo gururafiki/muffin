@@ -344,7 +344,7 @@ Five things are wrong with the current model, each with a cost already paid:
 | `market.prices(symbol, date, close)` | the same fact under a **second key**, FK'd to the curated instruments | retired; curated rows get `security_id` + `is_curated` |
 | `performance(scope, scope_id, period, …)` | **polymorphic key** — `scope_id` is a symbol, or a sector code, or a country; `period` is a 10-value CHECK | `security_return` + `index_return`, with `return_period` as a dimension |
 | 4 ingestion columns on `market.security` | pipeline state on a fact table | `ingest.task` |
-| `close` with **no currency** | the chart draws a bare number — the shape that rendered CNY 1.02 T as "$1.02T" | `currency_code NOT NULL`, enforced at the write |
+| `close` with **no currency** | the chart draws a bare number — the shape that rendered CNY 1.02 T as "$1.02T" | `currency_code`, **nullable** — see the measurement below |
 
 ```sql
 create table market.price_bar (
@@ -352,7 +352,7 @@ create table market.price_bar (
   trade_date    date not null,
   close         numeric not null check (close > 0),
   volume        bigint,
-  currency_code text   not null references market.currency,
+  currency_code text            references market.currency,   -- nullable, and measured; see below
   source_code   text   not null references market.data_source,
   primary key (security_id, trade_date)
 ) partition by range (trade_date);          -- one partition per year
@@ -368,14 +368,14 @@ create table market.security_return (
   as_of date not null,
   price_return_pct numeric,
   total_return_pct numeric,          -- NULL means "not computed"; never coalesced to the price return
-  method_code text not null,
+  source_code text not null references market.data_source,
   primary key (security_id, period_code));
 
 create table market.index_return (           -- sector / country / finviz-group proxies
   index_code  text not null references market.index_scope,
   period_code text not null references market.return_period,
   as_of date not null, price_return_pct numeric, total_return_pct numeric,
-  source_code text not null,
+  source_code text not null references market.data_source,
   primary key (index_code, period_code));
 
 create materialized view market.price_bar_weekly as
@@ -386,6 +386,19 @@ create materialized view market.price_bar_weekly as
 -- This retires `security-price-history` ENTIRELY: with full daily history held, a weekly series is
 -- arithmetic rather than a second fetch.
 ```
+
+**`currency_code` is nullable, and that is measured rather than lazy.** Of 10,894 askable equities,
+**10,469 (96.1 %) have a currency** from their listing or from `security.currency_code`; **425 have
+neither**. `NOT NULL` would refuse those securities a price row at all — which is worse than the bug
+it prevents, because the app already *withholds* a label it cannot justify (that is how the
+CNY-as-"$1.02T" defect was actually fixed), so an unlabelled number degrades gracefully while a
+missing bar means no chart. The shortfall is a symbol-resolution gap belonging to the universe
+family; an asset check counts it so it stays visible rather than becoming normal. The first draft
+of this document said `NOT NULL`.
+
+**`source_code`, not `method_code`.** The draft invented a column. `market.performance.source`
+already holds `yfinance` / `finviz`, which are `market.data_source.code` values, so the existing
+convention is a real foreign key and the new tables use it.
 
 **Depth: the full ~29 years of daily bars in core.** ~88 M rows ≈ 10 GB (heap ~6.4 GB at the
 measured 73 B/row, PK ~3.5 GB) against today's 5.1 GB and 69 GB free. That is what dropping the two
@@ -476,6 +489,29 @@ that updates the three services, triggered from `muffin-ingest`'s `image` job.
 | *rides with Phase 3's D1* | Drop `market.prices`, the four `market.security` price columns, the old `pending_*` views; delete the handlers from `index.ts` |
 
 Plus two things that are not `muffin-deployment` deploys: the `muffin-ui` PR, and the docs PR.
+
+### 7.1 Two gaps the migration cutover left, found by being the first to use it
+
+Both were fixed in D1 (muffin-deployment#362), and both are the same shape — *a guard that stopped
+covering the thing it was written for when the mechanism underneath it changed.*
+
+* **CI applied no new migrations at all.** It applies `migrations-legacy/` as the reference and the
+  baseline into a throwaway database for the equivalence proof. `migrations/` — now the only place
+  schema work goes — was never applied to the database the behaviour tests run against. The first
+  migration written after 2026-09-10 would have reached production unexercised. Fixed by applying
+  them *after* the equivalence proof (anything earlier reads as a difference against the baseline)
+  and **once**, because `db push` runs a migration once and the old "must apply twice" discipline
+  describes a deploy model that no longer exists.
+* **`every-table-is-reachable` walked `pg_tables`**, which lists every partition, so `price_bar`'s
+  61 partitions would each have been reported unreachable while the table was fully reachable.
+
+**And one that is NOT fixed, recorded here rather than quietly carried.** The baseline is generated
+with `pg_dump --no-privileges`, and the repeatable bundle emits grants only for `relkind in
+('v','m')`. So **no artifact in the repo grants anything on a `market` TABLE.** Production is
+unaffected — its ACLs came from the legacy applies and were never rebuilt — but a database rebuilt
+from `migrations/` + `schemas/` + `always/` would have market tables no role but `postgres` can
+read. It is a disaster-recovery gap, not a live one, and it wants its own change: either the bundle
+extracts table ACLs too, or the baseline stops being dumped `--no-privileges`.
 
 **The cost of two deploys, stated honestly:** D1 lands the whole model in one migration, so it has
 to be right the first time — a correction found during the build-out waits for D2 or buys a third

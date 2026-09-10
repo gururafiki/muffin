@@ -1685,8 +1685,18 @@ Three things settled in planning that are worth not re-deriving:
   ends in a full Terraform deploy. A `build-image.yml` ending in `docker service update --image`
   makes the entire build-out cost zero deploys; only Ansible edits and migrations need one.
 
-- [ ] **D1 — foundation**: writable `/mnt/data/ingest/raw`, provider pools, the whole normalised
-      model in one additive migration, `build-image.yml` + the image-roll fast path.
+- [x] **D1 — foundation** (muffin-deployment#362, awaiting a deploy): writable
+      `/mnt/data/ingest/raw`; the whole normalised model in one additive migration (`price_bar`
+      partitioned by year, `return_period`, `index_scope_kind`, `index_scope`, `security_return`,
+      `index_return`); `maintenance.yml roll-ingest`. **No pool entries were needed** —
+      `dagster.yaml` already sets `default_limit: 1`, so naming `yfinance` would have changed
+      nothing, and a bound that cannot bind is worse than none.
+- [ ] **A disaster-recovery gap the CLI cutover left, found 2026-09-10 and NOT fixed.** The baseline
+      is dumped `--no-privileges` and the repeatable bundle emits grants only for views and
+      matviews, so **nothing in the repo grants anything on a `market` TABLE**. Production is fine
+      (its ACLs came from the legacy applies and were never rebuilt), but a database rebuilt from
+      `migrations/` + `schemas/` + `always/` would have market tables only `postgres` can read.
+      Either the bundle extracts table ACLs too, or the baseline stops being `--no-privileges`.
 - [ ] **Build-out (no deploys)**: I/O managers, the yfinance adapter, both lanes, the sensor, the
       29-year backfill, returns, FX, index returns, checks, dual-run parity.
 - [ ] **D2 — cutover**: `api.price_series` / `api.performance`, old resources disabled. UI unchanged.
