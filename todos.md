@@ -1617,6 +1617,24 @@ either. Both now fixed; the restart is carried by a `muffin.config-hash` contain
       answered — the rule that once cost 1,369 securities now lives in the database.
 - [x] Library: outcome, provider vocabularies, isolation, settings, ledger client, rate limiter,
       HTTP client, provider seam. All mutation-proven.
+- [x] **Dagster is LIVE and materialising assets** (2026-09-10). Six daemons healthy and
+      heartbeating, the code location visible over GraphQL, `ledger_heartbeat` RUNNING, and
+      `ledger_health` launched → queued → executed in a subprocess → SUCCESS with its asset check
+      passing. Getting there cost six defects, every one found by DRIVING it rather than by
+      watching replica counts — each service reported `1/1` at some point while crash-looping:
+      a staged config directory nothing created; `dagster-webserver` not being a dependency of
+      `dagster`; `max_concurrent_runs` under `run_coordinator` becoming fatal the moment a pool is
+      declared; `psql -c` not interpolating; `postgres` not being a superuser on Supabase; Dagster
+      telemetry writing into a read-only `DAGSTER_HOME`; and `dagster-daemon run` needing its own
+      `-w`.
+- [ ] **The worker exposes no metrics, and the Prometheus job is parked until it does.** The
+      counters exist in `muffin_ingest.http.client` and nothing calls them; the scrape sat DOWN
+      from the moment it shipped. It needs an exporter in MULTIPROCESS mode — each run is a
+      subprocess, so the counters live in short-lived children — plus `mark_process_dead` on exit
+      or the per-PID files grow without bound. Comes back with the first facet.
+- [ ] **Phase 1 item 3, the migration tooling switch, is now the last foundation item** — and it
+      has a real number to beat: 527s of applying, not 26 minutes of deploy. Re-read §7 of the
+      design against that before starting.
 - [x] Dagster code location that loads, with a smoke asset and its first asset check.
 - [ ] **Deploy the three Dagster services** (merged as #343, awaiting a deploy).
 - [ ] **Migration tooling switch** to the Supabase CLI baseline + a repeatable views bundle. The
