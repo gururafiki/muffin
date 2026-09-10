@@ -1709,6 +1709,23 @@ Three things settled in planning that are worth not re-deriving:
         against a 10-minute deploy — and its first run found a defect in its own report, which
         printed a tag where a digest belongs and so could not have told a real roll from a no-op
         (muffin-deployment#363).
+  - [x] **Both lanes, two I/O managers and the history sensor** (muffin-ingest#2). Raw lands as
+        Parquet through a `UPathIOManager`; core goes through `writers.upsert` from the asset's own
+        metadata. **pyarrow, not polars** — both lanes are chunked by construction, so the largest
+        frame either holds is ~73k rows, four orders of magnitude below the number that justified a
+        lazy scan.
+  - [x] **FOUR DEFECTS FOUND BY THE FIRST REAL RUN, none visible to CI** (muffin-ingest #3/#4,
+        muffin-deployment#364). openbb could not import in the image (it rebuilds its extension map
+        inside site-packages and the container is not root); the hub had PROVIDERS but no ROUTERS,
+        so `obb.equity` did not exist and `ROUTES` advertised work nothing could do; **`ingest_rw`
+        could not write a single one of the 83 RLS-enabled `market` tables**, because none has a
+        policy permitting INSERT and the writer it replaces holds BYPASSRLS; and the asset reported
+        all of it as `empty: 50` — the failed-versus-empty shape this rework exists to remove,
+        authored by the rework. Each now has a guard that fires: the hub is imported AS THE RUNTIME
+        USER in the image, all 26 routes are resolved against the real hub, and
+        `every-table-is-reachable` covers the RLS gate as well as the grant.
+  - [ ] **Parity**: 200 securities by fund weight, row counts per year and returns per period
+        against what `security-prices` and `performance` currently serve. The gate for D2.
 - [ ] **D2 — cutover**: `api.price_series` / `api.performance`, old resources disabled. UI unchanged.
 - [ ] Rides with Phase 3: drop `market.prices`, the four `market.security` price columns, the old
       `pending_*` views, the `index.ts` handlers.
