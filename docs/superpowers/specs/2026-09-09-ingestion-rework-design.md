@@ -66,7 +66,7 @@ now for a better long-term solution rather than keep everything custom.
 | Why Dagster over Prefect | Asset checks (OSS) = the 39 verify assertions + 10 defect predicates, visible and blocking; declarative asset graph + `AutomationCondition.eager()` replaces cron-offset choreography (metrics :24/:54, facets :14, spine as 2nd RPC); freshness policies/checks per served table; per-provider concurrency **pools** serialise provider access so an in-process token bucket is correct; asset-centric UI answers "is this table healthy". Cost: ~1.5 GB, an event-log cleanup job. Prefect's native slot-decay limiter and ~0.5 GB saving weighed less. |
 | Data model | **Incremental normalisation beside the live schema**: new `ingest` schema (ledger), fiscal-period dimension, retire `instruments`/`prices` overlay, serving `api` schema; migrated facet by facet. |
 | Sequencing | **Stabilise first (Phase 0), then migrate by family**, disabling the old resource per resource as each lands. |
-| Migrations | **Supabase CLI** (`supabase db push --db-url` on the node; `supabase_migrations.schema_migrations`; baseline the current schema) + **one repeatable views/functions bundle** applied with `psql --single-transaction`; `market.one_shot` retired. |
+| Migrations | **Supabase CLI + declarative schemas** — SHIPPED, see §7. `supabase db push` applies only what `supabase_migrations.schema_migrations` says is pending; `schemas/` is the declared source of truth and a view changes only when its definition does; `always/` carries the two files that must re-run every deploy. `market.one_shot` is KEPT: apply-once by construction, it now genuinely runs once. |
 | Providers | **Free only for now.** OpenBB stays the hub but is **imported as a library in-process**, not called over HTTP (§2.2 Q5); direct adapters for the rest, as today. A new provider = one adapter module + control rows; paid bulk providers later without redesign. |
 | Licence | `muffin-ingest` is **AGPL-3.0**, because `openbb-core` is AGPL-3.0 and is imported. Every other submodule stays GPLv3 (`langchain-opensandbox` MIT). A line in its README and in the umbrella's Conventions section. |
 | Alerting | **Grafana email is the single path.** Grafana reads the ledger and Dagster's tables. `market-verify.yml` (anon-key end-to-end) stays. |
@@ -409,28 +409,89 @@ over three securities reaches all three (the `a-queue-must-reach-every-company` 
   `cleanup_event_logs` op (the docs' recipe) — Dagster OSS does not prune event logs itself.
 - **Not used, deliberately**: dynamic partitions per security (UI limits ≤25k/asset), docker-per-run.
 
-## 7. Migration tooling (Supabase CLI + repeatable bundle)
+## 7. Migration tooling — SHIPPED 2026-09-10, and not as written below was planned
 
-1. Baseline: `supabase db dump --db-url ... --schema market,public,ingest,api -f
-   supabase/migrations/20260910000000_baseline.sql` from production; `supabase migration repair
-   --status applied 20260910000000 --db-url ...` on the node. The 203 old files move to
-   `stack/supabase/migrations-legacy/` (kept for history; CI no longer applies them).
-2. Split every migration into **versioned DDL** (`supabase/migrations/<ts>_<name>.sql`, applied
-   once) and **repeatable objects** (`stack/supabase/repeatable/{views,functions,grants}/*.sql`,
-   the CURRENT definition of every view/matview/function, applied on every deploy as ONE
-   `psql --single-transaction` after `db push`). Readers never observe a dropped view; grants are
-   re-issued in the same transaction (drop-view-loses-ACL trap).
-3. Ansible: replace the fileglob loop (`muffin_stack.yml` ~493) with `supabase db push --db-url
-   postgresql://postgres:...@localhost:5432/postgres` (CLI installed on the node, arm64 binary),
-   then the bundle, then SIGUSR1 to PostgREST (unchanged), then the coverage sample (unchanged).
-4. `quality.yml` `migrations` job: apply baseline + pending on a throwaway Postgres; apply the
-   repeatable bundle **twice** (second pass must be a no-op: same `pg_get_viewdef` fingerprints);
-   keep the 85 tests (those that `\i` a migration point at the new file); add a test that every
-   `create view` lives in exactly one repeatable file.
-5. Retire `market.one_shot` (a versioned migration runs once by construction) and the
-   `segment_parser.version` no-bump assertion moves to the bundle test.
+**This section is a record of what was built, replacing the original plan.** Five of that plan's
+assumptions were wrong, each found by measurement, and they are kept here because the same
+assumptions are easy to make again.
 
-## 8. Phased roadmap
+### What shipped
+
+```
+stack/supabase/
+  config.toml          the Supabase CLI project root, deliberately minimal
+  schemas/             123 objects + 22 matview indexes + 262 grants — the DECLARED source of truth
+  migrations/          20260910000000_baseline.sql, and everything generated from schemas/ after it
+  migrations-legacy/   the 204 historical files: retired from the deploy, kept as the REFERENCE
+  always/              001-app.sql and 003-security.sql
+  run-cli.sh           the one definition of how the CLI is invoked here
+```
+
+| When | What runs |
+|---|---|
+| dev / CI | edit `schemas/` → `supabase db diff -f <name>` → a versioned migration |
+| CI gate | the baseline must reproduce what the 204 legacy files build; `always/` must be idempotent; the bundle must equal what the migrations produce and applying it must change nothing |
+| deploy | `supabase db push` (pending only) → `always/` in one transaction → SIGUSR1 → coverage sample |
+
+**DECLARATIVE, NOT RE-APPLIED EVERY DEPLOY.** The original plan applied the bundle on every deploy.
+Supabase's declarative model generates a migration when a definition changes, so a view is dropped
+and recreated ONLY when it actually changes — which removes the reader-outage window rather than
+shortening it. That is the whole user-visible point: 36 of 84 views and 10 of 40 functions had more
+than one definer, `symbol_cache_classification` twelve, and every deploy dropped and recreated all
+of them.
+
+**AND ONE BIG TRANSACTION IS NOT THE SHORTCUT IT LOOKS LIKE.** Wrapping the old loop in a single
+transaction would give atomicity and the ~110s apply for free, and it is WORSE for the app: the
+first view dropped holds ACCESS EXCLUSIVE for the whole run, so anon reads block past their
+3-second timeout and FAIL, where today they meet a short window per file.
+
+### The two files that cannot be baselined are the two CI could never apply
+
+Not a coincidence. `always/001-app.sql` and `always/003-security.sql` both say *IDEMPOTENT,
+RE-APPLIED ON EVERY DEPLOY* in their own first line, and both reference `auth.users`, which exists
+only in a real stack. `003` revokes the DEFAULT PRIVILEGES so a table LangGraph creates later cannot
+silently re-acquire anon access — **it works only because it re-runs**. Baselining it would have
+reproduced the exposure measured on 2026-08-09, invisibly.
+
+### Five assumptions in the original plan, all wrong
+
+| Planned | Measured |
+|---|---|
+| baseline via `supabase db dump` **from production** | generated in **CI** — production can carry Studio drift, and the migrations are the definition. It is schema **AND seed data**: in CI the database holds only what the migrations put there, so a full dump is exactly the control-table seeds. A schema-only baseline would rebuild a node with `countries`, `exchange`, `metric` and `cron_resource` EMPTY. |
+| `--db-url …@localhost:5432` | **nothing listens on 5432**; Postgres is only on the `muffin-net` overlay |
+| run the CLI as `ghcr.io/supabase/cli:<pinned>` | **no official CLI image exists** — Docker Hub answers 401 for `supabase/cli` where `library/postgres` answers 200 through the same request. The released binary is the only distribution. |
+| the CLI is a static Go binary | **dynamically linked against glibc** (`/lib/ld-linux-aarch64.so.1`), and `supabase/postgres` is **musl** — the borrowed image failed with `exec …: no such file or directory`, which names the binary that exists and not the loader that does not. It runs in `debian:12-slim`. |
+| `repeatable/{views,functions,grants}/` | a flat `schemas/`, one file per object, in `pg_depend` order |
+
+Two more the CLI itself imposed: **`sslmode=disable` is required** (this Postgres has no SSL and does
+not need it — the connection never leaves the overlay), and the **project root is the directory that
+CONTAINS `supabase/`**, not that directory itself.
+
+### Verified on the node after the cutover deploy
+
+```
+migration history:    20260910000000 baseline
+anon reads thread:    false          -- always/ still runs
+stats reset:          2026-09-10 18:47:29
+node migrations:      1              -- the baseline; legacy files are repo-only
+services:             all 1/1
+deploy:               11m04s         -- 41 min at the start of this work
+```
+
+The apply task no longer appears among the slowest tasks at all; the slowest is now a 33s image
+pull. `market.one_shot` is NOT retired — it is apply-once by construction and now genuinely runs
+once, so retiring it would be churn.
+
+### What the checks caught before it shipped
+
+`drop view` **loses the ACL** (`anon cannot read 40 serving view(s)` — the app's entire read path);
+`drop materialized view` **also loses its indexes**, and without the unique one
+`refresh … concurrently` is rejected so every refresh takes ACCESS EXCLUSIVE; `pg_get_viewdef` is
+**not round-trip stable**; a rendered function signature **cannot be re-parsed** as regprocedure;
+and `pg_dump` emits GRANTs in **ACL array order**, so re-granting reorders them and an idempotence
+check must compare a set rather than a sequence.
+
+## 8. Phased roadmap## 8. Phased roadmap
 
 ### Phase 0 — Stabilise (days, no rework; each step ships alone and is verified on the node)
 
@@ -444,7 +505,26 @@ over three securities reaches all three (the `a-queue-must-reach-every-company` 
 | 0.6 | Alert hygiene: for each of the 6 firing rules, fix or silence with a written reason (container-memory rule: exclude services at a known-steady ratio or raise to 90%; disk: fixed by 0.1; stopped-succeeding: fixed by 0.3; FLAT backlog `pending_eps_history` (300, unscheduled resource): disable the rule for unscheduled resources; data-defect: reclassify `contradicted_negative_cache` as GAUGE in the rule as CLAUDE.md already says) | `provisioning/alerting/rules.yml`, `market-verify.yml` | 0 firing alerts for 48 h; market-verify green |
 | 0.7 | `security-performance` at 89 s: cut its page so p95 < 70 s (stop-gap only) | `index.ts` | `refresh_run.duration_ms` p95 |
 
-### Phase 1 — Foundation (1-2 weeks)
+### Phase 1 — Foundation — **COMPLETE 2026-09-10**
+
+All six items shipped and verified in production: `muffin-ingest` published and pinned as the ninth
+submodule; the `ingest` ledger (4 tables, 9 functions) with a privilege boundary that makes its
+refusal-to-guess a rule rather than a convention; the migration tooling above; Dagster live with
+three services, six healthy daemons, a materialising smoke asset and two schedules; the library
+seams (outcome, vocab, isolation, ledger, limiter, HTTP, provider, **openbb hub**, **writers**),
+76 tests, every rule mutation-proven; and the edge function still serving everything unchanged.
+
+Two things deliberately NOT done, so the next phase does not assume them:
+
+* **The worker exposes no metrics.** The counters exist in `muffin_ingest.http.client`, nothing
+  calls them, and the Prometheus job is PARKED rather than left permanently red. It needs an
+  exporter in MULTIPROCESS mode — each Dagster run is a subprocess, so the counters live in
+  short-lived children — plus `mark_process_dead` on exit or the per-PID files grow without bound.
+  Phase 2 wants this, because provider throttling is the thing it will need to see.
+* **The containerd root is still on `/`** (27 GB). It moves every image layer on a live node and
+  wants its own change and rollback plan.
+
+### Phase 1 — Foundation (1-2 weeks) — as originally planned
 
 1. Create `muffin-ingest` repo + CI + arm64 image; umbrella pins it (submodule 9).
 2. Versioned migration: `ingest` schema (section 4), `api` schema (empty), `dagster` database +
@@ -574,9 +654,13 @@ old resource (`cron_resource.enabled=false` / drop the pg_cron job) and its `pen
   resources in `MIGRATED` are routed to Dagster; the rest fall through to the legacy handler. That
   is the per-resource UI switch; `cron_resource.enabled=false` is the scheduler switch. The
   muffin-ui code (`triggerRefresh`, Track, per-security refresh) does not change.
-- **Supabase CLI on the node**: run as `ghcr.io/supabase/cli:<pinned>` via `docker run --network
-  muffin_muffin-net` against `supabase-db:5432` (verify the arm64 manifest with `docker pull`,
-  never `manifest inspect`); fallback = the release tarball installed by the docker role.
+- **Supabase CLI on the node**: THERE IS NO OFFICIAL CLI IMAGE — `supabase/cli` does not exist on
+  Docker Hub. The pinned `linux_arm64` release binary is installed by `roles/supabase_cli`, and
+  `stack/supabase/run-cli.sh` runs it inside `debian:12-slim` on the **`muffin-net`** overlay
+  (the network is named `muffin-net`, not `muffin_muffin-net`, and it is attachable). A container
+  is required because nothing listens on 5432 on the host; `debian` rather than the database image
+  because the binary is glibc-linked and `supabase/postgres` is musl. The wrapper runs
+  `--version` as a precondition, so a linkage change says so in one line.
 
 ### 12.1 Per-family retire lists (what each cutover migration disables and drops)
 

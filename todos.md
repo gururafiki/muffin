@@ -1647,14 +1647,17 @@ either. Both now fixed; the restart is carried by a `muffin.config-hash` contain
       (40 serving views unreadable by anon), `drop materialized view` loses the unique index that
       makes a refresh concurrent, `pg_get_viewdef` is not round-trip stable, and a rendered
       function signature cannot be re-parsed.
-- [ ] **What is LEFT of Phase 1 item 3: baselining and the Ansible switch.** Stop re-applying the
-      204 historical migrations (Supabase CLI + `supabase_migrations.schema_migrations`), apply
-      only pending ones, then the bundle in one transaction. That is the change that alters a
-      deploy, and it is small now that the bundle exists and is proven — but it wants someone
-      watching the deploy, because a baseline against a live 11 GB database is the one step that
-      cannot be rehearsed in CI. — and it
-      has a real number to beat: 527s of applying, not 26 minutes of deploy. Re-read §7 of the
-      design against that before starting.
+- [x] **Phase 1 item 3 SHIPPED 2026-09-10.** `supabase db push` applies only what
+      `supabase_migrations.schema_migrations` says is pending; `schemas/` is the declared source of
+      truth; the 204 historical files are retired to `migrations-legacy/` as the reference the
+      baseline is proven against in CI. Verified on the node: history records
+      `20260910000000 baseline`, `anon` still cannot read `public.thread` (so `always/` ran), the
+      apply task is no longer among the slowest tasks, and the deploy is **11m04s against 41
+      minutes** when this work started.
+
+      It took five deploys, and the pattern is the lesson: four of them each taught exactly ONE
+      fact, because a deploy was being used as a diagnostic. Driving the CLI wrapper against the
+      node read-only found two more facts in seconds. **Probe before deploying.**
 - [x] Dagster code location that loads, with a smoke asset and its first asset check.
 - [ ] **Deploy the three Dagster services** (merged as #343, awaiting a deploy).
 - [ ] **Migration tooling switch** to the Supabase CLI baseline + a repeatable views bundle. The
