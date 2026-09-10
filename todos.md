@@ -1632,6 +1632,14 @@ either. Both now fixed; the restart is carried by a `muffin.config-hash` contain
       from the moment it shipped. It needs an exporter in MULTIPROCESS mode — each run is a
       subprocess, so the counters live in short-lived children — plus `mark_process_dead` on exit
       or the per-PID files grow without bound. Comes back with the first facet.
+- [x] **The two library seams are written.** `providers/openbb.py` — the hub IMPORTED rather than
+      called over HTTP, which is what keeps `OBBject.warnings` and the provider's own exception
+      text alive so a throttle stays distinguishable from an absence; written against the real API
+      (openbb-core installed locally to check the object shape), imported lazily so nothing at
+      check time needs 250 MB of AGPL code, nine tests on a fake hub. `writers.py` — dedupe on the
+      conflict key (SQLSTATE 21000, four occurrences), `replace_scope` that deletes even with no
+      rows (an upsert cannot retract), `numeric_or_none` (a numeric-looking string stores
+      silently), `require_currency` (the "$1.02T" bug). Ten tests, four mutations, all red.
 - [ ] **Phase 1 item 3, the migration tooling switch, is now the last foundation item** — and it
       has a real number to beat: 527s of applying, not 26 minutes of deploy. Re-read §7 of the
       design against that before starting.
