@@ -520,6 +520,28 @@ deploy. That is what this document is for.
 **Rollback** is unchanged throughout: the old resources run until D2, so reverting is re-enabling
 one `cron_resource` row; D2's views revert with the migration.
 
+### 7.2 Four things the first real run found, and no test could
+
+The assets were complete, CI was green on both halves, and `dagster definitions validate` passed.
+Then the first bounded run against production (50 securities, partition 2026-09-09) reported
+**SUCCESS**, wrote a 176-byte Parquet file and zero rows. Each finding below was invisible until
+something was driven.
+
+| Finding | Why nothing saw it |
+|---|---|
+| **openbb could not import in the image.** It rebuilds its extension map *inside* `site-packages`, and the container runs as uid 10001 against a root-owned tree, so every call raised `PermissionError`. | The unit tests drive a **fake hub** — deliberately, so the suite needs no 250 MB of AGPL code. That is exactly what makes the image the only place the real one is exercised. Built at image-build time now, guarded by importing it **as the runtime user**. |
+| **The hub had providers and no routers.** A provider supplies the data (`openbb-yfinance`); a *router* supplies the namespace (`openbb-equity`). With providers alone the hub imports perfectly and every call dies on `'App' object has no attribute 'equity'`. The built package held eleven modules, all `economy*`/`fixedincome*`, arrived transitively. | `ROUTES` was a control table advertising work nothing could do. Guarded now by resolving **every** route against the real hub in the image: 26/26. |
+| **`ingest_rw` could not write a single `market` table.** 83 tables have RLS with a permissive SELECT policy and **none** permitting INSERT. None ever needed one: the only writer was `service_role`, which holds BYPASSRLS. | `every-table-is-reachable` asks `has_table_privilege` — a question about **grants**, which were correct. RLS is a second, independent gate the grant cannot see. This is CLAUDE.md's "verify RLS by behaviour" from the other side, where the flag being *right* is what hid it. |
+| **And the asset reported all of that as `empty: 50`.** Fifty securities recorded as having answered nothing, when we had never asked one of them. | The thirty-first instance of the failed-versus-empty shape this rework exists to remove — and the first authored *by* the rework. `mark_absent` still refused to mark anything, so the blast radius was a wasted run; the counter was lying either way. `transport` is now its own outcome. |
+
+**The pattern is one thing, and it is the phase's own thesis.** Every one of these was a gauge
+reading green while the thing it measured was broken — and every one became obvious the moment a
+number was read off a real run. The instrumentation the design argues for is what turned a silent
+success into four named defects in an afternoon.
+
+**Cost, stated plainly:** the third of these needed a migration, so D1's "one deploy" became two.
+The plan said a correction found during the build-out would cost exactly that, and it did.
+
 ## 8. Verification
 
 * **Parity**, the gate for D2: 200 securities sampled by fund weight — `price_bar` vs
