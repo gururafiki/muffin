@@ -3494,6 +3494,45 @@ exception, and two were real.** The design this precedes is
   doubles the time to reach it — the nightly forced restart is the actual mitigation and has not yet
   fired once. **"It has not died in seven hours" is not "the leak is fixed."**
 
+### The repeatable bundle, and four things dropping an object loses (2026-09-10)
+
+- **36 OF 84 VIEWS AND 10 OF 40 FUNCTIONS ARE DEFINED MORE THAN ONCE** — twelve times for
+  `symbol_cache_classification`, nine for `clear_symbol_caches`, seven for `sector_constituents`.
+  `create or replace view` can only APPEND columns, so the earliest definer can never replace the
+  latest one's shape and must `drop` first: a real window, every deploy, in which a view and its
+  dependents do not exist. `stack/supabase/repeatable/` now holds ONE definition per object,
+  extracted from the database by `.github/scripts/extract_repeatable.py` and checked in CI both
+  ways — the bundle must equal what the migrations produce, and applying it must re-extract
+  identically.
+- **`drop view` LOSES THE ACL, and the first run of that check said so: `anon cannot read 40
+  serving view(s)`** — the app's entire read path. `create or replace function` is the opposite
+  (it PRESERVES the ACL, which is why a grant in a re-run migration can only ever ADD a privilege),
+  so functions need no grant re-issue and views need all 262 of them. Emitted from `relacl`, never
+  a list of expected roles: `metrics_ro`, `service_role`, `anon`, `authenticated` and `ingest_rw`
+  do not hold the same privileges on the same objects.
+- **`drop materialized view` ALSO LOSES ITS INDEXES, AND ONE OF THEM IS LOAD-BEARING.**
+  `security_facets` without its UNIQUE index makes `refresh materialized view concurrently`
+  REJECTED, so every refresh takes ACCESS EXCLUSIVE on the relation every aggregate reads. The
+  matview would have come back correct, populated, and quietly blocking readers on every refresh.
+- **`pg_get_viewdef` IS NOT ROUND-TRIP STABLE.** A `union all` arm carrying an unaliased literal
+  renders as `'sector'::text`; recreating from that text makes Postgres assign the default alias,
+  so it re-renders as `'sector'::text AS text`. `coverage_current` does it eleven times, and an
+  extract/apply/extract loop oscillates for ever without normalising it. The difference is cosmetic
+  by construction — a union's column names come from its FIRST arm — so stripping an alias that
+  merely repeats its own cast's type is information-preserving.
+- **DO NOT ROUND-TRIP `oid::regprocedure::text`.** Re-parsing a rendered signature fails with
+  `expected a right parenthesis` on real functions. Pass the OID; it is an integer and cannot be
+  misread. The rendered name is for the FILENAME only.
+- **ONE BIG TRANSACTION FOR THE MIGRATIONS IS NOT THE SHORTCUT IT LOOKS LIKE.** It would give
+  atomicity and the ~110s apply for free — and it is WORSE for the app: the first view dropped
+  holds ACCESS EXCLUSIVE for the whole run, so anon reads block past their 3-second timeout and
+  FAIL, where today they meet a short window per file. A short bundle transaction is the shape that
+  fixes it, which is why §7 pairs the bundle with baselining rather than just wrapping the loop.
+- **THE APPLY IS ~110s OF SQL AND ~417s OF ANSIBLE.** Measured on the node: a bare
+  `docker exec psql -c "select 1"` is 51 ms, a real migration averages ~0.5 s, and the whole
+  204-file set applied from ONE local loop takes **110 seconds** against the deploy task's 527.
+  So most of that task, like the staging task before it, is the per-item SSH round trip.
+
 ### Coverage metrics (added 2026-08-27)
 
 `market.coverage_current` is a VIEW over the `security_facets` matview joined to the per-facet

@@ -1640,7 +1640,19 @@ either. Both now fixed; the restart is carried by a `muffin.config-hash` contain
       conflict key (SQLSTATE 21000, four occurrences), `replace_scope` that deletes even with no
       rows (an upsert cannot retract), `numeric_or_none` (a numeric-looking string stores
       silently), `require_currency` (the "$1.02T" bug). Ten tests, four mutations, all red.
-- [ ] **Phase 1 item 3, the migration tooling switch, is now the last foundation item** — and it
+- [x] **The repeatable bundle exists and is proven both ways** (muffin-deployment#355). 123
+      objects, 22 matview indexes, 262 grants, one definition each, extracted from the database and
+      checked in CI: the bundle must equal what the migrations produce, and applying it must
+      re-extract identically. It caught four things before they shipped — `drop view` loses the ACL
+      (40 serving views unreadable by anon), `drop materialized view` loses the unique index that
+      makes a refresh concurrent, `pg_get_viewdef` is not round-trip stable, and a rendered
+      function signature cannot be re-parsed.
+- [ ] **What is LEFT of Phase 1 item 3: baselining and the Ansible switch.** Stop re-applying the
+      204 historical migrations (Supabase CLI + `supabase_migrations.schema_migrations`), apply
+      only pending ones, then the bundle in one transaction. That is the change that alters a
+      deploy, and it is small now that the bundle exists and is proven — but it wants someone
+      watching the deploy, because a baseline against a live 11 GB database is the one step that
+      cannot be rehearsed in CI. — and it
       has a real number to beat: 527s of applying, not 26 minutes of deploy. Re-read §7 of the
       design against that before starting.
 - [x] Dagster code location that loads, with a smoke asset and its first asset check.
