@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is the **umbrella repo** for **Muffin** — a multi-agent stock-analysis system built on LangGraph
 (a council of investor personas, criteria-driven analysis, deep research, and a trading-decision
-pipeline). It contains almost no code of its own: its job is to **pin the seven component repos
+pipeline). It contains almost no code of its own: its job is to **pin the eight component repos
 together as git submodules** and ship the cross-cutting deploy runbook ([README.md](README.md)).
 
 Deployed on **Oracle Cloud Always-Free** (single ARM `A1.Flex` node, single-node Docker Swarm) behind
@@ -28,6 +28,7 @@ docs before working inside a submodule** — do not re-derive that detail here.
 | `agent-chat-ui-docker` | Legacy chat UI (Next.js, same-origin `/api` proxy), arm64 build — served at `muffin-chat.*` | `ghcr.io/gururafiki/agent-chat-ui-docker` | [agent-chat-ui-docker/README.md](agent-chat-ui-docker/README.md) |
 | `nuq-postgres-docker` | arm64 rebuild of Firecrawl's `nuq-postgres` queue DB | `ghcr.io/gururafiki/nuq-postgres-docker` | [nuq-postgres-docker/README.md](nuq-postgres-docker/README.md) |
 | `langchain-opensandbox` | OpenSandbox backend for LangChain deep agents (MIT) — extracted from `muffin-agent` 2026-08-08 and shared with the community. **A library, not a service**: no image, no deployment, nothing in the Swarm stack. `muffin-agent` depends on it. | — (PyPI) | [langchain-opensandbox/README.md](langchain-opensandbox/README.md) |
+| `muffin-ingest` | The ingestion library + Dagster assets replacing the `market-refresh` edge function — providers, the `ingest` task ledger client, parsers, facets. **AGPL-3.0**, not GPLv3, because `openbb-core` is AGPL and is imported in-process rather than called over HTTP. One image runs all three Swarm services (code location, daemon, webserver). Added 2026-09-09; see the rework design below. | `ghcr.io/gururafiki/muffin-ingest` | [muffin-ingest/README.md](muffin-ingest/README.md) |
 
 **The detailed agent architecture (MuffinAgentBuilder, middleware stack, the persona/criteria/research/
 trading-decision graphs, memory routes, testing rules) lives in [muffin-agent/CLAUDE.md](muffin-agent/CLAUDE.md).**
@@ -372,7 +373,7 @@ only reads `SKILL.md` files under `.claude/skills/`, so the symlink is what make
 
 ## Repo hardening baseline (every repo, set 2026-08-08)
 
-All eight repos are public and carry Dependabot (version + security updates), secret scanning +
+All nine repos are public and carry Dependabot (version + security updates), secret scanning +
 push protection, CodeQL, and a branch ruleset. Protection is **tiered on purpose** — full parity
 everywhere would turn every one-line Dockerfile bump and every umbrella submodule re-pin into a PR:
 
@@ -3548,8 +3549,13 @@ region, income group, currency, security type. 469 buckets, **743 ms**.
 ## Conventions
 
 - **License: GNU GPL v3.0** ([LICENSE](LICENSE)). Each submodule is GPLv3 — **except
-  `langchain-opensandbox`, which is MIT** because it is a library published for other people's agents;
-  third-party images the submodules wrap keep their upstream licenses.
+  `langchain-opensandbox`, which is MIT** because it is a library published for other people's agents,
+  **and `muffin-ingest`, which is AGPL-3.0** because it IMPORTS `openbb-core` (AGPL) in-process
+  rather than calling it over HTTP. That import is a deliberate trade, not an accident: the REST hop
+  is where a yfinance throttle becomes an empty 204 indistinguishable from "this symbol has no
+  data", which is the confusion that once negative-cached ~8,300 securities in an afternoon. The
+  obligation is satisfied by publishing the source, which is already the case.
+  Third-party images the submodules wrap keep their upstream licenses.
 - **All published images are arm64** (Oracle A1 / aarch64). Anything new that runs on the node must
   have an arm64 build.
 - Coding conventions, collaboration preferences, and "memorize lessons in CLAUDE.md" rules are
