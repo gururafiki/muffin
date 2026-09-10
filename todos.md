@@ -1557,6 +1557,59 @@ Still open:
 - [ ] **Sub-industry levels 3–4** — `taxonomy_node.parent_id` models the full tree and only levels
       1–2 are populated.
 
+## Ingestion rework (started 2026-09-09)
+
+Design, with every measurement behind it:
+[docs/superpowers/specs/2026-09-09-ingestion-rework-design.md](docs/superpowers/specs/2026-09-09-ingestion-rework-design.md).
+A Python library + a task ledger in Postgres + Dagster, replacing the 7,891-line Deno edge
+function. **Nothing has moved yet** — the edge function still ingests everything and families are
+cut over one at a time.
+
+### Phase 0 — stabilise — DONE 2026-09-09
+
+- [x] **Root disk 93% → 76%.** The `reclaim-old-docker-root` action had NEVER worked: its marker
+      guard ran without `sudo` against a root-only directory, so it refused whether the marker
+      existed or not. 7.6 GB had been sitting there for two weeks.
+- [x] **Postgres was on the image's defaults against an 11 GB database** — `shared_buffers` 128 MB
+      (heap hit **27%** on `security_metric`), `effective_cache_size` also 128 MB, `work_mem` 4 MB
+      having spilled **77,526 temp files totalling 491 GB**. Now 1 GB / 6 GB / 16 MB.
+- [x] **A duplicate index on `security_price`**, 7,079,656 scans and still redundant with the
+      primary key: **1.54 GB** freed and the app's query FASTER (0.580 → 0.311 ms).
+- [x] **`security-cn-segments` fixed after four attempts** — see below.
+- [x] **Six firing alerts → 0**, each diagnosed rather than silenced.
+- [ ] **The containerd root is still on `/`** (27 GB). Deferred deliberately: it moves every image
+      layer on a live node and wants its own change and rollback plan.
+- [ ] **`security-performance` still runs at ~89 s of its 90 s worker.**
+
+**THE FOUR-ATTEMPT ONE, because the lesson generalises.** `security-cn-segments` had died on every
+invocation since 09-07. A page of six documents (true, not the cause), one 9.15 MB document costing
+129 MB of RSS (measured, not the cause), a 384 MB isolate and a 12 MB gate (still died, in 2.87 s
+against a 70 s deadline). The log had been saying `CPU time hard limit reached` throughout:
+**there are THREE worker limits and only two were ever set.** And the fix then appeared not to work
+because **`main/index.ts` is read once at service start** and a bind-mounted file is not part of the
+service spec, so nothing restarted it — the previous deploy's memory change had never taken effect
+either. Both now fixed; the restart is carried by a `muffin.config-hash` container label.
+
+### Phase 1 — foundation — mostly done
+
+- [x] `muffin-ingest` published as the ninth submodule; CI green; arm64 image built.
+- [x] The `ingest` ledger: 4 tables, 7 functions, `api` schema, `ingest_rw` role, live in production.
+      `mark_absent` REFUSES without an attempt proving the subject was asked alone and a control
+      answered — the rule that once cost 1,369 securities now lives in the database.
+- [x] Library: outcome, provider vocabularies, isolation, settings, ledger client, rate limiter,
+      HTTP client, provider seam. All mutation-proven.
+- [x] Dagster code location that loads, with a smoke asset and its first asset check.
+- [ ] **Deploy the three Dagster services** (merged as #343, awaiting a deploy).
+- [ ] **Migration tooling switch** to the Supabase CLI baseline + a repeatable views bundle. The
+      plan says this lands BEFORE any family, so it is the next thing after Dagster is up.
+
+### Phases 2-8 — the family cutovers — not started
+
+Prices, symbols/universe, yfinance backlogs, SEC, regulators, macro/events, derived/serving, then
+retirement of the edge function. **Each gets its own planning session**, per the phased-work
+convention, and each is one migration + one release + a 3-7 day dual-run soak before the old
+resource is disabled.
+
 ## Other P2
 - [ ] Add new tab to donate to Ukraine with links to different funds
 - [ ] Create agent similiar to criteria analysis, but for hypothesis analysis. The idea is that we firstly define multiple hypothesis and then define which data is needed to compute it's probability -> collect the data and define how probable it is.

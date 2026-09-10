@@ -1,6 +1,12 @@
 # Market data ingestion — how it works
 
-**Status: current as of 2026-08-28.** Numbers are measured against production, not estimated.
+**Status: current as of 2026-09-09.** Numbers are measured against production, not estimated.
+
+> **THIS DESCRIBES THE SYSTEM BEING REPLACED.** A rework is underway — a Python library, a task
+> ledger in Postgres and Dagster assets, in the `muffin-ingest` submodule — designed in
+> [docs/superpowers/specs/2026-09-09-ingestion-rework-design.md](superpowers/specs/2026-09-09-ingestion-rework-design.md).
+> Nothing has moved yet: the edge function still ingests everything, and families are cut over one
+> at a time. This document stays authoritative until each one is, and each cutover updates it.
 
 > **Changed 2026-08-27:** the scheduler moved out of GitHub Actions into **pg_cron** (§4).
 > `market-warmup.yml` no longer exists; `market.cron_resource` is the source of truth for what runs.
@@ -1021,10 +1027,25 @@ incremented by the right quantity.
 - **`create or replace view` can only APPEND columns** — not rename, reorder or drop. Drop first.
 - **Migrations re-run on EVERY deploy**, so a data repair needs `market.one_shot`. Schema statements
   are idempotent by construction; repairs are not.
-- **A bare 502 from an edge function means a dead worker** — look at memory or wall clock, not at
-  error handling. Application failures answer **200 with `"ok": false`**.
-- **Worker limits are ours**, not the platform's: 90s / 256MB in `functions/main/index.ts`. The real
-  ceiling is Cloudflare cutting a proxied request at ~100s.
+- **A bare 502 from an edge function means a dead worker** — but WHICH limit killed it is in the
+  log and nowhere else, and this entry used to say "look at memory or wall clock", which cost three
+  wrong fixes on 2026-09-09. There are THREE kill reasons and they are distinguishable only by name:
+  `memory limit`, `wall clock duration reached`, and `CPU time hard limit reached`. Application
+  failures answer **200 with `"ok": false`**.
+- **THERE ARE THREE WORKER LIMITS AND ALL THREE ARE OURS** — `functions/main/index.ts`, now
+  **384 MB / 90 s / 20 s soft + 60 s hard CPU**. The first two were tuned and written up; the CPU
+  pair was never passed at all, so every worker ran on the runtime's default and
+  `security-cn-segments` was killed in under two seconds on every firing for two days. A CPU budget
+  is not a wall clock: a 90-page PDF costs 577 ms of CPU on a laptop and several times that on this
+  node's Ampere core. Verify an option name against the runtime binary's own symbols
+  (`cpuTimeSoftLimitMs`, `cpuTimeHardLimitMs`) — an unrecognised key is silently ignored. The outer
+  ceiling is still Cloudflare cutting a proxied request at ~100s.
+- **`main/index.ts` IS THE SERVICE AND IS READ ONCE, so a change to it needs a RESTART.** The
+  per-request worker re-reads `market-refresh/*.ts` every time, which is why a handler change takes
+  effect immediately — but the router's limits are fixed at service start, and a bind-mounted file
+  is not part of the service spec, so `docker stack deploy` never restarted it. Two limit changes
+  were staged, deployed, reported successful and never in effect. Now carried by a
+  `muffin.config-hash` container label, like traefik and http-cache.
 - **Units are mixed inside one provider response.** In `equity/fundamental/metrics`,
   `profit_margin` is a fraction, `dividend_yield` is already a percent, and `dividend_yield_5y_avg`
   is a fraction again. One shared `pct()` rendered NVIDIA at a 46% dividend yield.
