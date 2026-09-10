@@ -1697,8 +1697,18 @@ Three things settled in planning that are worth not re-deriving:
       (its ACLs came from the legacy applies and were never rebuilt), but a database rebuilt from
       `migrations/` + `schemas/` + `always/` would have market tables only `postgres` can read.
       Either the bundle extracts table ACLs too, or the baseline stops being `--no-privileges`.
-- [ ] **Build-out (no deploys)**: I/O managers, the yfinance adapter, both lanes, the sensor, the
-      29-year backfill, returns, FX, index returns, checks, dual-run parity.
+- [ ] **Build-out (no deploys)**: I/O managers, both lanes, the sensor, the 29-year backfill, FX,
+      index returns, checks, dual-run parity.
+  - [x] **The price seams** (muffin-ingest#1, rolled onto the node 2026-09-10): the yfinance
+        provider, bar parsing, and the return rules ported line for line with the JavaScript
+        rounding, because the gate is PARITY rather than a better rule. Five rules mutation-proven;
+        the harness caught one test that could not tell "the previous bar" from "a one-day
+        lookback" because the fixture made them agree, and two more that were too short to reach
+        the window they asserted.
+  - [x] **The roll path is proven end to end**: `maintenance.yml roll-ingest` took **1 minute**
+        against a 10-minute deploy — and its first run found a defect in its own report, which
+        printed a tag where a digest belongs and so could not have told a real roll from a no-op
+        (muffin-deployment#363).
 - [ ] **D2 — cutover**: `api.price_series` / `api.performance`, old resources disabled. UI unchanged.
 - [ ] Rides with Phase 3: drop `market.prices`, the four `market.security` price columns, the old
       `pending_*` views, the `index.ts` handlers.
