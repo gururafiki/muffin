@@ -1659,16 +1659,45 @@ either. Both now fixed; the restart is carried by a `muffin.config-hash` contain
       fact, because a deploy was being used as a diagnostic. Driving the CLI wrapper against the
       node read-only found two more facts in seconds. **Probe before deploying.**
 - [x] Dagster code location that loads, with a smoke asset and its first asset check.
-- [ ] **Deploy the three Dagster services** (merged as #343, awaiting a deploy).
-- [ ] **Migration tooling switch** to the Supabase CLI baseline + a repeatable views bundle. The
-      plan says this lands BEFORE any family, so it is the next thing after Dagster is up.
+- [x] **Deploy the three Dagster services** (#343) — live and verified 2026-09-10.
+- [x] **Migration tooling switch** to the Supabase CLI baseline + a repeatable views bundle —
+      shipped 2026-09-10, see the item above.
 
-### Phases 2-8 — the family cutovers — not started
+### Phase 2 — prices, returns, FX, index returns — PLANNED 2026-09-10
 
-Prices, symbols/universe, yfinance backlogs, SEC, regulators, macro/events, derived/serving, then
-retirement of the edge function. **Each gets its own planning session**, per the phased-work
-convention, and each is one migration + one release + a 3-7 day dual-run soak before the old
-resource is disabled.
+Design: **[docs/superpowers/specs/2026-09-10-prices-dagster-design.md](docs/superpowers/specs/2026-09-10-prices-dagster-design.md)**.
+It also defines **the standard** every later family follows: acquire -> normalise -> derive, where
+stage 1 is the only stage allowed a network call.
+
+Three things settled in planning that are worth not re-deriving:
+
+- **Partition the question the data cannot answer about itself.** "Did we collect Tuesday?" is
+  unanswerable from `price_bar` — a missing bar is indistinguishable from a market holiday — so the
+  cross-section is DATE-partitioned. "Does this security have its history?" IS answerable
+  (`min(trade_date)`), so history/repair is TICKER-partitioned, where the subject is genuinely the
+  slice.
+- **A batched call is NOT one vendor request.** `openbb_yfinance` calls
+  `yf.download(tickers="A,B,C", threads=False)` — one Yahoo request per symbol, serially. Batching
+  collapses OUR call count (545 vs 10,894), not the vendor's. So `provider_budget.rate_per_sec` is
+  denominated in **symbols**, and the earlier "ticker partitions cost 20x the budget" claim is
+  withdrawn.
+- **Two deploys, not eleven.** `muffin-ingest` has no build workflow and every other image repo's CI
+  ends in a full Terraform deploy. A `build-image.yml` ending in `docker service update --image`
+  makes the entire build-out cost zero deploys; only Ansible edits and migrations need one.
+
+- [ ] **D1 — foundation**: writable `/mnt/data/ingest/raw`, provider pools, the whole normalised
+      model in one additive migration, `build-image.yml` + the image-roll fast path.
+- [ ] **Build-out (no deploys)**: I/O managers, the yfinance adapter, both lanes, the sensor, the
+      29-year backfill, returns, FX, index returns, checks, dual-run parity.
+- [ ] **D2 — cutover**: `api.price_series` / `api.performance`, old resources disabled. UI unchanged.
+- [ ] Rides with Phase 3: drop `market.prices`, the four `market.security` price columns, the old
+      `pending_*` views, the `index.ts` handlers.
+- [ ] `muffin-ui` PR: full-range daily charts, currency-labelled prices, volume.
+
+### Phases 3-8 — the remaining family cutovers — not started
+
+Symbols/universe, yfinance backlogs, SEC, regulators, macro/events, derived/serving, then retirement
+of the edge function. **Each gets its own planning session**, per the phased-work convention.
 
 ## Other P2
 - [ ] Add new tab to donate to Ukraine with links to different funds

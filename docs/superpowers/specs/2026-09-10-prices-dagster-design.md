@@ -1,0 +1,522 @@
+# Phase 2 — the price family, and the Dagster pipeline standard
+
+**Status: APPROVED 2026-09-10.** Implements §8 Phase 2 of
+[2026-09-09-ingestion-rework-design.md](2026-09-09-ingestion-rework-design.md), and **revises its
+§6**: that section said "assets = tables, and one materialisation drains N pages of the ledger".
+For prices that is the wrong shape, and the reason is measurable — see §3.1.
+
+Every number here was measured against production on 2026-09-10, not estimated. Where a claim in an
+earlier document turned out to be wrong, it is corrected in place and the correction is marked, so
+a later session does not re-derive it from the wrong version.
+
+## 1. Why prices first
+
+Phase 1 landed the foundation and moved nothing user-facing: `muffin-ingest` (library, ledger, 76
+tests), Dagster live with three services, migrations on the Supabase CLI. The 7,891-line Deno edge
+function still runs all 54 resources.
+
+Prices are the right first family:
+
+* **They are the throughput pain.** `pending_prices` grows +768/day against an 8,520 backlog. The
+  cause turns out not to be the provider (§3.1).
+* **They have the simplest provider contract** in the system — one route, one provider, no
+  jurisdiction-specific parsing.
+* **They are the family the app draws directly**, so a parity failure is visible rather than
+  theoretical.
+
+The deliverable is two things, and the first outlasts the second: **a standard** for how every
+ingestion pipeline here is built on Dagster, and **the price family** built to it.
+
+## 2. What was measured
+
+| Fact | Value |
+|---|---|
+| Equities | 12,350 · with a symbol 12,016 · with a **yfinance** symbol **10,894** |
+| `market.security_price` | 16.4 M rows — 6.8 M daily, 9.6 M weekly · 11,754 securities · 1970-01-02 → 2026-09-10 |
+| …footprint | **1,197 MB heap, 3,943 MB indexes** — 77 % index |
+| …indexes | `pkey` 1,553 MB / **2 scans** · `date_idx` 1,490 MB / 11,447 scans · `date_sid_idx` 900 MB / **11 scans** |
+| Other price tables | `market.prices` 6,575 rows · `performance` 82,260 · `security_corporate_action` 98,296 |
+| Database / disk | DB 10,035 MB · `/mnt/data` **69 GB free** of 98 · `/` 12 GB free of 45 |
+| Provider, measured 2026-08-28 | 12 symbols × full history = **11.6 MB JSON in 8.1 s** · mean **~7,300 bars ≈ 29 years** per security |
+
+Two conclusions drive the design.
+
+**`pending_prices` was an artefact of the runtime, not of the provider.** A 90-second worker could
+carry ~400 securities per run, so the backlog grew whatever the provider would have allowed. The
+same work outside that worker is one nightly pass.
+
+**Two of the three indexes on `security_price` are dead** — 13 scans between them, 2.45 GB. The
+replacement table ships with its primary key and nothing else until a query plan earns an index.
+This is what pays for holding five times the rows (§5).
+
+## 3. The standard
+
+Every family from here follows the same three stages.
+
+```
+  ┌─ 1 ACQUIRE ───────────────┐  ┌─ 2 NORMALISE ─────────┐  ┌─ 3 DERIVE / SERVE ────────┐
+  │ talks to the provider     │  │ never talks to a      │  │ never reads raw            │
+  │ writes the provider's own │─►│ provider; reads raw,  │─►│ pure computation over core │
+  │ words, unchanged, to raw  │  │ writes typed core rows│  │ + the serving views        │
+  └───────────────────────────┘  └───────────────────────┘  └───────────────────────────┘
+     partitioned; pool = provider   partitioned; pool = sql    eager; pool = sql / db-heavy
+```
+
+1. **An asset is a table (or a raw dataset); a partition is a slice of it.** Partition the question
+   **the data cannot answer about itself**; leave to a query anything the table already states.
+2. **Materialising a partition is a claim of completeness for that slice.** A run that cannot make
+   that claim for the whole slice must not write the partition.
+3. **The partition key follows the provider's REQUEST grain, not its subject grain** — and those
+   are not always the same thing (§3.1).
+4. **Stage 1 is the only stage allowed a network call.** Re-running stage 2 or 3 after a logic fix
+   must never cost a provider request. This is also what makes the transformation rules testable
+   against frozen bytes.
+5. **Raw is immutable and reconstructible.** It records what the provider said, under the key we
+   asked with, with `ingested_at` and `run_id`. A correction is a new fetch, never an edit.
+6. **One I/O manager per storage class**, never per asset. Assets *return* records; they do not open
+   connections to write their own output.
+7. **A provider is a pool; a rate is the limiter.** A pool cannot express a rate, and a limiter
+   cannot stop two runs colliding.
+8. **Every rule that has cost this pipeline a month lives in SQL or one shared function**, never in
+   an asset body. `ingest.mark_absent` still refuses without an isolated attempt and a healthy
+   control.
+9. **Every asset emits metadata answering "did this do anything real"** — `calls`, `answered`,
+   `empty`, `rows_written`, `rows_retracted`, `backlog`. `rows_written: 0` is a legitimate value and
+   is never filtered out of a chart.
+10. **Checks are asset checks**, not a separate workflow. `market-verify` keeps only the end-to-end
+    anon-key assertions.
+11. **Serving views are the compatibility boundary.** The tables underneath can be replaced without
+    a UI release.
+12. **Code ships by image roll; config and schema ship by deploy** (§8).
+
+### 3.1 Partitioning: date for the cross-section, ticker for history
+
+**A correction to the first draft of this design.** It claimed a 20-symbol batch was one vendor
+request, and therefore that ticker partitioning would cost 20× the provider budget. That is wrong.
+From `openbb_yfinance/utils/helpers.py`:
+
+```python
+data = yf.download(tickers=symbol, ..., threads=False, **kwargs)   # symbol = "A,B,C,…"
+```
+
+`threads=False` with comma-joined tickers — **yfinance issues one Yahoo request per symbol,
+serially**, inside one openbb call. It matches the measurement exactly: 12 symbols at full history
+in 8.1 s ≈ 0.67 s per symbol. Batching collapses *our* call count (545 rather than 10,894); the
+vendor sees one request per ticker either way.
+
+Two consequences:
+
+* The "20× the budget" argument is **withdrawn**. At the vendor layer the two schemes cost the same.
+* **The limiter must be denominated in symbols per second, not calls per second.** A budget written
+  in calls is 20× looser than it reads. `ingest.provider_budget.rate_per_sec` is symbols.
+
+The second objection also fails, and it was checked rather than assumed:
+`PartitionsDefinition.get_partition_keys_in_range` is implemented on the **base** class by index
+over the ordered key list, so `BackfillPolicy.single_run()` works for static and dynamic partitions
+as well as time windows — one run receives `context.partition_keys` and can batch inside it.
+Batching survives ticker partitioning.
+
+So the decision rests on orchestration cost and expressiveness:
+
+| Option | Partitions | Materialisation rows/day | Answers |
+|---|---|---|---|
+| **Date (daily)** | ~365/yr | 1 | *"Did we collect Tuesday?"* |
+| **Ticker (dynamic)** | 10,894 | 10,894 if run daily | *"Does AAPL have its history?"* |
+| Date × ticker | 10,894 × 7,300 = **80 M** | — | over Dagster's documented ≤100,000/asset |
+| Year × ticker | 29 × 10,894 = **316 k** | — | also over the limit |
+| Decade × ticker | 33 k | — | fits, buys nothing — we never restate by decade, and a multi-dimensional selection is not one contiguous range, so single-run batching is lost |
+
+**The rule that decides it: partition the question the data cannot answer about itself.**
+
+* *"Does this security have its full history?"* **is** answerable from the data — `min(trade_date)`
+  — and more so now that core holds the full span. A partition grid for it duplicates a fact the
+  table already states.
+* *"Did the collection run on Tuesday?"* is **not**. A security with no bar on Tuesday looks
+  identical whether its market was shut, its symbol is dead, or nothing ran at all. That is the
+  confusion this codebase has paid for repeatedly, and a date partition removes it structurally.
+
+Three costs of ticker partitioning that bite only at daily cadence, and are why it is Lane B's
+scheme rather than Lane A's:
+
+* **No clean daily schedule.** `build_schedule_from_partitioned_job` is for time-window partitions;
+  over 10,894 dynamic keys a nightly pass is either 10,894 `RunRequest`s or a programmatically
+  launched backfill.
+* **Event-log volume.** ~10,894 materialisation rows a day, ~4 M a year, into an event log Dagster
+  OSS does not prune on its own. As Lane B it is ~10,894 rows **once**.
+* **A scattered selection fragments.** A single-run backfill materialises a contiguous *key range*
+  (`ASSET_PARTITION_RANGE_START/END` tags); 37 unrelated repairs become up to 37 runs. Fine for a
+  lane that idles at zero. `get_partition_keys()` is also index-scanned per range resolution and is
+  commented in Dagster's own source as "potentially expensive".
+
+The number that makes the date lane comfortable, stated at the layer that matters: a full daily pass
+is **545 openbb calls / ~10,894 Yahoo requests**, issued serially within each batch — ~0.13 req/s
+averaged, ~1.5 req/s inside a batch. The old system tripped the limit by firing resources back to
+back inside 90-second workers. The throughput problem goes away because the work stops being
+squeezed into 90 seconds, not because a cheaper call was found.
+
+### 3.2 Two acquisition lanes
+
+| Lane | Asset | Partitions | Job | Idles at |
+|---|---|---|---|---|
+| **A — cross-section** | `raw_price_bars` | **daily**, from go-live, `single_run` | every askable symbol's bars for this window | never |
+| **B — history & repair** | `raw_price_history` | **dynamic, one key per `security_id`**, `single_run` | this security has no history, or a new symbol | **zero** |
+
+Two lanes because there are two questions. Lane B is where the subject *is* the slice, so Dagster's
+partition grid is the native answer to "which securities are loaded" — no backlog view, and one
+security is re-fetched by re-materialising one partition. The initial 29-year load is one backfill
+over all keys: one run, 545 calls, chunked internally so memory stays bounded. A sensor keeps the
+partition set in step with the universe (`AddDynamicPartitionsRequest` on promotion), which is also
+the hook a symbol repair fires.
+
+Lane A cannot be ticker-partitioned without losing the one question the data cannot answer for
+itself. Lane B cannot be date-partitioned without a newly promoted security costing a re-fetch of
+the universe.
+
+*Rejected:* one asset, initial load as a single-run backfill over 1996 → today — on memory (one run
+holding 80 M bars) and because a targeted top-up would then either lie about a date partition's
+completeness or re-fetch 10,894 symbols to serve one.
+
+### 3.3 Raw is partitioned Parquet behind an I/O manager
+
+Raw records the provider's answer unchanged: `(provider, asked_symbol, observed_symbol, date,
+o/h/l/c, volume, dividend, split_ratio, currency, ingested_at, run_id)`.
+
+| | Parquet on `/mnt/data` **(chosen)** | a `raw` schema in Postgres |
+|---|---|---|
+| 88 M bars | **~0.8–1.5 GB** compressed | ~10 GB, inside the database the app reads |
+| Re-transform | reads files, no load on the serving DB | competes for the 1 GB `shared_buffers` |
+| Ad-hoc SQL | needs DuckDB/polars | native |
+| Durability | same volume as the DB; **reconstructible in 545 calls** | same volume |
+
+Raw's value is being cheap to keep and cheap to re-read. Putting 10 GB of it into the database the
+app reads as `anon` under a 3-second timeout is a shape this codebase has been bitten by. It needs
+no backup: 545 calls rebuild it.
+
+Implementation is `dagster-polars`' `PolarsParquetIOManager` if the arm64 wheel and image-size delta
+check out, else a `UPathIOManager` subclass over `pyarrow`. Either way the asset returns a frame.
+
+**This needs a deployment change that is easy to miss.** `DAGSTER_HOME` is bind-mounted **read-only**
+into all three services, deliberately — the daemon crash-looped when telemetry tried to write there.
+Raw needs a *separate*, writable mount at `/mnt/data/ingest/raw`, on `/mnt/data` and never on `/`
+(74 % full). It is an Ansible task plus a compose volume carrying the `muffin.config-hash` label, so
+the edit actually restarts the service.
+
+### 3.4 Core is written by a Postgres I/O manager
+
+Stage-2 assets return typed records; the `postgres_io` manager performs the write through the
+existing `muffin_ingest.writers.upsert` / `replace_scope`. So `dedupe_by` on the conflict key,
+`require_currency` and `numeric_or_none` apply to **every** core write without a caller remembering
+— which is the writers module's stated purpose, now structural rather than conventional.
+
+Returns are computed in **Python**, not SQL: the rules are intricate and already carry ~100
+assertions to port (staleness ≥ 10 days, the `>5×` comparability cut, "a window that never moved is
+not a 0.00 % return", `1d` = previous bar rather than a date lookback, YTD anchored on last year's
+final close, dividend-reinvested total return). The weekly downsample and the serving views are SQL,
+because their input is already in Postgres.
+
+### 3.5 The ledger, reduced to subject health and a call log
+
+Today per-security ingestion state is **21 `%_missing_at` columns and 8 cursors on
+`market.security`**, read by **38 `pending_*` views** doing duty as work queues. `ingest.task` is
+the normalised form of exactly that — one row per (subject, facet) with `status`, `next_due_at`,
+`asked_with`, `last_outcome`, instead of one column per facet on a fact table. It is not a rival to
+Dagster; it is third normal form applied to state that already exists.
+
+With Lane B ticker-partitioned the ledger loses its ordering and queue roles. What remains is what
+Dagster has no concept of:
+
+1. **Outcome classification with a retry policy.** Dagster knows *materialised* or *failed*. It has
+   no notion of "asked, the provider genuinely has nothing, do not ask again for 30 days, and here is
+   the retraction that must run". Failed vs empty vs throttled vs dead-subject is the most expensive
+   confusion in this codebase's history — ~8,300 securities negative-cached in one afternoon.
+2. **A refusal the caller cannot walk around.** `ingest.mark_absent` is `security definer` and
+   refuses unless the attempt was isolated *and* a control subject answered; migration 207 revokes
+   DML on `ingest.task` from `ingest_rw`, so the worker cannot set `status='absent'` itself.
+3. **Sub-run granularity.** One run makes 545 calls. Die at call 300 and Dagster records one failed
+   run; `ingest.attempt` records which 300 landed and over which subjects.
+4. **A provider budget shared across runs and families** — the daily quota (Alpha Vantage is 25/day)
+   and the cooldown.
+
+*If it is ever to be dropped*, the honest list is: replace `status`/`next_due_at` with a
+`security_provider_state` table (the ledger renamed) or encode absence as materialisation metadata
+queried through Dagster's GraphQL — putting a correctness-critical query behind Dagster's internal
+schema; give up the per-call record and with it the dead-run detector; and move the daily quota into
+the limiter's own store.
+
+### 3.6 Calling the vendors
+
+**openbb, imported in-process**, for `equity/price/historical` (yfinance), `equity/compare/groups`
+(finviz), `equity/calendar/earnings` (nasdaq) and the FRED/OECD/federal-reserve macro routes.
+Scaffolded in Phase 1 as `providers/openbb.py`: a lazy `_load_hub()` so `dagster definitions
+validate`, mypy and the unit tests all run without ~250 MB of AGPL provider code installed; a
+`ROUTES` table as *data*; and `classify()` checking the throttle vocabulary **before** the absence
+one.
+
+* **What the import buys** — the provider's own `YFRateLimitError` reaches `classify()` intact.
+  Behind the REST hop it was flattened to an empty 204, byte-identical to "this symbol has no data".
+  That is the confusion that negative-cached ~8,300 securities, and the reason the licence is
+  AGPL-3.0.
+* **What it costs** — openbb's egress does **not** pass through `http-cache` (yfinance uses
+  `curl_cffi` and ignores our base URLs), so those calls are uncached and invisible to nginx's
+  `$provider` metrics. This is the blind spot already recorded for `openbb-api`, moved inside our
+  process. **It is why the worker's Prometheus exporter is a Phase 2 deliverable rather than a
+  nice-to-have** — in-process is the only place those requests can be counted.
+* Every openbb extension is pinned exactly; a bump is deliberate and gated by `@pytest.mark.live`
+  contract tests per route.
+
+**`muffin_ingest.http.client` (httpx) for everything else** — Yahoo chart and ISIN search, SEC,
+OpenFIGI, Tiingo, Alpha Vantage, Wikidata, DART, CNINFO, NSE. Base URL from
+`settings.provider_base()` defaulting to the **real origin** so the cache stays removable, the
+SEC-mandated User-Agent, timeouts, Prometheus counters. These do go through `http-cache`, and
+`quality.yml`'s `http-cache-covers-every-provider` keeps that honest in both directions.
+
+**Three layers of pacing, each bounding something the others cannot:**
+
+| Layer | Bounds |
+|---|---|
+| Dagster pool `yfinance` (limit 1) | two runs touching one provider at once |
+| `pyrate-limiter` on `ingest.provider_budget` | **symbols**/sec and requests/day, Postgres bucket so it holds across run subprocesses |
+| `provider_budget.cooldown_until` | "it told us it is refusing us" — the budget can be untouched and the provider still unwilling |
+
+### 3.7 Dependency isolation: prepare for the split, ship one environment
+
+openbb pins `pandas` and drags a provider stack; yfinance pins `curl_cffi`; `edgartools`,
+`pdfplumber` and `lxml` each pin their own. Dagster's mechanisms, lightest first: one environment;
+**a second code location** (its own image and gRPC server, assets still depending across locations
+by `AssetKey`); `dagster-pipes` for a single step in its own venv; `docker_executor` for a container
+per step.
+
+**Ship one environment now; keep the split one packaging change away.** That is safe as a property
+of the architecture rather than a hope: because stage 1 hands off through Parquet and stage 2
+through Postgres, **no asset passes a Python object to another asset across a stage boundary** — so
+any asset can move to a second code location, or behind Pipes, without changing a dependency edge.
+
+To keep the split a packaging change, the library declares extras from the start —
+`muffin-ingest[acquire]` (openbb, httpx, edgartools, pdfplumber) and `muffin-ingest[transform]`
+(polars, psycopg) — with one image built from both. The day a conflict or an image-size problem
+makes it worth a deploy, the transform location becomes a smaller image carrying **no AGPL code at
+all**, which is a licence boundary worth having anyway.
+
+*Measured 2026-09-10, and the estimate in the first draft (~35 MB) was low.* On `aarch64` the
+wheels are **`polars-runtime-32` 46.6 MB** and **`pyarrow` 46.8 MB**, compressed. `dagster-polars`
+0.27.12 is pure Python, declares `dagster` unpinned, and 0.27.x is the line that tracks dagster
+1.11. `pyarrow`'s wheel is `manylinux_2_28`, which `python:3.13-slim` (bookworm, glibc 2.36)
+satisfies. Since the fallback needs `pyarrow` either way, **the marginal cost of polars is 46.6 MB**,
+not 93. It still has to earn that — `scan_parquet` streams, and the 88 M-row transform must not hold
+a frame in memory on this node — so the first image roll reports the real layer delta.
+
+## 4. The asset graph
+
+```
+                    ┌──────────────────────────────────────── pool: yfinance ───┐
+   schedule 22:10 ─►│ raw_price_bars      [DAILY partitions,     single_run]    │
+   sensor / repair ►│ raw_price_history   [per-SECURITY dynamic, single_run]    │
+                    └───────────────┬───────────────────────────────────────────┘
+                                    │ parquet_io  (/mnt/data/ingest/raw/…)
+                    ┌───────────────▼──────────────────────── pool: sql ────────┐
+                    │ price_bar          [daily]     market.price_bar           │
+                    │ price_bar_history  [security]  market.price_bar           │
+                    │ corporate_action   [daily]     market.corporate_action    │
+                    └───────────────┬───────────────────────────────────────────┘
+                                    │ AutomationCondition.eager()
+                    ┌───────────────▼───────────────────────────────────────────┐
+                    │ price_bar_weekly (matview)      security_return           │
+                    │ index_return ◄── raw_group_performance / raw_index_bars   │
+                    └───────────────┬───────────────────────────────────────────┘
+                                    ▼
+                      api.price_series · api.performance    (shape unchanged for the UI)
+```
+
+`fx_rate` joins as a third acquisition asset (Yahoo, daily partitions) feeding `market.fx_rate`; it
+is small and shares every rule, including the subunit derivation (ILA/ZAC/KWF) and the negative
+cache for a currency with no history.
+
+Two assets write `market.price_bar`, on two partition schemes. Deliberate, and visible in lineage;
+the alternative was a partition that lies about its completeness.
+
+## 5. The normalised model
+
+Five things are wrong with the current model, each with a cost already paid:
+
+| Today | Problem | Target |
+|---|---|---|
+| `security_price(security_id, date, close, **grain**)` | a *sampling* concept in the primary key; one date carries two rows meaning different things | `market.price_bar` — daily observations only; weekly is a **matview** |
+| `market.prices(symbol, date, close)` | the same fact under a **second key**, FK'd to the curated instruments | retired; curated rows get `security_id` + `is_curated` |
+| `performance(scope, scope_id, period, …)` | **polymorphic key** — `scope_id` is a symbol, or a sector code, or a country; `period` is a 10-value CHECK | `security_return` + `index_return`, with `return_period` as a dimension |
+| 4 ingestion columns on `market.security` | pipeline state on a fact table | `ingest.task` |
+| `close` with **no currency** | the chart draws a bare number — the shape that rendered CNY 1.02 T as "$1.02T" | `currency_code NOT NULL`, enforced at the write |
+
+```sql
+create table market.price_bar (
+  security_id   uuid not null references market.security on delete cascade,
+  trade_date    date not null,
+  close         numeric not null check (close > 0),
+  volume        bigint,
+  currency_code text   not null references market.currency,
+  source_code   text   not null references market.data_source,
+  primary key (security_id, trade_date)
+) partition by range (trade_date);          -- one partition per year
+-- SHIPS WITH THE PRIMARY KEY AND NOTHING ELSE. Measured on its predecessor: two of three indexes
+-- had 13 scans between them and cost 2.45 GB. An index is added when a plan asks for one.
+
+create table market.return_period (          -- was a CHECK constraint listing ten strings
+  period_code text primary key, lookback_days int, label text not null, sort_order int not null);
+
+create table market.security_return (
+  security_id uuid not null references market.security on delete cascade,
+  period_code text not null references market.return_period,
+  as_of date not null,
+  price_return_pct numeric,
+  total_return_pct numeric,          -- NULL means "not computed"; never coalesced to the price return
+  method_code text not null,
+  primary key (security_id, period_code));
+
+create table market.index_return (           -- sector / country / finviz-group proxies
+  index_code  text not null references market.index_scope,
+  period_code text not null references market.return_period,
+  as_of date not null, price_return_pct numeric, total_return_pct numeric,
+  source_code text not null,
+  primary key (index_code, period_code));
+
+create materialized view market.price_bar_weekly as
+  select distinct on (security_id, date_trunc('week', trade_date))
+         security_id, trade_date, close, currency_code
+    from market.price_bar
+   order by security_id, date_trunc('week', trade_date), trade_date desc;
+-- This retires `security-price-history` ENTIRELY: with full daily history held, a weekly series is
+-- arithmetic rather than a second fetch.
+```
+
+**Depth: the full ~29 years of daily bars in core.** ~88 M rows ≈ 10 GB (heap ~6.4 GB at the
+measured 73 B/row, PK ~3.5 GB) against today's 5.1 GB and 69 GB free. That is what dropping the two
+dead indexes pays for: **5× the rows for 2× the bytes**, and any chart range or backtest answerable
+from SQL. Three things make it safe rather than merely affordable:
+
+* **Yearly range partitions** — a date filter prunes, `vacuum` is per-year, and a later retention
+  decision is a `detach` rather than a rewrite.
+* **The estimate is checked before it is committed to.** The 50-security shadow measures real
+  bytes-per-row; the full load proceeds only if the extrapolation still leaves ≥ 20 GB headroom.
+* **`price_bar_weekly` survives as a serving optimisation.** 29 years of daily is ~7,300 points —
+  too many to draw and too slow to ship to `anon` inside 3 s — so long charts read the downsample.
+  The difference from today is that it is derived.
+
+The bulk load is chunked by security through Lane B, runs off-hours, pre-creates the yearly
+partitions and uses `COPY`: 88 M rows is a lot of WAL on a node whose documented failure mode is
+resource exhaustion.
+
+### 5.1 What the UI gets, and when
+
+The cutover lands `api.price_series(symbol, date, close, grain)` and `api.performance(scope,
+scope_id, period, change_pct, total_return_pct, as_of)` — **the shapes the app already reads** — so
+it needs no `muffin-ui` release. The UI PR is separate and later, and what it unlocks is real:
+daily charts at any range (today's daily window is 400 days and everything longer is weekly), a
+currency on the price so the chart can label money the way `money.ts` already labels fundamentals,
+and volume — with OHLC available from raw if candlesticks are ever wanted.
+
+## 6. Observability
+
+**Dagster owns**, and nothing is rebuilt in Grafana for it: the partition grid — *which days are
+missing*, which the old system had no equivalent of; run and step status, duration and logs; asset
+check history; backfill progress; and per-materialisation metadata plotted over time (`calls`,
+`answered`, `empty`, `throttled`, `rows`), which replaces the `refresh_run` panels.
+
+**Grafana stays the single alert path** and gains one dashboard over the `dagster` database through
+`metrics_ro`:
+
+| Panel / alert | Source |
+|---|---|
+| Failed runs, failed asset checks, freshness breaches → **email** | `dagster.runs`, `asset_check_executions` |
+| Dead run — an attempt open past its timeout | `ingest.attempt` |
+| Provider requests / throttles / bucket wait, by provider | the worker's Prometheus exporter (multiprocess mode + `mark_process_dead`) |
+| Coverage by country/sector/tier, universe size | `coverage_sample`, `universe_sample` — unchanged |
+| Infra: memory, disk, container restarts | unchanged |
+
+Retired for this family: the backlog depth / drain-rate / FLAT panels. For Lane A the backlog is
+Dagster's unmaterialised partitions; for Lane B it is one count published as asset metadata.
+`market-verify.yml` keeps only the end-to-end anon-key assertions, and a check leaves it **only
+after the Dagster check has fired correctly once**, proven by mutation as today.
+
+### 6.1 Asset checks
+
+`close_is_positive` (blocking) · `cross_section_covers_the_universe` (**warn**, because a national
+holiday legitimately empties a market) · `discontinuities_are_explained_by_a_split` (gauge, the
+`>5×` rule) · `one_period_one_point` (blocking) · `no_frozen_series_reported_as_flat` (blocking —
+the 62-identical-closes detector) · `weekly_matches_daily` · `anon_read_latency`. A
+`FreshnessPolicy.time_window(fail_window=36h)` on `price_bar`.
+
+## 7. Sequencing — two deploys
+
+**A correction to the first draft, found by looking rather than grepping for a filename.** It said
+`muffin-ingest` has no build workflow. It has one — inside `quality.yml`, an `image` job on
+`ubuntu-24.04-arm` that builds `linux/arm64` and pushes **`:latest` and `:<sha>`** on every push to
+main, then asserts all three entrypoints exist in the pushed tag. What is missing is not the build.
+It is the **roll**: nothing tells the node to pull it.
+
+That makes the fast path cheaper *and* safer than the draft assumed, because of a second measured
+fact: `image_ingest` is `…/muffin-ingest:latest` in **all three** places that set it — the deploy
+workflow, `config.example.yml` and the compose default. So:
+
+> **Code ships by image roll; config and schema ship by deploy.** A roll is
+> `docker service update --image ghcr.io/gururafiki/muffin-ingest:latest --force` on the three
+> Dagster services — a minute, no Terraform, no Ansible, no migrations re-applied.
+> **There is no revert trap here, and that is a property of the tags rather than luck:** a full
+> deploy renders the same moving tag the roll pulled, so the two *converge*. Were `image_ingest`
+> ever pinned to a sha, the roll would be silently undone by the next unrelated deploy — the same
+> class of mistake as the bind-mounted config that restarted nothing. Pinning it is therefore a
+> decision that has to come with a new way to ship code.
+
+So the only deliverable here is the roll step: a small `workflow_dispatch` in `muffin-deployment`
+that updates the three services, triggered from `muffin-ingest`'s `image` job.
+
+| Deploy | Contents |
+|---|---|
+| **D1 — Foundation** | Ansible: writable `/mnt/data/ingest/raw`, `yfinance`/`yahoo` pools, both under `muffin.config-hash`. Migration: the whole model in §5 — additive, empty, beside the existing tables. Plus the image-roll workflow. |
+| **build-out** *(no deploys)* | I/O managers, records, the adapter and `classify()`; Lanes A and B, the sensor; the **29-year backfill** (a Dagster backfill, not a deploy); returns with their ~100 ported assertions; FX; index returns; checks and freshness; **dual-run parity over days** |
+| **D2 — Cutover** | Migration: `api.price_series` / `api.performance`, PostgREST exposes `api`, old resources disabled in `cron_resource` — safe together *because parity was proven with no deploys in between*. Old tables stay. UI unchanged. |
+| *rides with Phase 3's D1* | Drop `market.prices`, the four `market.security` price columns, the old `pending_*` views; delete the handlers from `index.ts` |
+
+Plus two things that are not `muffin-deployment` deploys: the `muffin-ui` PR, and the docs PR.
+
+**The cost of two deploys, stated honestly:** D1 lands the whole model in one migration, so it has
+to be right the first time — a correction found during the build-out waits for D2 or buys a third
+deploy. That is what this document is for.
+
+**Rollback** is unchanged throughout: the old resources run until D2, so reverting is re-enabling
+one `cron_resource` row; D2's views revert with the migration.
+
+## 8. Verification
+
+* **Parity**, the gate for D2: 200 securities sampled by fund weight — `price_bar` vs
+  `security_price` row counts per year and closes per date; `security_return` vs `performance` per
+  period within 0.01 pp.
+* **Cost**: a full Lane A run reports ~545 calls and does not grow with the window; `ingest.attempt`
+  shows zero throttles over 7 days.
+* **Latency**: `check_anon_read_latency.py` best-of-three on `price_series` filtered by symbol AND
+  grain — the conjunction that timed out at 2,993 ms before migration 80's matview.
+* **Size**: `pg_total_relation_size` before and after, measured rather than projected.
+* **Dagster**: a deliberately failed check blocks `security_return`; a killed run leaves an open
+  `ingest.attempt` and fires the dead-run alert, proven by killing one.
+
+## 9. Risks
+
+* **polars/pyarrow on arm64** — verify the wheel and the image-size delta on the first image roll;
+  fallback is `UPathIOManager` over `pyarrow`.
+* **An image roll a deploy reverts** — measured as *not* a risk today, because `image_ingest` is
+  `:latest` in all three places that set it, so a deploy converges on what the roll pulled. It
+  becomes a risk the moment anyone pins that tag to a sha. Re-checked by rolling an image and then
+  running `mode=plan` to see no proposed change.
+* **Vendor pacing is per symbol, not per call.** A budget in calls/s is 20× looser than it reads.
+* **10,894 dynamic partition keys** — under the documented ≤100,000, but `get_partition_keys()` is
+  index-scanned per range resolution. Measure the asset page and a one-key materialisation; the
+  fallback is Lane B unpartitioned over the ledger.
+* **The 29-year load** is ~10 GB in and ~10 GB out on a node whose failure mode is resource
+  exhaustion — chunked, bounded, off-hours, `COPY`, resumable, and gated on the measured
+  bytes-per-row rather than the estimate.
+* **A writable raw volume is new surface.** `DAGSTER_HOME` is read-only for a reason; the raw mount
+  is separate, on `/mnt/data`, and nothing but the I/O manager writes it.
+* **Freshness policies are recent API surface** in the pinned 1.11–1.13 range; the fallback is
+  `build_last_update_freshness_checks`.
+
+## 10. Out of scope
+
+Families 3–7; the containerd root move; Loki; paid providers; agent access to market data.
