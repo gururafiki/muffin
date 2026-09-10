@@ -3388,6 +3388,65 @@ exception, and two were real.** The design this precedes is
   TTL fresh and returned `skipped`, spending one of 49 slots for nothing. Every resource moved onto
   its own job from migration 142 onward had its row disabled; this one was missed.
 
+### Verifying Phase 0, and what the deploy actually spends its time on (2026-09-10)
+
+- **THE DEPLOY IS 27 OF 29 MINUTES OF ANSIBLE AND HAS NEVER HAD PER-TASK VISIBILITY.** Measured on
+  run 34414969842: `ansible_playbook.muffin` took **27m02s** and Terraform itself about two
+  minutes. The `ansible/ansible` provider **CAPTURES** the playbook's stdout into the
+  `ansible_playbook_stdout` attribute rather than streaming it, so the deploy log holds nothing but
+  `Still creating...` every ten seconds — every claim about what makes a deploy slow, this file's
+  and the rework plan's alike, has been an inference over a black box. `ansible.posix.profile_tasks`
+  plus a step that lifts the timing table out of state into the job summary is now in `deploy.yml`.
+  **Print the TABLE, never the stdout**: `no_log` covers the tasks that stage secrets, but nothing
+  promises a future task will not echo one into a public summary.
+- **AND THE PREMISE IT WAS ABOUT TO BE SPENT ON WAS UNMEASURED.** The rework plan proposes replacing
+  the migration mechanism partly because "deploy = re-apply 203 migrations (25-40 min)".
+  `quality.yml`'s `migrations` job applies the whole 206-file set **four times**, plus 85 behaviour
+  tests, in **43 seconds** — so on an empty database the DDL is not the cost. What it costs against
+  11 GB of production data, in a play that also refreshes matviews and builds indexes on
+  ten-million-row tables, is still unknown. Instrument first; this file's own rule is that an index
+  is a hypothesis until the number moves, and a migration rewrite is a much larger hypothesis.
+- **`ansible/ansible.cfg` IS NEVER READ, WHICH IS WHY EVERY ANSIBLE SETTING IS AN ENV VAR.** Ansible
+  discovers a config file from `$ANSIBLE_CONFIG` or the **current directory**, and the provider runs
+  `ansible-playbook` from `terraform/` — so the file one directory over is not found, locally or in
+  CI. The `host_key_checking = False` sitting in it does nothing; `ansible.tf` passes
+  `ansible_ssh_common_args` explicitly for exactly that reason. A comment in `deploy.yml` claimed
+  "ansible.cfg sets stdout_callback=yaml", which was wrong twice over — it sets no such thing, and
+  would not be read if it did.
+- **`docker exec -i` INSIDE A SCRIPT THAT ITSELF ARRIVES ON STDIN EATS THE REST OF THE SCRIPT.**
+  This file already records that `docker exec` WITHOUT `-i` discards a heredoc of SQL. The inverse
+  is equally silent and cost several round trips today: under `ssh host 'bash -s' <<'EOF'`, the
+  script is on stdin, so a `docker exec -i ... psql -c "..."` consumes every remaining line as
+  psql's stdin — the first query prints and everything after it vanishes with no error. Pass
+  `< /dev/null` on any `docker exec` whose SQL is already in `-c`, and keep `-i` only where the SQL
+  genuinely comes from a heredoc. **Both directions fail silently**, so neither is safe to guess at:
+  ask where this command's stdin comes from.
+- **VERIFY AN ALERT BY RUNNING ITS OWN QUERY, AND RUN IT VERBATIM — A PARAPHRASE IS A DIFFERENT
+  RULE.** All twelve Grafana rules were checked against production by extracting each `rawSql`/`expr`
+  and evaluating it, rather than by looking at a dashboard. Writing the stalled-resource condition
+  out by hand first dropped its `greatest(12, ttl_hours * 2.5)` FLOOR, and reported **twenty**
+  stalled resources: a rotation resource has a 10-minute TTL but gets a slot every ~4 hours, so
+  2.5x its TTL is 25 minutes and every one of them looks late. The shipped rule returns **0**. The
+  floor was the whole point and was invisible in the summary of the rule.
+- **A CONTROL TABLE READ DURING A DEPLOY IS A TRANSIENT.** The same rule returned 1 at 00:19 and 0
+  at 00:22, naming `security-eps-history` as scheduled while `cron_resource` holds no row for it —
+  migrations re-run in full on every deploy, so a control table is momentarily mid-rebuild. Take a
+  reading that decides something after the deploy finishes, or you will chase a row that no longer
+  exists.
+- **A SINGLE DURATION IS NOT A DISTRIBUTION.** `security-performance` was carried as an open item
+  at "~89 s of its 90 s worker". Over 24 hours of `refresh_run` it is p50 **58.6 s**, p95 60.6 s,
+  max 60.9 s — and its handler self-bounds at `Date.now() + 60_000`, so it is not near the worker
+  limit at all, it is draining to its own deadline and stopping. The resources genuinely closest to
+  their budget are `security-statements` (p50 69.4 s against its own 70 s deadline) and
+  `security-kr-segments` (66.3 s), and both are the same non-problem. Shrinking a page on the
+  strength of one observation would have cost throughput for nothing.
+- **THE OOM LOOP IS GONE, AND HALF OF WHY IS STILL UNPROVEN.** Zero killed workers in **1,549 runs**
+  over 24 hours (a killed worker leaves a `refresh_run` row with a null `finished_at`), and the last
+  kernel `oom-kill` of `edge-runtime` was 17:12 on 09-09, before the 512M→1G bump reached the node.
+  But the ~1 MB/min RSS creep is why the container died every 3-5 hours, and doubling the ceiling
+  doubles the time to reach it — the nightly forced restart is the actual mitigation and has not yet
+  fired once. **"It has not died in seven hours" is not "the leak is fixed."**
+
 ### Coverage metrics (added 2026-08-27)
 
 `market.coverage_current` is a VIEW over the `security_facets` matview joined to the per-facet

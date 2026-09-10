@@ -1579,7 +1579,15 @@ cut over one at a time.
 - [x] **Six firing alerts → 0**, each diagnosed rather than silenced.
 - [ ] **The containerd root is still on `/`** (27 GB). Deferred deliberately: it moves every image
       layer on a live node and wants its own change and rollback plan.
-- [ ] **`security-performance` still runs at ~89 s of its 90 s worker.**
+- [x] **`security-performance` at ~89 s was ONE OBSERVATION, not the distribution — nothing to
+      fix.** Measured over 24 h of `refresh_run` (2026-09-10): p50 **58.6 s**, p95 **60.6 s**, max
+      60.9 s. Its handler self-bounds at `Date.now() + 60_000`, so it is not approaching the 90 s
+      worker at all — it is draining to *its own* deadline and stopping, which is what a paged
+      resource is supposed to do. The two resources actually closest to their budget are
+      `security-statements` (p50 69.4 s against a 70 s handler deadline) and `security-kr-segments`
+      (p50 66.3 s), and both are the same story: they use their deadline, they do not overrun it.
+      **A single duration is a measurement of one run.** Carrying that number forward as a defect
+      would have bought a smaller page for a resource with 33 % of its worker unused.
 
 **THE FOUR-ATTEMPT ONE, because the lesson generalises.** `security-cn-segments` had died on every
 invocation since 09-07. A page of six documents (true, not the cause), one 9.15 MB document costing
