@@ -1579,6 +1579,17 @@ cut over one at a time.
 - [x] **Six firing alerts → 0**, each diagnosed rather than silenced.
 - [ ] **The containerd root is still on `/`** (27 GB). Deferred deliberately: it moves every image
       layer on a live node and wants its own change and rollback plan.
+- [x] **The deploy can now say where its time goes, and the first reading reassigned the blame.**
+      `profile_tasks` runs on every deploy and the table lands in the job summary. Of a 26m20s
+      play: STAGING the migrations 559s, APPLYING them 527s, staging the functions 90s, staging
+      observability 57s. The largest task in the deploy was an `scp` — 2.71s per file, which is
+      what `copy:` of a directory costs. rsync does it in 2.57s total, so the four staging tasks
+      are `synchronize` now (~11 min off every deploy). **Section 7 of the design still stands, but
+      its number is 527s and not 26 minutes** — re-read it against that before starting.
+- [x] **A privilege escalation in the ledger, closed the day after it shipped.** `ingest_rw` could
+      write `ingest.facet`, whose `retract_sql` a `SECURITY DEFINER` function executes as
+      `postgres`. Migration 207 makes the whole `ingest` schema read-only to the worker except
+      `attempt`, so every queue mutation goes through the functions carrying the invariants.
 - [x] **`security-performance` at ~89 s was ONE OBSERVATION, not the distribution — nothing to
       fix.** Measured over 24 h of `refresh_run` (2026-09-10): p50 **58.6 s**, p95 **60.6 s**, max
       60.9 s. Its handler self-bounds at `Date.now() + 60_000`, so it is not approaching the 90 s

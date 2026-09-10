@@ -3399,13 +3399,42 @@ exception, and two were real.** The design this precedes is
   plus a step that lifts the timing table out of state into the job summary is now in `deploy.yml`.
   **Print the TABLE, never the stdout**: `no_log` covers the tasks that stage secrets, but nothing
   promises a future task will not echo one into a public summary.
-- **AND THE PREMISE IT WAS ABOUT TO BE SPENT ON WAS UNMEASURED.** The rework plan proposes replacing
-  the migration mechanism partly because "deploy = re-apply 203 migrations (25-40 min)".
-  `quality.yml`'s `migrations` job applies the whole 206-file set **four times**, plus 85 behaviour
-  tests, in **43 seconds** — so on an empty database the DDL is not the cost. What it costs against
-  11 GB of production data, in a play that also refreshes matviews and builds indexes on
-  ten-million-row tables, is still unknown. Instrument first; this file's own rule is that an index
-  is a hypothesis until the number moves, and a migration rewrite is a much larger hypothesis.
+- **AND THE ANSWER WAS NOT THE MIGRATIONS. IT WAS COPYING THEM.** The instrument paid for itself on
+  its first run. Of a 26m20s play: **staging** the migrations **559.00s**, **applying** them
+  **527.48s**, staging the edge functions 90.19s, staging observability 56.86s, pre-pulling images
+  51.94s, `docker stack deploy` 25.80s. The single largest task in the deploy was an `scp`.
+  559s over 206 files is **2.71s each**, which is exactly what `copy:` of a DIRECTORY costs — it
+  stats and checksums every file over its own SSH round trip. The rework plan attributes the
+  deploy's length to re-applying 203 migrations; applying is real at 527s and is a THIRD of the
+  play, not the story. (`quality.yml` applies the whole set four times plus 85 tests in 43 seconds,
+  so on an empty database the DDL is nearly free; the 527s is production's data.) **rsync does the
+  same transfer in 2.57 seconds, cold**, so the four directory-staging tasks are
+  `ansible.posix.synchronize` now — ~11 minutes off every deploy, before anything is decided about
+  the migration mechanism, which can finally be judged against the number that is actually its own.
+- **THREE THINGS ABOUT `synchronize` THAT ONLY DRIVING IT SETTLED.** `use_ssh_args` looks required,
+  since the module builds its own ssh command instead of reusing the connection's — it is not: the
+  module adds `-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null` ITSELF because
+  `verify_host` defaults to false, and enabling it only appends ControlMaster and one more string
+  to malform. `become` is handled by the ACTION PLUGIN, which sets `--rsync-path='sudo -u root
+  rsync'`, which is what lets it write these root-owned directories. And **rsync creates only the
+  LAST path component** (`--mkpath` is rsync 3.2.3+), where a `copy:` of a directory behaves like
+  `mkdir -p` — so the switch silently removed the thing that had been creating
+  `/home/ubuntu/supabase`, and only the staging guard caught it. A probe playbook against the real
+  node found all three; reading the docs would have found none.
+- **`copy:` NEVER DELETES, SO THE NODE HELD 304 MIGRATION FILES AGAINST THE REPO'S 206.** 98
+  renamed or deleted migrations, lying around since whenever. Harmless ONLY because the apply loop
+  globs the CONTROLLER (`query('fileglob', playbook_dir + …)`), not the node — anything that ever
+  globbed the node would apply migrations this repo no longer has. `delete: true` on the rsync
+  fixes it; nothing else could.
+- **`psql -c` DOES NOT INTERPOLATE `:'var'`, AND THAT IS THE THIRD DEPLOY THIS FAMILY HAS COST.**
+  psql substitutes in its LEXER, on input read from a file or stdin; `-c` hands its string straight
+  to the server. So `-v pw=… -c "create role dagster login password :'pw'"` dies with
+  `syntax error at or near ":"` — **the same message the dollar-quoted `do $$ … $$` form gives**,
+  which is why it reads as the already-documented problem rather than a new one. The comment
+  explaining that older trap sat three lines above the task committing this one. Measured on the
+  node, two commands apart: `psql -tA -v x=hello -c "select :'x'"` errors, `echo "select :'x'" |
+  psql -tA -v x=hello` prints `hello`. Pipe the statement in — and that is the ONE place
+  `docker exec -i` is required, the exact opposite of the trap below.
 - **`ansible/ansible.cfg` IS NEVER READ, WHICH IS WHY EVERY ANSIBLE SETTING IS AN ENV VAR.** Ansible
   discovers a config file from `$ANSIBLE_CONFIG` or the **current directory**, and the provider runs
   `ansible-playbook` from `terraform/` — so the file one directory over is not found, locally or in
@@ -3440,6 +3469,23 @@ exception, and two were real.** The design this precedes is
   their budget are `security-statements` (p50 69.4 s against its own 70 s deadline) and
   `security-kr-segments` (66.3 s), and both are the same non-problem. Shrinking a page on the
   strength of one observation would have cost throughput for nothing.
+- **A CONTROL TABLE EXECUTED BY A `SECURITY DEFINER` FUNCTION MUST NOT BE WRITABLE BY THE CALLER.**
+  Migration 206 gave `ingest_rw` "insert, update, delete on all tables in schema ingest" and
+  `mark_absent` — running as `postgres` — does `execute f.retract_sql`, where `retract_sql` is a
+  COLUMN of `ingest.facet`. The ingestion worker could therefore write any statement into a control
+  column and have it run as a superuser. The same grant also reduced the ledger's headline
+  invariant to a convention: `mark_absent` refuses an absence without an isolated attempt and a
+  healthy control, and a role holding `update` on `ingest.task` simply sets `status = 'absent'`
+  itself. **A guard the guarded party can walk around is documentation.** Migration 207 revokes DML
+  on everything in `ingest` except `attempt` (which the worker must append to, since that append is
+  what makes a killed run visible) — and the revoke is DERIVED, not a list of three table names,
+  because a list is the shape that rots: the next control table would arrive writable, exactly as
+  `clear_symbol_caches` carried a column list a tenth column never joined.
+- **A NOT NULL COLUMN HOLDING SQL THAT NOTHING EXECUTES IS A STRING, NOT A CONTRACT.**
+  `ingest.facet.population_sql` shipped in 206 with a NOT NULL constraint, a test fixture and no
+  function that ran it — so its shape was never checked, and the fixture's two-column query would
+  have failed on first use. The ledger could be claimed, completed and reaped while being
+  permanently empty.
 - **THE OOM LOOP IS GONE, AND HALF OF WHY IS STILL UNPROVEN.** Zero killed workers in **1,549 runs**
   over 24 hours (a killed worker leaves a `refresh_run` row with a null `finished_at`), and the last
   kernel `oom-kill` of `edge-runtime` was 17:12 on 09-09, before the 512M→1G bump reached the node.
