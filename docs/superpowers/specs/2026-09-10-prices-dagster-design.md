@@ -598,6 +598,88 @@ identical, which is exactly why the weight-ordered sample never showed the bug.
 **The bars gate is met**: every disagreement is explained. **Returns parity remains a second gate**
 and is written with the `security_return` asset.
 
+## 8.2 Parity result — returns, 2026-09-11
+
+The second gate, and it does **not** reduce to a percentage. It splits into a question we can decide
+and a question we cannot, and saying which is which is the result.
+
+### The decidable half: our returns are right given our bars
+
+Every stored `price_return_pct` was recomputed **in SQL**, from `market.price_bar`, independently of
+the Python that wrote it:
+
+| | |
+|---|---|
+| compared | **653** |
+| agree | **653** (100%) |
+| worst difference | **0.000000 pp** |
+
+Two independent implementations of the same rules over the same bars, agreeing to the last digit.
+Combined with §8.1 — bars 97.34% agreement, and **all 16 disagreements adjudicated to the NEW
+value** — the new layer is correct on its own terms.
+
+### The undecidable half: `market.performance` cannot be reconstructed
+
+A direct comparison reported 81% disagreement, and chasing it found three separate causes, none of
+them a defect in the new layer:
+
+1. **Ragged endpoints.** The old table's newest bar ranged across **09-09 (5,413 securities),
+   09-10 (2,646) and 09-11 (586)** at one instant, because its backlog drains unevenly. Two
+   snapshots taken at different moments cannot produce a stable number, and re-measuring after the
+   old cron ran flipped the offset's *direction*.
+2. **Intraday capture, confirmed exactly.** SCCO: our 09-10 close is 194.14 and the old layer
+   published `1d = +1.4732`, implying a latest of **197.00**; its `1w = -0.8855` over our 09-04
+   close of 198.76 implies **197.00** as well. Two independent equations, one answer — the old
+   resource refreshes eight times a day and priced a US name mid-session. A "1-day return" measured
+   to a mid-session quote is not a daily return, and a Dagster partition cannot materialise before
+   its window closes, so our refusing to publish that number is the correct behaviour.
+3. **A residual that is NOT attributed, and is stated as such.** Solving the old `1d` for the price
+   it must have used does *not* reproduce its other periods for most securities. The old resource
+   **re-fetches its own history at refresh time and does not store it**, so its inputs no longer
+   exist and the difference cannot be traced further. That is a property of what is being retired,
+   not a finding about what replaces it — and it is the sharpest argument for the new design, where
+   raw is kept as Parquet and any published number can be re-derived from the bytes it came from.
+
+**So the gate is passed on the decidable half and closed as unanswerable on the other.** "Matches
+`market.performance`" was never the target: §8.1 had already shown the old table holding the next
+day's close, and the old bars agree with ours exactly on every date they share.
+
+### Two defects the gate found in the NEW layer, both shipped
+
+Neither was visible to any test, because a fixture whose series ends today cannot tell the two rules
+apart.
+
+* **`as_of` was the run's date, not the last bar used.** A figure stamped 09-11 whose newest input
+  was the 09-10 close. Fixed to the last bar; that is what made the offset visible at all.
+* **Windows were anchored on wall-clock `now` while the value came from the last bar**, so the same
+  bars produced different numbers depending on the day the job ran. **21% of the adjudicated
+  disagreements were reproduced exactly** by recomputing over our unchanged bars with the last bar
+  as the basis. `now` keeps one job — staleness — because only a clock can say whether a series is
+  still being updated.
+
+## 8.3 Three failures between the fix and the data, each one stage past the last
+
+The history backfill took four attempts, and the shape is worth keeping: **every failure was at a
+seam the previous fix had not looked at, and each one had already been paid for by the provider.**
+
+| Attempt | Failed at | Cause |
+|---|---|---|
+| 1 | the write | `UPathIOManager` refuses a multi-partition output |
+| 2 | the load | `load_input` returns a `{key: obj}` mapping the input type-check rejects |
+| 3 | the clean stage | OOM at **2.4 GB** — 96 securities is **683,391 bars**, and `load_input` is eager |
+| 4 | the upsert | **65,535** bind parameters is a protocol ceiling; 25 securities is 1.4 M |
+
+Then it ran: **683,391 rows, 96 securities, back to 1970-01-02**, in four runs of ~30 s.
+
+Attempt 3 also corrected a claim in this document. `single_run` was chosen for Lane B partly because
+a multi-run policy "turns ten calls into ninety-six" — which is **false for this provider**, and the
+fact was already written in `openbb.py`: `yf.download(..., threads=False)` asks the vendor once per
+symbol whatever a run covers. Joining symbols collapses *our* call count, never theirs. So the
+partition **axis** decides the policy: a date partition batches many securities and keeps
+`single_run`; a subject partition has nothing to batch across, and its run width is a **memory
+budget** — `multi_run(25)`, making the full 10,894-security load ~436 runs rather than one that
+cannot finish.
+
 ## 9. Risks
 
 * **polars/pyarrow on arm64** — verify the wheel and the image-size delta on the first image roll;
