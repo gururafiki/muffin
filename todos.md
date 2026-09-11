@@ -1831,13 +1831,16 @@ Three things settled in planning that are worth not re-deriving:
         nothing for re-fetched its twenty-four neighbours every round — two rounds wrote the same
         139,7xx rows. Fixed by asking Dagster what it has MATERIALISED, which means "we asked and
         stored whatever came back, including nothing".
-  - [ ] **`market.price_bar_weekly` — a PREREQUISITE for D2, not an optimisation** (design §8.6).
-        Measured as `anon` with `price_bar` at 16 M rows: the candidate `price_series` takes
-        **25.2 s** for one symbol's daily and **times out at 30 s** for weekly, against a 3-second
-        budget. Weekly cannot be derived at read time — the caller's `symbol =` predicate cannot be
-        pushed through `distinct on (security_id, week)`, so it materialises every security's whole
-        history first. Built over the FINAL data once the load ends, because a matview over a table
-        still taking millions of inserts is refreshed twice and competes for I/O.
+  - [x] **D2's serving views measured as `anon` ahead of the cutover** (design §8.6). A shared CTE
+        made the candidate `price_series` take **23.9 s** for one symbol's daily and time out for
+        weekly — a CTE referenced TWICE is materialised, so all 17 M rows joined before either
+        arm's filter applied. Each arm on the base tables: **13 ms / 13 ms**, and **4 ms** for the
+        400-day range the chart actually sends.
+        **I first blamed the weekly `distinct on` and wrote `price_bar_weekly` up as a
+        prerequisite. That was wrong** — I took the cause from the design's own prediction rather
+        than from the measurement. The matview is not needed for D2; it stays available as a
+        rendering optimisation. The numbers are at 17 M rows and the load ends near 70 M, so D2
+        re-times them at full size rather than assuming they stay flat.
 - [ ] **D2 — cutover**, gated on the load rather than on the code. **CORRECTED**: the app reads
       `supabase.schema('market').from('price_series')` and `.from('performance')` and **nothing in
       `muffin-ui` reads an `api` schema**, so landing `api.*` would need a UI release — the opposite
