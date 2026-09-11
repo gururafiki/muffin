@@ -3568,6 +3568,36 @@ region, income group, currency, security type. 469 buckets, **743 ms**.
   without anyone remembering to. **`Content-Profile`, not `Accept-Profile`** — the latter selects a
   schema for a READ and is silently ignored on a write.
 
+### The image roll, and a report that certified old code (2026-09-11)
+
+- **EIGHT IMAGE ROLLS IN ONE AFTERNOON FILLED `/`, AND THE ROLL THEN REPORTED SUCCESS ON OLD CODE
+  THREE TIMES.** `data-root` is `/mnt/data/docker` and **does not control where images live** —
+  this node uses containerd's image store, whose root has no override and defaults to
+  `/var/lib/containerd` on the 45 GB boot volume. Measured: **`/` at 100%, 368K free**, containerd
+  at **38 GB**, while `/mnt/data` sat at 29% of 98 GB. A dangling-only prune returned **10.13 GB**.
+  **The disk is not the defect.** The pull died with `no space left on device`;
+  `docker service update --force --image :latest` then resolved the tag to the digest the node
+  ALREADY HAD, recreated the tasks, and succeeded. `muffin-roll-ingest.sh` printed
+  `muffin_muffin-ingest unchanged sha256:99b71a…` — byte-identical to what a roll that was already
+  current prints. It was caught only because an asset that should have existed could not be
+  imported. A report that cannot tell *already current* from *could not pull* certifies everything,
+  which is this file's most repeated shape. The pull is now explicit and its failure fatal, and
+  `maintenance.yml prune-images` makes the reclaim repeatable with a **5 GB floor that fails the
+  job** — below that the next pull is the one that fails silently. Dangling only, never
+  `system prune -a`: this stack holds images that are pulled and not currently running.
+- **WAIT FOR THE BUILD OF *THIS* COMMIT, NOT THE NEWEST RUN.** `gh run list --branch main --limit 1`
+  returns the previous commit's run for the ~20 s before the new one is created, so a wait loop
+  reading it exits immediately and the roll fires before the image exists. Filter on `headSha`.
+- **AND `gh pr merge` RUNS WHETHER OR NOT THE CHECKS PASSED.** A wait loop that prints
+  `checks:fail` and is followed by an unconditional merge is not a gate. One red `main` came from
+  exactly that; the loop now refuses when any check reports `fail`.
+- **RUN EVERY mypy INVOCATION CI RUNS, NOT ONE OF THEM.** `muffin-ingest`'s `quality.yml` has two —
+  `mypy --strict src/muffin_ingest tests/unit` and `PYTHONPATH=src mypy --strict
+  src/muffin_ingest_dagster tests/dagster`. Running the first locally and merging cost two red
+  builds. The second one also enforces something the first never sees: **a re-exported attribute is
+  not an export**, so reaching a facet through an asset module (`assets.indices.indices.foo`) fails
+  with *"does not explicitly export attribute"*.
+
 ## Running an OpenSandbox server locally
 
 - **`docker run -d -p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock opensandbox/server:latest`.**

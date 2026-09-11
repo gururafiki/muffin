@@ -1762,8 +1762,21 @@ Three things settled in planning that are worth not re-deriving:
         discarded — because **a daily FX bar is stamped at the session's OPEN in the exchange's
         timezone** and **the last point is a LIVE QUOTE whose timestamp equals
         `regularMarketTime`**. Both facts live only in the response's `meta` block.
-  - [ ] **Index returns** (`index_return` from the finviz groups and the country ETFs). The last
-        piece of the family.
+  - [x] **Index returns** (muffin-ingest #22/#23/#25/#26/#27, design §8.5). Country (45) and group
+        (17) from proxy-ETF bars through the SAME `derive/returns` rules a security uses; sector
+        (11) from finviz, which publishes numbers rather than a series. Verified in production:
+        `answered=61/61`, 549 periods, **0 unmapped labels**, 626 rows. Colombia is the only
+        missing country and correctly so — `GXG` is `tracked_fund.enabled = false`.
+        THREE DEFECTS, AND ONE GUARD WORSE THAN THE DEFECT. A dict comprehension mapping
+        symbol->scope kept the last, so nine of 62 scopes silently got no returns (`answered=52`
+        beside `empty=0` was the only trace). A snapshot source cannot be backfilled — and the
+        guard refusing a closed window could never have collected anything, since `end_offset` is 0
+        and the newest materialisable partition is always yesterday. And `raw_index_bars` cut the
+        bottom of its lookback window but not the TOP, so today's in-progress bar became the newest
+        close.
+        **That is four places in one family where a date came from the wrong source** — the clock,
+        the window's anchor, a partition key, and the top of a series. The rule is in the skill: the
+        date travels with the data.
   - [ ] **Absent-marking**: a symbol yfinance will never serve costs one request a day, because the
         vendor is asked per symbol — ~425 dead symbols is ~155k wasted requests a year. Uses the
         ledger that exists; `mark_absent` still refuses without an isolated attempt and a healthy

@@ -729,6 +729,78 @@ history:           39 currencies, 21,443 rows (19,874 observed + 1,569 derived)
 | a derived rate is exactly parent ÷ divisor | **849/849, 851/851, 846/846** within 1e-12 |
 | nothing implausible was ever admitted | **0** of 34,848 rows outside the band |
 
+## 8.5 Index returns — and the fourth place a date came from the wrong source
+
+The last of the family. **Country (45)** and **group (17)** scopes are backed by a proxy ETF, so
+their returns go through `derive/returns` — the *same* rules a security's use, so a country page and
+a stock page cannot disagree about what "3-month return" means. **Sector (11)** has no ETF; finviz
+publishes the numbers directly.
+
+Two things settled by measurement rather than assumption:
+
+* `equity/price/historical` serves an ETF **identically** to `etf/historical` — same 16 rows, same
+  closes, on the same symbols and window. One call site is only worth having if the answers match.
+* The proxy symbol is **not copied**. `countries.etf_symbol` and `classification_groups.etf` already
+  hold it; `index_scope.proxy_symbol` stays an editorial override. A group is keyed
+  `group:<scheme>:<id>` because a group id is **not** unique across schemes — MSCI and FTSE both
+  have `developed`, backed by URTH and VEA.
+
+### Verified in production
+
+```
+raw_index_bars    calls=3  answered=61/61  empty=0  transport=0  outside_window=52  bars=79,666
+raw_sector_perf   groups=11  rows=77  warnings=0  taken=2026-09-11
+index_return      scopes=61  with_returns=61  periods=549  unmapped_labels=0  rows=626
+```
+
+`country` 44 of 45 — Colombia's `GXG` is `tracked_fund.enabled = false`, the documented
+liquidated-fund exclusion, so that is correct rather than missing.
+
+### Two defects, and one guard that was worse than the defect
+
+**A symbol backs more than one scope, and a dict comprehension keeps the last.** 62 scopes over
+**53 distinct symbols** — `EEM` backs three, `IVV` backs three including `country:US` — so nine
+scopes silently got no returns. The run said `answered=52` beside `empty=0`, two numbers that cannot
+both be right, and that was the only trace. Those scopes genuinely *are* the same index: the
+relation is many-to-one and has to be stored as one.
+
+**A snapshot cannot be backfilled.** finviz answers "as of now" and carries no date, so running the
+09-10 partition on 09-11 stored today's numbers under yesterday. The first fix was a guard refusing
+a closed window — and it could never have collected anything, because `end_offset` is 0 so the
+newest *materialisable* partition is always yesterday and today is always outside it. It would have
+run for ever collecting nothing while reporting success. **A guard that can only ever refuse is
+worse than the defect it replaces**, and only working out what it would do in production caught it;
+the test used a deliberately-closed window and passed for the same reason the real thing would have
+failed. The asset is unpartitioned now, and `as_of` travels with the data.
+
+### The rule all four date defects share
+
+| # | Wrong source | Effect |
+|---|---|---|
+| 1 | the clock (`date.today()`) | a figure claimed current whose newest input is days old |
+| 2 | the window's anchor | the same bars give different numbers on different days |
+| 3 | a partition key, for a source with no dates | today's snapshot stamped with a past day |
+| 4 | the **top** of a lookback series | today's in-progress bar becomes the newest close |
+
+**The date travels with the data.** Stamp from the last input actually used; anchor windows on the
+data; cut a series at *both* ends of the window; and where a source genuinely has no date, record
+when it was **read**, in the raw artifact, so nothing downstream invents one. The first three were
+all at the bottom of a window, which is exactly why the fourth was not looked for.
+
+### Parity, and why it closes the same way as §8.2
+
+| scope | n | ≤1pp | median | same-day |
+|---|---|---|---|---|
+| country | 395 | 203 | 0.99pp | **0** |
+| group | 153 | 70 | 1.16pp | **0** |
+| sector | 77 | 36 | 1.34pp | 77 |
+
+`same-day 0` is the finding: the old table is dated 09-11 because it prices **intraday**, ours 09-10
+because a partition cannot close before its window does. The sector rows *are* same-day and still
+1.34pp apart — both sides read finviz, at different moments of a moving number. The old layer is a
+moving intraday snapshot and cannot be a stable baseline, which §8.2 established and this confirms
+on a second, independent scope.
+
 ## 9. Risks
 
 * **polars/pyarrow on arm64** — verify the wheel and the image-size delta on the first image roll;

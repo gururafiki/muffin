@@ -302,6 +302,72 @@ current for ever. Keep that one use and pass it separately.
 tell "anchored on the clock" from "anchored on the last bar". Make the series end well before `now`
 and the rules disagree.
 
+### Do not read a provider's timestamp in UTC, and do not assume the last point is a bar
+
+Two facts that live in a chart response's `meta` block and nowhere else, both of which cost a
+production run:
+
+* **A bar is dated in its EXCHANGE's timezone.** An FX daily bar is stamped at the session's *open*
+  in `exchangeTimezoneName` — `Europe/London` — so the 2026-09-10 session arrives as
+  `2026-09-09T23:00Z`. A UTC `.date()` dates every bar a day early, and a partition filtering to
+  its own window then discards the lot: `outside_window=190`, 38 currencies × 5 points, **writing
+  nothing while reporting success**. Read `gmtoffset` from the response; never assume a venue.
+* **The last point is often a LIVE QUOTE, not a completed bar**, and it is exactly identifiable:
+  its timestamp *equals* `regularMarketTime`. Storing it publishes a mid-session price wearing a
+  close's clothes — the defect that makes the resource being replaced disagree with this one.
+  `GELUSD=X` is the extreme: its only point is the live quote, so the provider has no completed bar
+  for the lari at all, which is what the negative cache needs to hear.
+
+Count both drops. `live_dropped` non-zero is normal during a session and zero after it closes;
+`nulls_dropped` says the provider is padding. **Capture the `meta` with the fixture** — the first
+capture here omitted it, and that omission is what let both defects ship.
+
+### A DATE MUST COME FROM THE DATA — four times in one family, in four different disguises
+
+Every one of these produced a plausible number with a wrong date, and none was visible to a test:
+
+1. **The clock.** `as_of = date.today()` on a derived asset claims a figure is current when its
+   newest input may be days old.
+2. **The window's anchor.** Measuring the window from `now` while measuring the value from the last
+   bar makes the same bars give different numbers on different days.
+3. **A partition key, for a source that has no dates at all.** A snapshot provider answers "as of
+   now"; stamping its answer with the partition being materialised misdates it by however long ago
+   that partition was.
+4. **The TOP of a lookback series.** A lane asking for 1,900 days *up to the partition's end*
+   brings back today's in-progress bar, and the newest close is then a mid-session price. The first
+   three were all at the BOTTOM of a window, which is exactly why this one was not looked for.
+
+The rule that covers all four: **the date travels with the data.** Stamp from the last input
+actually used; anchor windows on the data; cut a series at BOTH ends of the partition's window; and
+where a source genuinely has no date, record when it was READ, in the raw artifact, so nothing
+downstream has to invent one.
+
+### A source that cannot be asked about a past day must not be date-partitioned
+
+finviz answers "as of now" and carries no date — it cannot be backfilled. A daily partition there
+claims something the source cannot support.
+
+**And the obvious guard is worse than the defect.** Refusing a partition whose window has closed
+looks right and can never collect anything: with `end_offset` at 0 the newest *materialisable*
+partition is always yesterday, so today is always outside it. It would have run for ever, collecting
+nothing, reporting success. Only working out what it would do in production caught it — the test
+used a deliberately-closed window and passed for the same reason the real thing would have failed.
+
+There is exactly one current snapshot, and the materialisation event is already the record of when
+it was taken. Leave it unpartitioned; let its consumers stay partitioned, because their inputs
+genuinely do have dates.
+
+### Do not map a many-to-one relation with a dict comprehension
+
+`{symbol: code for code, symbol in scopes}` keeps the LAST code per symbol. Measured: 62 index
+scopes over **53 distinct symbols** — `EEM` backs three of them, `IVV` backs three including
+`country:US` — so nine scopes silently got no data. The run said `answered=52` beside `empty=0`,
+two numbers that cannot both be right, and that was the only trace.
+
+It is usually not a modelling error. Those scopes genuinely *are* the same index; the relation is
+many-to-one and has to be stored as one. **Make the counters count the thing you care about** — here
+`answered` counting scopes rather than symbols is what stops the two figures from disagreeing.
+
 ### Do not write an artifact only your own loader can read
 
 An empty partition written as `pa.table({})` is a Parquet file with **zero columns**. DuckDB:
