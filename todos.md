@@ -1799,6 +1799,24 @@ Three things settled in planning that are worth not re-deriving:
       belonging to CI. One throwaway container runs `dagster instance migrate` first, so the schema
       exists and nothing races for it; verified from the log (`Updating run storage...` then all
       three at `restarts=0`), which is a structural guarantee rather than one green run.
+  - [x] **Step (a) completed** (muffin-deployment#370): the old pipeline's **570 absences carried
+        into the ledger**, keeping their ORIGINAL expiry dates rather than being re-sentenced by the
+        migration that moved them. Askable falls 12,016 -> 11,446, which is 570 real vendor requests
+        a day no longer spent re-deriving what was already written down.
+  - [x] **The nightly budget could not cover the universe** (muffin-ingest#30). Measured: 200
+        securities in 244 s -> 1.22 s each -> **3.9 hours** for 11,446, against a `budget_seconds`
+        of one hour. Not a slow run but a FALSE CLAIM: a day-partitioned asset IS the answer to
+        "did the collection run on Tuesday?", and a run that stops with 9,000 subjects unasked
+        materialises the partition anyway. Raised to five hours, pinned as ARITHMETIC so a growing
+        universe fails the test rather than quietly invalidating the claim, plus
+        `every_askable_security_was_asked` (WARN) to surface it where an operator looks.
+  - [ ] **THE DUAL-RUN WINDOW IS SKIPPED, DELIBERATELY** (decided with the user 2026-09-11). Seven
+        days of comparing against `market.performance` would mostly re-measure what the parity work
+        already established — that the old table holds intraday captures (SCCO reconciles exactly to
+        a mid-session 197.00) and in one case the next day's close. It is replaced by ONE FULL PASS
+        AT FULL COVERAGE through the gates that already exist. The ordering is load-bearing: old
+        resources off before D2 freezes the app's data; D2 before the load finishes loses securities
+        from the chart.
   - [ ] **The full history load** — running 2026-09-11 as a bounded driver on the node (windows of
         25 from Dagster's own partition order, launched two at a time, stopping on a 10 GB floor or
         a stall). 12,016 partitions registered in 0.9 s and read back in 0.04 s, which settles the

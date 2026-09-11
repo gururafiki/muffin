@@ -1257,6 +1257,13 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   survives (measured — the first attempt died with `terminating connection due to administrator
   command` and the blocker lived). And one logical query occupied **two** backends, so the fix is to
   terminate the matched SET rather than a single pid.
+  **`pgrep -f` HAS THE SAME SELF-MATCH, and it reports the OPPOSITE of the truth.** Run over ssh,
+  `pgrep -f /tmp/drive.sh` matches the shell executing that very command, so a stopped process reads
+  as running — measured 2026-09-11, where it said a paused load driver was still going and the
+  honest check (`pgrep -f drive.sh` from a script whose own command line does not contain the path)
+  returned nothing. A self-matching killer fails loudly; a self-matching CHECK just lies. And
+  `setsid nohup` detaches into its own process group, so killing the pid leaves the `sleep` — kill
+  the group.
 - **"DOES IT RETURN ROWS" IS NOT "IS IT STILL PUBLISHED" — a series can answer and be a year
   stale.** Migration 83 drove all 42 FRED candidates before seeding, precisely so a retired id could
   not ship blind, and still shipped three defects that only the FIRST REAL RUN exposed. Ten CPI
