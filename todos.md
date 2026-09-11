@@ -1750,9 +1750,20 @@ Three things settled in planning that are worth not re-deriving:
         was the run's date rather than the last bar used, and windows were anchored on wall-clock
         `now` while the value came from the last bar, so the same bars gave different numbers on
         different days. `now` keeps one job — staleness.
-  - [ ] **FX** (`raw_fx_bars` -> `market.fx_rate`) and **index returns** (`index_return` from the
-        finviz groups and the country ETFs). The rest of the family, deliberately after the seams
-        were cut back.
+  - [x] **FX, in the same two lanes** (muffin-ingest #17/#18/#19/#20/#21, design §8.4). Yahoo's
+        chart endpoint called directly, because openbb has no keyless FX pair endpoint and the
+        ECB's free rates cover 27 of the 43 currencies here. Verified in production: spot
+        `answered=38/38`, history 21,443 rows over 39 currencies, every subunit at its parent's
+        exact depth and exactly parent/divisor on all 2,546 shared dates, and **0 of 34,848 rows
+        outside the plausibility band**.
+        FOUR DEFECTS, ONE PER RUN, none visible to CI: a 404 that names an absence read as a
+        transport failure; an unseeded `source_code` failed the whole write after every currency
+        had answered; the 09-10 partition stored 09-11; and then `outside_window=190` — everything
+        discarded — because **a daily FX bar is stamped at the session's OPEN in the exchange's
+        timezone** and **the last point is a LIVE QUOTE whose timestamp equals
+        `regularMarketTime`**. Both facts live only in the response's `meta` block.
+  - [ ] **Index returns** (`index_return` from the finviz groups and the country ETFs). The last
+        piece of the family.
   - [ ] **Absent-marking**: a symbol yfinance will never serve costs one request a day, because the
         vendor is asked per symbol — ~425 dead symbols is ~155k wasted requests a year. Uses the
         ledger that exists; `mark_absent` still refuses without an isolated attempt and a healthy

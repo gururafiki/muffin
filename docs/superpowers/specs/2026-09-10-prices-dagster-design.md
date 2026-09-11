@@ -680,6 +680,55 @@ partition **axis** decides the policy: a date partition batches many securities 
 budget** — `multi_run(25)`, making the full 10,894-security load ~436 runs rather than one that
 cannot finish.
 
+## 8.4 FX — the same two lanes, and four things only a real run could say
+
+Built on the standard rather than beside it: a DAILY cross-section that claims completeness, and a
+per-CURRENCY history whose subject is the slice. Forty-three currencies is small enough that one
+lane would work; building it the other way would make the standard something that holds only when
+convenient. What genuinely differs is the two parts carrying the domain — the plausibility band, and
+subunits being DERIVED rather than fetched.
+
+Yahoo's chart endpoint is called **directly**, not through the hub: openbb has no keyless FX pair
+endpoint, and the ECB's free reference rates cover **27 of the 43** currencies here — missing TWD
+(535 Taiwanese securities), VND, AED, SAR, QAR, KWD, PEN, CLP, COP, ARS and GEL.
+
+| Found by | What |
+|---|---|
+| a capture | An unknown pair is **HTTP 404** carrying `{"code":"Not Found","description":"No data found…"}`. The provider raised on every non-200, so each unquoted currency read as a *transport* failure — and since a transport failure must never mark a subject absent, the negative cache could never fill. |
+| the first run | `source_code` is a foreign key and `yahoo` was not seeded, so the whole write failed **after** all 38 currencies had answered. Settled as `yfinance`: `data_source` names the vendor, and all 22,236 pre-existing rows say so. |
+| the second run | The 09-10 partition wrote **42 rates dated 09-11** — a five-day range is requested so the partition's day is certainly inside it, and the asset took the *newest* point instead of its own. |
+| the third run | `outside_window=190` — 38 currencies × 5 points, **every one discarded**, writing nothing while reporting success. |
+
+That last one is the finding worth carrying. Two facts live only in the response's `meta` block:
+
+* **A daily FX bar is stamped at the session's OPEN in the exchange's timezone.**
+  `exchangeTimezoneName` is `Europe/London`, `gmtoffset` 3600 — the 2026-09-10 session arrives as
+  `1788994800`, i.e. **2026-09-09T23:00Z**. A UTC `.date()` dates every bar a day early.
+* **The last point is often a LIVE QUOTE, not a bar**, and it is exactly identifiable: its timestamp
+  *equals* `regularMarketTime`, measured to the second on three separate series. `GELUSD=X` is the
+  extreme — its only point is the live quote, so Yahoo has **no completed weekly bar for the lari at
+  all**, which is far more precise than "it returned one row" and is what the negative cache needs.
+
+**The price lane does NOT share the date defect, and I asserted that it did before checking.**
+Measured against the old table on exactly the timezone-exposed venues: HK 540/540, TW 542/542,
+SG 554/554, TH 272/272, ID 532/532, KR 532/534, AU 558/560 — same-date agreement is something a
+one-day shift makes impossible. openbb's adapter hands back a normalised date; the raw endpoint does
+not.
+
+### Verified in production
+
+```
+spot, 2026-09-10:  calls=38 answered=38 empty=0 transport=0
+                   outside_window=114  live_dropped=38  nulls_dropped=38  ->  41 rows
+history:           39 currencies, 21,443 rows (19,874 observed + 1,569 derived)
+```
+
+| Invariant | Result |
+|---|---|
+| a subunit has its parent's full depth | ILA 849 / ILS 849 · ZAC 851 / ZAR 851 · KWF 846 / KWD 846 |
+| a derived rate is exactly parent ÷ divisor | **849/849, 851/851, 846/846** within 1e-12 |
+| nothing implausible was ever admitted | **0** of 34,848 rows outside the band |
+
 ## 9. Risks
 
 * **polars/pyarrow on arm64** — verify the wheel and the image-size delta on the first image roll;
