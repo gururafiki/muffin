@@ -1792,11 +1792,13 @@ Three things settled in planning that are worth not re-deriving:
         `isolated=True, control_answered=True` passed every other test — the one lie that walks
         around the database's refusal. An absence also **expires** now, covered by
         `an-absence-expires.sql`.
-- [ ] **`dagster-boots` is FLAKY and it is a required check.** It failed on muffin-deployment#368
-      with `type "runs" already exists` and passed on a bare re-run: the daemon and the webserver
-      race to create Dagster's own storage schema. A flaky required check is a check people learn to
-      re-run rather than read, which is how a real failure gets waved through — see the six days
-      market-verify sat red. Serialise the boot or let one service own the migration.
+- [x] **`dagster-boots` was FLAKY and it is a required check** (muffin-deployment#369). It failed on
+      #368 with `type "runs" already exists` and passed on a bare re-run: the daemon and the
+      webserver both initialise Dagster's run storage and `boot.sh` starts them back to back. The
+      node does not have this — Swarm starts services seconds apart — so it is a COLD-START race
+      belonging to CI. One throwaway container runs `dagster instance migrate` first, so the schema
+      exists and nothing races for it; verified from the log (`Updating run storage...` then all
+      three at `restarts=0`), which is a structural guarantee rather than one green run.
   - [ ] **The full history load** — running 2026-09-11 as a bounded driver on the node (windows of
         25 from Dagster's own partition order, launched two at a time, stopping on a 10 GB floor or
         a stall). 12,016 partitions registered in 0.9 s and read back in 0.04 s, which settles the
