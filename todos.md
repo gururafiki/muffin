@@ -1777,11 +1777,46 @@ Three things settled in planning that are worth not re-deriving:
         **That is four places in one family where a date came from the wrong source** — the clock,
         the window's anchor, a partition key, and the top of a series. The rule is in the skill: the
         date travels with the data.
-  - [ ] **Absent-marking**: a symbol yfinance will never serve costs one request a day, because the
-        vendor is asked per symbol — ~425 dead symbols is ~155k wasted requests a year. Uses the
-        ledger that exists; `mark_absent` still refuses without an isolated attempt and a healthy
-        control.
-- [ ] **D2 — cutover**: `api.price_series` / `api.performance`, old resources disabled. UI unchanged.
+  - [x] **Absent-marking** (muffin-deployment#368, muffin-ingest#28). The isolation pass had always
+        produced the evidence and `_collect` counted it into a metadata field and threw it away,
+        because `ingest.facet` was EMPTY — no facet row means nothing to enqueue, nothing to mark,
+        and the LEFT JOIN excluding an absent security matches nothing. The facet is a MIGRATION
+        because `mark_absent` is SECURITY DEFINER and `execute`s `retract_sql`, so a worker able to
+        write that column could run any statement as a superuser.
+        **The bars are not retracted** — `price_bar` is keyed on `security_id`, so a wrong symbol
+        cannot misfile one, and the bars are facts about days the provider did answer. What goes is
+        `security_return`, the number published as current that would otherwise outlive the fix.
+        Three defects the mutations forced out: the facet was named `price_daily` in the query and
+        `prices` in the migration (the join would have matched nothing); `sync_population` had to
+        run before asking or the mark is written and never read; and hardcoding
+        `isolated=True, control_answered=True` passed every other test — the one lie that walks
+        around the database's refusal. An absence also **expires** now, covered by
+        `an-absence-expires.sql`.
+- [ ] **`dagster-boots` is FLAKY and it is a required check.** It failed on muffin-deployment#368
+      with `type "runs" already exists` and passed on a bare re-run: the daemon and the webserver
+      race to create Dagster's own storage schema. A flaky required check is a check people learn to
+      re-run rather than read, which is how a real failure gets waved through — see the six days
+      market-verify sat red. Serialise the boot or let one service own the migration.
+  - [ ] **The full history load** — running 2026-09-11 as a bounded driver on the node (windows of
+        25 from Dagster's own partition order, launched two at a time, stopping on a 10 GB floor or
+        a stall). 12,016 partitions registered in 0.9 s and read back in 0.04 s, which settles the
+        design's open risk about partition-set cost. Measured: ~25 securities per ~65 s and
+        **158.9 bytes a row**, so the universe is ~11 GB against 67 GB free and roughly 8 hours.
+        TWO DEFECTS IT FOUND. `multi_run` groups CONTIGUOUS partitions, so a backfill over a
+        scattered key list became **one run per partition** — and each carried a
+        `partition_key_range` whose start equalled its end, which `_by_partition` called a range and
+        the I/O manager called a single partition (`'str' object has no attribute 'get'`). And the
+        driver's own resumability had the head-of-line stall this repo has recorded six times: a
+        window was outstanding while any security in it lacked deep history, so one the provider has
+        nothing for re-fetched its twenty-four neighbours every round — two rounds wrote the same
+        139,7xx rows. Fixed by asking Dagster what it has MATERIALISED, which means "we asked and
+        stored whatever came back, including nothing".
+- [ ] **D2 — cutover**, gated on the load rather than on the code. **CORRECTED**: the app reads
+      `supabase.schema('market').from('price_series')` and `.from('performance')` and **nothing in
+      `muffin-ui` reads an `api` schema**, so landing `api.*` would need a UI release — the opposite
+      of what the design said. The cutover that needs no release is a REDEFINITION IN PLACE of
+      `market.price_series` and `market.performance` over the new tables. `price_series` serves
+      11,770 symbols today against 120 when the load started, so the number is the gate.
 - [ ] Rides with Phase 3: drop `market.prices`, the four `market.security` price columns, the old
       `pending_*` views, the `index.ts` handlers.
 - [ ] `muffin-ui` PR: full-range daily charts, currency-labelled prices, volume.

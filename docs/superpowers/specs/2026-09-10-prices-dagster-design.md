@@ -419,9 +419,20 @@ resource exhaustion.
 
 ### 5.1 What the UI gets, and when
 
-The cutover lands `api.price_series(symbol, date, close, grain)` and `api.performance(scope,
-scope_id, period, change_pct, total_return_pct, as_of)` — **the shapes the app already reads** — so
-it needs no `muffin-ui` release. The UI PR is separate and later, and what it unlocks is real:
+**CORRECTION, measured 2026-09-11: an `api` schema would need a UI release, which is the opposite
+of what this section claimed.** The app reads `supabase.schema('market').from('price_series')` and
+`.from('performance')` — verified across `use-instrument-prices.ts`, `market-client.ts` and
+`use-instrument.ts`, and **nothing in `muffin-ui` reads an `api` schema at all**. Landing
+`api.price_series` would therefore be a new surface the app must be changed to adopt.
+
+The cutover that genuinely needs no release is a **redefinition in place**: `market.price_series`
+and `market.performance` keep their names, schema and column lists and are pointed at
+`market.price_bar`, `market.security_return` and `market.index_return`. The app sees nothing.
+
+AND IT IS GATED ON COVERAGE, NOT ON THE CODE. `market.price_series` serves **11,770 symbols**
+today; the new tables held **120 securities** when the full load started. Swapping before the load
+finishes would take the chart from the whole universe to a rounding error of it — so the gate is the
+load, and the migration is written when the number justifies it rather than held ready and forgotten. The UI PR is separate and later, and what it unlocks is real:
 daily charts at any range (today's daily window is 400 days and everything longer is weekly), a
 currency on the price so the chart can label money the way `money.ts` already labels fundamentals,
 and volume — with OHLC available from raw if candlesticks are ever wanted.
