@@ -1663,6 +1663,20 @@ either. Both now fixed; the restart is carried by a `muffin.config-hash` contain
 - [x] **Migration tooling switch** to the Supabase CLI baseline + a repeatable views bundle —
       shipped 2026-09-10, see the item above.
 
+- [ ] **THE SEGMENT SPINE REFRESH HAS ~1.7 SECONDS OF HEADROOM, AND ANYTHING TIPS IT.** Measured
+      2026-09-11: the three runs before the price history load took **6,237 / 6,742 / 6,300 ms**
+      against the PostgREST role's **8-second** statement timeout — already 78-84% of the ceiling.
+      Under the load's sustained write pressure it began failing intermittently (19:14 ok, 20:14
+      TIMEOUT, 21:14 ok, 22:14 TIMEOUT, 23:15 TIMEOUT), which turns market-verify red and freezes
+      `derive_segment_classification` while every run still reports success.
+      **The load is the straw, not the cause**, and I confirmed that the expensive way: I first
+      theorised a burst colliding with the refresh and held the load's launcher either side of
+      :14 — the next refresh timed out anyway, so the pressure is sustained (buffer-cache eviction
+      by 25 M new rows) rather than instantaneous, and the hold cost ~17% throughput for nothing.
+      It belongs to the SEGMENT family rather than to prices. The fix is the one CLAUDE.md already
+      names for this shape — a loop that must outlive the role's timeout belongs in the caller, so
+      a second RPC or pg_cron, never a `SET` inside the statement.
+
 ### Phase 2 — prices, returns, FX, index returns — PLANNED 2026-09-10
 
 Design: **[docs/superpowers/specs/2026-09-10-prices-dagster-design.md](docs/superpowers/specs/2026-09-10-prices-dagster-design.md)**.
