@@ -1724,8 +1724,39 @@ Three things settled in planning that are worth not re-deriving:
         authored by the rework. Each now has a guard that fires: the hub is imported AS THE RUNTIME
         USER in the image, all 26 routes are resolved against the real hub, and
         `every-table-is-reachable` covers the RLS gate as well as the grant.
-  - [ ] **Parity**: 200 securities by fund weight, row counts per year and returns per period
-        against what `security-prices` and `performance` currently serve. The gate for D2.
+  - [x] **Lane B's history, after FOUR failures each one stage past the last** (muffin-ingest
+        #12/#13/#14/#15). The write refused a multi-partition output; the load returned a
+        `{key: obj}` mapping the input type-check rejected; the clean stage was OOM-killed at
+        **2.4 GB** because `UPathIOManager.load_input` is eager and 96 securities is **683,391
+        bars**; and the upsert hit the **65,535** bind-parameter protocol ceiling. Every one had
+        already been paid for by the provider, which is exactly what raw-as-Parquet is for — the
+        final attempt re-ran stage 2 alone off the bytes on disk and cost nothing. Landed
+        **683,391 rows, 96 securities, back to 1970-01-02** in four runs of ~30 s.
+        It also corrected the design: `single_run` is right for a DATE partition and wrong for a
+        SUBJECT partition, because this provider is asked once per symbol whatever a run covers —
+        so Lane B's run width is a memory budget, `multi_run(25)`.
+  - [x] **Parity, both gates** (design §8.1, §8.2). Bars: **602 compared, 586 agree (97.34%), and
+        all 16 disagreements adjudicated to the NEW value**. Returns: every stored return
+        recomputed **in SQL** from our own bars, independently of the Python that wrote it —
+        **653 of 653 agree to 0.000000pp**.
+        The comparison against `market.performance` is deliberately NOT reduced to a percentage:
+        its endpoints are ragged (09-09 for 5,413 securities, 09-10 for 2,646, 09-11 for 586 at one
+        instant), one intraday capture was confirmed exactly on SCCO, and the residual is **not
+        attributed** because that resource re-fetches its history at refresh time and does not
+        store it. Unreconstructable inputs are an argument for the new design, not a finding
+        against it.
+  - [x] **Two defects the returns gate found in the NEW layer** (muffin-ingest#16), neither visible
+        to any test because a fixture whose series ends today cannot tell the rules apart: `as_of`
+        was the run's date rather than the last bar used, and windows were anchored on wall-clock
+        `now` while the value came from the last bar, so the same bars gave different numbers on
+        different days. `now` keeps one job — staleness.
+  - [ ] **FX** (`raw_fx_bars` -> `market.fx_rate`) and **index returns** (`index_return` from the
+        finviz groups and the country ETFs). The rest of the family, deliberately after the seams
+        were cut back.
+  - [ ] **Absent-marking**: a symbol yfinance will never serve costs one request a day, because the
+        vendor is asked per symbol — ~425 dead symbols is ~155k wasted requests a year. Uses the
+        ledger that exists; `mark_absent` still refuses without an isolated attempt and a healthy
+        control.
 - [ ] **D2 — cutover**: `api.price_series` / `api.performance`, old resources disabled. UI unchanged.
 - [ ] Rides with Phase 3: drop `market.prices`, the four `market.security` price columns, the old
       `pending_*` views, the `index.ts` handlers.
