@@ -1841,6 +1841,14 @@ Three things settled in planning that are worth not re-deriving:
         than from the measurement. The matview is not needed for D2; it stays available as a
         rendering optimisation. The numbers are at 17 M rows and the load ends near 70 M, so D2
         re-times them at full size rather than assuming they stay flat.
+  - [x] **The whole D2 rehearsed in a rolled-back transaction** (design §8.7). `price_series` is a
+        VIEW and independent; **`performance` is a TABLE** whose `cascade` takes
+        `country_sector_performance`, `coverage_current`, `data_defect`, `pending_performance` and
+        `security_facet_status` — captured with `pg_get_viewdef` first, because the cascade does not
+        give them back, and all rebuilt with 0 missing. As `anon`: 21 ms / 89 ms / 15 ms / 1 ms.
+        **AND THE `performance` CONVERSION CANNOT SHIP BEFORE THE OLD RESOURCES ARE OFF** — five of
+        them `upsert` into it and a view without an `INSTEAD OF` trigger rejects an insert. The
+        conversion and `cron_resource.enabled = false` are ONE migration, not two steps.
 - [ ] **D2 — cutover**, gated on the load rather than on the code. **CORRECTED**: the app reads
       `supabase.schema('market').from('price_series')` and `.from('performance')` and **nothing in
       `muffin-ui` reads an `api` schema**, so landing `api.*` would need a UI release — the opposite

@@ -862,6 +862,54 @@ Two smaller things the probe settled:
   asks for them by name for every range past a year, so `grain` stays part of the contract until the
   UI PR §5.1 describes.
 
+## 8.7 D2 is two changes of very different sizes, and one of them cannot be done alone
+
+Measured 2026-09-11 by building the whole cutover in a rolled-back transaction against the real
+database.
+
+**`market.price_series` is a VIEW** — a redefinition, reversible, and independent of everything
+else. The old resources keep writing `security_price` and `market.prices`, which simply stop being
+read.
+
+**`market.performance` is a TABLE with dependents**, so it is drop-and-recreate:
+`country_sector_performance`, `coverage_current`, `data_defect`, `pending_performance` and
+`security_facet_status` fall to the `cascade`, and `pg_get_viewdef` has to capture them BEFORE the
+drop because the cascade does not give them back. Rebuilt in dependency order, all of them return —
+0 missing on the probe.
+
+**AND IT CANNOT SHIP BEFORE THE OLD RESOURCES ARE OFF.** `security-performance`,
+`instrument-performance` and the three group/country/sector resources all `upsert` into
+`market.performance`, and a view without an `INSTEAD OF` trigger rejects an insert. So the table-to-
+view conversion and `cron_resource.enabled = false` for those five are **one migration**, not two
+steps in a sequence — splitting them leaves either a view the old resources crash against, or a
+window where nothing maintains the table the app is still reading.
+
+`price_series` has no such constraint and can land first.
+
+### What the replacement supplies, and why
+
+`performance.scope_id` holds the **display symbol** for `scope = 'instrument'` — migration 39
+re-keyed it deliberately, and anything joining it on `security_id` reports zero coverage. The
+country/group/sector arm unwraps `index_return.index_code` on the **first colon only**, because a
+group's id is itself `<scheme>:<group>` (`group:ftse:na` → scope `group`, scope_id `ftse:na`).
+
+`stale_after` is supplied even though only `pending_performance` reads it — that view is the OLD
+resource's backlog and retires with it, and keeping the column makes the replacement drop-in until
+then.
+
+### Measured as `anon`, in the same transaction
+
+| probe | |
+|---|---|
+| `price_series`, daily + the 400-day range the chart sends | **21 ms** |
+| `price_series`, weekly | **89 ms** |
+| `performance`, one symbol | **15 ms** |
+| `performance`, a sector / all countries | **1 ms / 1 ms** |
+
+All far inside the 3-second anon budget — but `security_return` held 96 securities when this ran,
+so the `performance` numbers are not yet a full-size measurement. Both views are filtered lookups
+and ought to stay flat; **ought to is not a measurement**, and D2 re-times them before it ships.
+
 ## 9. Risks
 
 * **polars/pyarrow on arm64** — verify the wheel and the image-size delta on the first image roll;
