@@ -1849,6 +1849,19 @@ Three things settled in planning that are worth not re-deriving:
         **AND THE `performance` CONVERSION CANNOT SHIP BEFORE THE OLD RESOURCES ARE OFF** — five of
         them `upsert` into it and a view without an `INSTEAD OF` trigger rejects an insert. The
         conversion and `cron_resource.enabled = false` are ONE migration, not two steps.
+  - [ ] **`default_automation_condition_sensor` IS STOPPED, so the derived layer never refreshes.**
+        Found 2026-09-11 by asking why `security_return` still held 96 securities after the load
+        had written 20 M rows: `AUTO-MATERIALIZE runs ever: 0` against 48 daemon ticks, all of them
+        from the two standard sensors. `AutomationCondition.eager()` is evaluated by an
+        automatically-created sensor that Dagster ships **STOPPED**, so the condition the design
+        relies on to replace the old cron choreography does nothing at all.
+        **It must NOT be started during the load** — `price_bar_history` materialises 25 partitions
+        a minute and each would request a whole-universe returns computation. It is declared
+        explicitly and started as part of the cutover, not clicked in a UI where the next rebuild
+        forgets it.
+  - [ ] **The three schedules ship STOPPED** (`daily_prices`, `daily_fx`, `daily_indices`) and are
+        started at cutover. Deliberate — a schedule spending the provider budget on numbers nobody
+        had compared was the wrong default — but it is a step, and nothing refreshes without it.
 - [ ] **D2 — cutover**, gated on the load rather than on the code. **CORRECTED**: the app reads
       `supabase.schema('market').from('price_series')` and `.from('performance')` and **nothing in
       `muffin-ui` reads an `api` schema**, so landing `api.*` would need a UI release — the opposite
