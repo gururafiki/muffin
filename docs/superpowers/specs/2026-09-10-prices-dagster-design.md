@@ -555,6 +555,49 @@ The plan said a correction found during the build-out would cost exactly that, a
 * **Dagster**: a deliberately failed check blocks `security_return`; a killed run leaves an open
   `ingest.attempt` and fires the dead-run alert, proven by killing one.
 
+## 8.1 Parity result — bars, 2026-09-11
+
+Ten daily partitions × 100 securities by fund weight, compared on `(security_id, trade_date)` at a
+**1e-6 relative tolerance** rather than equality. Both tables hold float32 from the same provider, so
+one value reads as `1010.26000976562` through one path and `1010.260009765625` through the other;
+comparing exactly reported 36 of 48 as disagreeing when almost all agreed.
+
+| | |
+|---|---|
+| compared | **602** pairs |
+| agree | **586 — 97.34 %** |
+| disagree | 16 — 2.66 % |
+| rows the OLD table has no bar for at all | **91** |
+
+**All 16 disagreements were adjudicated against the provider, and all 16 support the NEW value.**
+Zero for the old pipeline. That is the opposite of what a cutover usually has to defend, so the
+16 were examined further rather than banked — and they split cleanly into two causes:
+
+* **The old value is an intraday capture** (4 of 7 examined). It sits INSIDE that session's own
+  high/low — BHP.AX `62.78` within `62.12–63.92`, Samsung `266,250` within `263,500–270,500` — so
+  it is a price that really traded, written while the market was still open. All on 2026-09-10, all
+  Asia-Pacific, whose sessions close early in UTC. This is the same partial-bar defect the new
+  pipeline was given a window filter to avoid, present in the old one and evidenced rather than
+  inferred.
+* **The provider's own bar is degenerate** (3 of 7). `low == high == close` for SQM-B.SN (65450),
+  CHILE.SN (188.5) and QIBK.QA (21.60) — the padded-series signature this codebase already records
+  for illiquid sessions. The new value is faithful to the provider, but *matching the provider* is a
+  weaker claim when the provider reports a flat bar, and it is recorded as weaker rather than
+  counted as a win.
+
+**A hypothesis raised earlier and now WITHDRAWN.** QIBK.QA holds 2026-09-10's close against 09-09,
+and a systematic date shift was inferred from it. Across ~180 sampled pairs in three samples there
+are **zero** shifts. It was one instance.
+
+**And a measurement retracted.** A baseline sample of Gulf and Latin American holdings first read
+48 % "unanswered" — an artefact of asking with the DISPLAY symbol. `ALMARAI.SR` is what the app
+shows; yfinance wants `2280.SR`. Asked with the fetch symbol the same population reads **85 %
+agreeing**, against **95 %** for top-weight names — where display and provider symbol are usually
+identical, which is exactly why the weight-ordered sample never showed the bug.
+
+**The bars gate is met**: every disagreement is explained. **Returns parity remains a second gate**
+and is written with the `security_return` asset.
+
 ## 9. Risks
 
 * **polars/pyarrow on arm64** — verify the wheel and the image-size delta on the first image roll;
