@@ -1831,6 +1831,13 @@ Three things settled in planning that are worth not re-deriving:
         nothing for re-fetched its twenty-four neighbours every round — two rounds wrote the same
         139,7xx rows. Fixed by asking Dagster what it has MATERIALISED, which means "we asked and
         stored whatever came back, including nothing".
+  - [ ] **`market.price_bar_weekly` — a PREREQUISITE for D2, not an optimisation** (design §8.6).
+        Measured as `anon` with `price_bar` at 16 M rows: the candidate `price_series` takes
+        **25.2 s** for one symbol's daily and **times out at 30 s** for weekly, against a 3-second
+        budget. Weekly cannot be derived at read time — the caller's `symbol =` predicate cannot be
+        pushed through `distinct on (security_id, week)`, so it materialises every security's whole
+        history first. Built over the FINAL data once the load ends, because a matview over a table
+        still taking millions of inserts is refreshed twice and competes for I/O.
 - [ ] **D2 — cutover**, gated on the load rather than on the code. **CORRECTED**: the app reads
       `supabase.schema('market').from('price_series')` and `.from('performance')` and **nothing in
       `muffin-ui` reads an `api` schema**, so landing `api.*` would need a UI release — the opposite

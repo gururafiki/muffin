@@ -812,6 +812,44 @@ because a partition cannot close before its window does. The sector rows *are* s
 moving intraday snapshot and cannot be a stable baseline, which §8.2 established and this confirms
 on a second, independent scope.
 
+## 8.6 D2 measured ahead of the cutover, and it does not work without the weekly matview
+
+Measured 2026-09-11 with `price_bar` at 16 M rows — **more than the 7.35 M daily rows in the table
+it replaces** — by building the candidate `market.price_series` in a rolled-back transaction and
+timing it **as `anon`**, which is the only role whose answer matters: it carries a 3-second
+statement timeout that `postgres` does not, and this schema has shipped four views that were fast
+for a service-role probe and `57014` for the app.
+
+| probe | as `anon` |
+|---|---|
+| one symbol, `grain = 'daily'` | **25.2 s** |
+| one symbol, `grain = 'weekly'` | **timed out at 30 s** |
+
+Against a 3-second budget the chart would simply have been broken — and the cutover is precisely
+the moment nobody would be looking for it, because the migration's own tests pass and the data is
+right.
+
+**The cause is that weekly cannot be derived at read time.** The daily arm is a filtered join and
+is fine; the weekly arm is a `distinct on (security_id, week)` whose result the caller's
+`symbol = …` predicate cannot be pushed through, so it materialises every security's whole history
+before the filter applies. Adding a filter changing a view's plan is the fourth occurrence of that
+shape here, after `fund_sector_weight`, `security_facets` and `price_series` itself.
+
+**§5's `price_bar_weekly` is not an optimisation, it is a prerequisite**, and this section exists
+because the design said so — *"too many to draw and too slow to ship to `anon` inside 3 s"* — and
+the number now confirms it. It is deliberately NOT built yet: a matview over a table still taking
+millions of inserts would be refreshed twice and compete for I/O with the load. It is built over
+the final data, and D2 follows it.
+
+Two smaller things the probe settled:
+
+* **The weekly arm needs its own subquery.** In a set-operation arm `ORDER BY` resolves against the
+  OUTPUT columns, so `distinct on (…, trade_date)` beside `trade_date as date` fails outright with
+  `column "trade_date" does not exist`.
+* **The old table's weekly rows are not a rounding error** — 9,612,718 of them against 7,351,248
+  daily. The chart asks for them by name for every range past a year, so `grain` stays part of the
+  contract until the UI PR that §5.1 describes.
+
 ## 9. Risks
 
 * **polars/pyarrow on arm64** — verify the wheel and the image-size delta on the first image roll;
