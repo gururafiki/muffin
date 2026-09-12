@@ -3673,6 +3673,75 @@ in one migration. Every item below was found by verifying the cutover, not by a 
   cutover. The cutover contributes ~480 ms. **Check whether the thing you are about to own predates
   you** — the timestamp of the last successful sample answered it in one query.
 
+### Raw is the vendor's answer, whole (2026-09-12)
+
+The rule, set by the user: **stage 1 stores what the provider sent, with nothing dropped and nothing
+rewritten; every narrowing belongs to stage 2**, so adopting a field later costs a re-parse of files
+already on disk and never a re-fetch. Design:
+[docs/superpowers/specs/2026-09-12-universe-dagster-design.md](docs/superpowers/specs/2026-09-12-universe-dagster-design.md) §2.1.
+
+- **ALL 181 TESTS PASSED WHILE THREE OF FOUR LANES BROKE IT.** Prices kept 6 of the provider's 10
+  fields, indices 5, FX an `as_of` and a `close` — `open`/`high`/`low`/`vwap` were discarded at fetch.
+  Nothing asserted the SHAPE of raw, only the values it kept. Raw is now asserted as a SUPERSET of
+  what the provider sent — never an equality, which would fail the day a vendor adds a field, the
+  one event this rule exists to make free.
+- **A PIVOT IS AN INTERPRETATION, HOWEVER FAITHFUL — and the first repair left one.** Reading Yahoo's
+  parallel arrays generically fixed the fields and kept the shape: `chart()` still reshaped
+  `chart.result[0]` into one object per timestamp before writing, so a second quote block, an array
+  whose length did not match `timestamp`, or a key Yahoo adds beside it was gone at fetch. The user
+  caught it with the plain question — *"do we store them exactly as we read them?"*
+  `providers/yahoo_chart.py` is now `fetch` (bytes; the only network call) + `parse` (stage 2), and
+  raw FX is a `Document` row like the registries. **Assert BYTES by sha256, never a JSON round
+  trip**, which passes a stage 1 that re-serialised — itself a choice of key order and number
+  format. The captured body's `meta` had 29 keys where an earlier count said 27: the drift is the
+  argument, not a footnote.
+- **PLACEMENT IS NOT STORAGE.** A partition key is needed to choose a file, so the asset parses the
+  provider's `date` for that and writes nothing derived into the row. `prices.CONTEXT_COLUMNS` is
+  exactly what stage 1 adds and a test holds `raw_rows` to it, because `trade_date` had crept into
+  raw as "just the key".
+- **KEEPING THE WHOLE ANSWER MOVES THE WINDOW TO STAGE 2, AND STAGE 2 MUST THEN PUBLISH EACH
+  PARTITION FROM ITS OWN FILE.** Found by asking what a range re-parse — the thing stage 2 exists
+  to make free — would now do. A stray bar sits in one partition's file and the real one in its
+  own, and the writer dedupes **last-wins, so the flattened run picks between them by FILE ORDER**:
+  right only by accident of sorting. One FX body covers a range and is filed under every day it
+  covers, so a flattened window publishes each rate once per copy. And every daily index run stores
+  its 1,900-day lookback, so a range re-parse fed each bar in once per file — a day beside its own
+  duplicate in a series every return rule reads positionally, **which predated the change**.
+  `partitioned.rows_per_partition` keeps the input per partition; nothing else is safe.
+- **A LIVE QUOTE CAN SHARE ITS DATE WITH A COMPLETED BAR.** The captured EURUSD body ends in
+  Friday's last tick (stamped at `regularMarketTime`, 1.16009) beside that day's completed bar
+  (1.16099), both dated 2026-09-11 in London. A rule keyed on the date publishes the tick as the
+  day's rate — wrong in the fourth decimal and entirely plausible. Only the stamp identifies it, and
+  the first test written for it made the date mistake itself; the capture refuted it.
+- **WHEN A RULE MOVES STAGES, A TEST CAN START PASSING FOR THE WRONG REASON.**
+  `test_normalisation_refuses_a_close_that_is_not_a_positive_number` fed rows with no provider
+  `date`, so once the date moved to stage 2 `normalise` refused them for THAT and the close rule was
+  never reached — green throughout. A control row that must survive is what makes the rule under
+  test the only thing refusing. And **a rule that moved is asserted on BOTH sides**, or "moved" and
+  "vanished" are indistinguishable.
+- **openbb's layer is documented, not undone.** Price and index raw is `model_dump()` of openbb's
+  `Data`: `extra="allow"` keeps undeclared vendor fields, but openbb has already parsed the vendor's
+  JSON into dates and floats before we see it. Owning that layer means calling yfinance directly —
+  a separate decision the user chose not to take here.
+- **RAW FX PARTITIONS WRITTEN BEFORE 2026-09-12 HOLD THE PIVOT**, carry no `body`, and yield nothing
+  under the new rules. `fx.normalise` counts them as `legacy_rows` and the asset logs the remedy —
+  re-materialise that raw partition, one call per currency — because skipping them silently would
+  read exactly like a day the provider had nothing for.
+- **zsh DOES NOT WORD-SPLIT `set -- $VAR`**, so a merge gate parsing four fields that way put the
+  whole string in `$1` and refused a green PR. It failed CLOSED, the safe direction;
+  `read -r a b c d <<< "$VAR"` behaves the same in both shells. Same family as
+  `cmd | tail; echo $?` reporting tail's status: **a watcher's exit code is not the checks' verdict**
+  — read `statusCheckRollup` before `gh pr merge`, which merges whatever the checks said.
+- **A METRIC LABELLED BY URL HOST IS LABELLED BY THE CACHE ONCE A CACHE IS IN FRONT — the nginx
+  `$provider` lesson, reproduced in Python.** `documents._get` took its `provider` label from the
+  URL's host; in production every base URL is `http://http-cache:8080/<location>`, so the first SEC
+  request driven after the roll counted as `provider="http-cache:8080"`, and NSE would have joined it
+  in the same series. Every test passed, because none routed through the cache — against the real
+  origins host and provider AGREE, so no fixture could tell the rules apart. Found only by driving
+  one real request in production and reading the exporter. The label is now passed explicitly, as
+  `yahoo_chart` and the openbb routes already did, and the test routes through the cache so the two
+  rules give different answers.
+
 ## Running an OpenSandbox server locally
 
 - **`docker run -d -p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock opensandbox/server:latest`.**

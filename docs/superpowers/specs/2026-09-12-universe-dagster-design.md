@@ -12,9 +12,9 @@ to generalise instead of remaining a special case of "date".
 | Step | What | State |
 |---|---|---|
 | 1 | Standard v2 refactor — partition seam, resource, pools, freshness | **merged** (ingest#32) |
-| 2 | The two whole-file registries (`sec-cik-map`, `in-symbols`) | **green, open** (ingest#33, deployment#373) |
-| 3 | Worker Prometheus exporter | **green, open** (same PRs) |
-| — | Raw fidelity: every lane stores the vendor's answer whole; stage 2 publishes each partition from its own file (§2.1) | **pushed to ingest#33**; CI's unit job green, verified locally (136 unit, 54 dagster, strict typing both ways) |
+| 2 | The two whole-file registries (`sec-cik-map`, `in-symbols`) | **live** — ingest#33 + deployment#373. Verified in production: `ingest_rw` holds EXECUTE on both RPCs, and SEC answers the production User-Agent (794,966 B) where the URL-bearing one always 403'd |
+| 3 | Worker Prometheus exporter | **live** — the Prometheus target is up, counters written by processes that have exited are served, and a request is labelled by its provider (`provider="sec"`) since ingest#35 fixed a cache-host label |
+| — | Raw fidelity: every lane stores the vendor's answer whole; stage 2 publishes each partition from its own file (§2.1) | **live** — ingest#33. In production a Yahoo body fetched through `http-cache` is stored byte-identical, with 6 points → 5 rates and the live quote refused; the rule is in the pipeline skill (ingest#34). Running image `8f25d63c` = `67e8af2` |
 | 3b | Dagster Grafana dashboard over `dagster.runs` | not started |
 | 4 | Discovery — N-PORT + the OpenFIGI exchange sweep | not started |
 | 5 | Identity ladder — four rungs, `identifier_probe`, `ReAskAfter` | not started |
@@ -39,6 +39,11 @@ to generalise instead of remaining a special case of "date".
 Building the raw-fidelity rule found two more: a range re-parse of `index_return` fed each lookback
 bar in once per daily file (predates Phase 3), and a price test that had been passing for the wrong
 reason — its row had no provider `date`, so the close rule it is named for was never reached.
+
+And verifying the roll in production found one in the exporter itself: document requests were
+labelled by their URL's host, which in production is `http-cache:8080` for every provider — the
+nginx `$provider` lesson reproduced in Python, invisible to every test because none routed through
+the cache. Fixed in ingest#35.
 
 ---
 
