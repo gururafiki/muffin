@@ -1677,7 +1677,25 @@ either. Both now fixed; the restart is carried by a `muffin.config-hash` contain
       names for this shape — a loop that must outlive the role's timeout belongs in the caller, so
       a second RPC or pg_cron, never a `SET` inside the statement.
 
-### Phase 2 — prices, returns, FX, index returns — PLANNED 2026-09-10
+### Phase 2 — prices, returns, FX, index returns — **CUT OVER 2026-09-12**
+
+Serving layer moved, ten old resources disabled, and the pipeline started (automation sensor
+ticking against 0 ticks ever before). Full record of the gates, what was skipped and what is still
+open: the design doc's **Phase 2 — CUT OVER** section. The short version:
+
+- **3y coverage went from 45 instruments to 11,190** — the old per-symbol path only ever held a
+  ~400-day window, so long-window returns are a NEW capability rather than a migrated one.
+- **The dual-run was skipped on purpose**, so parity became adjudication against the provider:
+  `country:KR 1d` matches to 4dp on each side's own anchor, and the two tables' 453 "disagreements"
+  were a trade-date vs run-timestamp anchor gap.
+- **STILL OPEN — step (g).** The ten handlers and their five `pending_*` views are still in
+  `index.ts`: 1,007 lines of explicit blocks plus a generic `spec!.load()` tail, seven tests, the
+  Grafana pipeline dashboard, `config.example.yml` and a `logic-check` guard. Unreachable meanwhile
+  (cron rows disabled); the clock is the FLAT-backlog alert ~7 days after the cutover.
+- **STILL OPEN — the first scheduled run.** `daily_prices` first fires at 00:00, so eager
+  materialisation of `security_return` is armed rather than proven.
+
+### Phase 2 — as planned 2026-09-10
 
 Design: **[docs/superpowers/specs/2026-09-10-prices-dagster-design.md](docs/superpowers/specs/2026-09-10-prices-dagster-design.md)**.
 It also defines **the standard** every later family follows: acquire -> normalise -> derive, where
