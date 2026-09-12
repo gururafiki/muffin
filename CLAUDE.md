@@ -3605,6 +3605,74 @@ region, income group, currency, security type. 469 buckets, **743 ms**.
   not an export**, so reaching a facet through an asset module (`assets.indices.indices.foo`) fails
   with *"does not explicitly export attribute"*.
 
+### The D2 serving cutover, and four things verifying it found (2026-09-12)
+
+Phase 2 of the rework: `market.performance` became a VIEW over `security_return` + `index_return`,
+`price_series` moved onto `price_bar`, and the ten old price/performance/FX resources were disabled
+in one migration. Every item below was found by verifying the cutover, not by a failure report.
+
+- **`drop table … cascade` LOSES EVERY DEPENDENT'S ACL, AND A BUNDLE REGENERATED FROM THE BROKEN
+  DATABASE CERTIFIES THE BREAKAGE.** The migration captured `pg_get_viewdef` before the cascade and
+  rebuilt all five dependents — definitions only. They came back correct and unreadable by the app;
+  CI said `anon cannot read 4 serving view(s)`. The fix captures `relacl` too and replays it through
+  `aclexplode`, never a list of expected roles: `data_defect` also grants `metrics_ro` and
+  `pending_performance` grants anon nothing, so `grant select … to anon, authenticated,
+  service_role` would have been wrong in both directions. **The second half is the lesson**: the
+  repeatable bundle had already been regenerated from a database where the cascade had dropped
+  those grants, so `9999-grants.sql` recorded the ACL loss as the expected state. Extraction is
+  faithful by construction, so nothing comparing the bundle to itself can ever see it —
+  `every-table-is-reachable`, which asks the database a question it can answer wrongly, is what
+  caught it. Also `distinct on`: pg_depend carries a row per referenced COLUMN, so five dependents
+  arrived as eighteen and the notice claimed eighteen rebuilds.
+- **A RETIREMENT THAT DISABLES RATHER THAN DELETES FIRES THE STALLED-RESOURCE ALERT, BECAUSE
+  `scheduled` TESTS THAT THE ROW EXISTS.** `resource_health.scheduled` was
+  `exists (select 1 from cron_resource where resource = r.resource)`. The alert's own comment
+  explains the exemption and cites `security-eps-history`, which migration 138 **removed** — the row
+  was deleted, so `exists` went false. D2 sets `enabled = false` and KEEPS the row on purpose (a
+  retirement should be re-assertable every deploy, and rollback is then one update), so `exists`
+  stayed true, `last_worked` froze at the cutover, and `greatest(12, ttl_hours * 2.5)` would have
+  named all ten within twelve hours. Third time this schema has paid for a gate left red for a
+  reason nobody would act on. Fixed with `and cr.enabled`; `check_resource_health.py` reads the same
+  column and inherits it.
+- **MOVING A SERVING VIEW ONTO A DEEPER TABLE SILENTLY REMOVES ITS WINDOW.** `price_series`' daily
+  arm had been fed by `security_price`, which the old resource only ever filled with a rolling
+  ~400-day window. On `price_bar` it returns everything back to 1980: measured on AAPL the morning
+  after, **275 rows → 11,528**, median 273 across every security. Nothing truncates — the app pages
+  at 1000 and stops on a short page — it just makes **twelve sequential round trips to draw at most
+  365 days**. Bounded on the clock, as a measured trade: a per-security anchor needs either a
+  `group by` over 58 M rows per chart load or a `price_history_to` column, and buys **13 securities
+  of 11,716** whose last bar predates the window. They keep the WEEKLY arm, which stays unbounded
+  because it is what a 3Y/5Y chart reads.
+- **COMPARING A TRADE-DATE-ANCHORED TABLE AGAINST A RUN-TIMESTAMP-ANCHORED ONE MEASURES THE ANCHOR
+  GAP, NOT A DEFECT.** New `index_return` against old `performance` disagreed on **453 of 626**
+  (scope, period) pairs, `country:KR 1d` at **−4.1933 against +3.2498** — a sign flip, which reads
+  as catastrophic. `index_return.as_of` is a trade date and `performance.as_of` is when the run
+  happened, and `performance` upserts in place so there is no history to pin them to a common day.
+  The provider settles it: EWY closed 190.78 / 182.78 / 188.72 on 09-09/10/11, so 1d ending 09-10 is
+  **−4.1933%** and ending 09-11 is **+3.2498%**. Each side matches EXACTLY, to four decimal places,
+  for its own anchor — both right. The match also proves the live-quote drop, since the stored value
+  is the completed bar rather than `regularMarketTime`. **Adjudicate against the provider; parity
+  against the thing you are replacing is only meaningful at a common anchor.**
+- **AND THE CUTOVER WAS A CAPABILITY GAIN, WHICH A LIKE-FOR-LIKE PARITY CHECK WOULD HAVE HIDDEN.**
+  The period vocabulary matches on both sides and the seven short windows are within ~1%, but **3y
+  went from 45 instruments to 11,190 and 5y from 45 to 10,631** — the old per-symbol path had a
+  ~400-day window, so those windows existed only for the 45 country ETFs computed off
+  `etf/historical`. Equity `complete` went 43.4% → **67.5%** across the backfill.
+- **market-verify HAD BEEN RED FOR FOUR DAYS AND WAS HIDING AN ACTIVE OUTAGE — the same pattern as
+  2026-09-05, recurring.** Last success 09-07; since 09-08 it fails on `data_defect` as anon
+  (57014), `sector_constituents` as anon (57014), the significant-holding check (HTTP 500) and
+  **`segment spine refresh failed in 5 of the last 12 facets-refresh runs`**, whose own message says
+  *"`derive_segment_classification` reads that spine, so its output freezes while every run still
+  reports success"*. None is related to the price family, so Phase 2's gate had to be evaluated by
+  running the price invariants directly. **A cutover landing into a red gate cannot be verified by
+  that gate**, and anything it broke would have been equally invisible.
+- **AND I NEARLY REPORTED THAT AS MY OWN REGRESSION, TWICE OVER.** `data_defect` measures 53 s and
+  reads `performance` — so "the cutover made it a view, and it is referenced 11 times" was the
+  obvious story. Both halves were wrong: the whole `performance` view is **313 ms** (so 11 × it is
+  ~3 s, not 53), and the `defect.*` sample last landed **2026-09-09**, three days before the
+  cutover. The cutover contributes ~480 ms. **Check whether the thing you are about to own predates
+  you** — the timestamp of the last successful sample answered it in one query.
+
 ## Running an OpenSandbox server locally
 
 - **`docker run -d -p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock opensandbox/server:latest`.**
