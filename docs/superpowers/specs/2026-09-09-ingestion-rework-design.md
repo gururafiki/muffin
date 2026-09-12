@@ -538,6 +538,50 @@ Two things deliberately NOT done, so the next phase does not assume them:
    green; `docker service update --image` path proven (minutes, no Terraform).
 6. The edge function keeps running everything. Nothing user-visible changes.
 
+### Phase 2 — Prices + performance — **CUT OVER 2026-09-12**
+
+`market.performance` is a VIEW over `security_return` + `index_return`, `price_series` reads
+`price_bar`, and the ten old resources are `enabled = false`. Verified on the node after the deploy:
+the view serves instrument 103,270 rows / 11,663 ids / 9 periods, country 396/44/9, group 153/17/9,
+sector 77/11/7; the app's own anon queries answer in **209 ms** (instrument+symbol) and **1.3 ms**
+(country+period); all five rebuilt dependents kept their ACLs; `coverage_sample` kept writing.
+
+**Recipe steps (a)-(c) and (e) shipped. (d) was skipped deliberately** — the user chose to disable
+the old ingestion and re-ingest rather than dual-run, so parity became ADJUDICATION against the
+provider instead of agreement with the thing being replaced:
+
+| gate | result |
+|---|---|
+| returns self-consistency | 79,889 / 79,889 |
+| bars parity | 116,743 / 117,304 (99.52%); the 497 systematic disagreements adjudicated to NEW in all six probes |
+| index returns | `country:KR 1d` −4.1933 vs the provider's −4.1933 for 09-10, **exact to 4dp** |
+| FX | **cannot be attributed** — both writers share the table, key and `source_code`, and the old function populates `derived_from` too. Stored 09-11 sits 0.03-0.57% above the provider's close for all six of EUR/GBP/JPY/KRW/ILS/TWD, same direction: a mid-session snapshot, which is the OLD shape. Suggestive, not proof. |
+| price invariants | 0 frozen series, 0 returns orphaned from the view's join; the single −100% row is FFAI, real (2021 close 12,902,400 split-adjusted against 1.67) |
+| equity `complete` | 43.4% → **67.5%** |
+
+**It is a capability gain, not a like-for-like swap**: 3y went from **45 instruments to 11,190** and
+5y from 45 to 10,631, because the old per-symbol path only ever held a ~400-day window.
+
+**Still open, and none of it blocks Phase 3:**
+
+* **(g) is NOT done** — the ten handlers are still in `index.ts`, and with them the five
+  `pending_*` views they read. Measured: the six explicit blocks are **1,007 lines**, and the other
+  four performance resources are not blocks at all — they fall through to a generic `spec!.load()`
+  dispatch with `'sector-performance'` as a default in two places. Seven tests, the Grafana pipeline
+  dashboard, `config.example.yml` and `logic-check`'s "a resource must report its own `pending_*`
+  view" guard all reference them. Nothing is broken meanwhile (the cron rows are disabled, so the
+  code is unreachable); the clock on it is the FLAT-backlog alert, which fires ~7 days after the
+  cutover because `backlogs_to_sample()` is catalogue-derived over `pending\_%`.
+* **The first scheduled run had not happened when this was written.** The automation sensor ticks
+  (5 ticks, cursor populated, against 0 ever before) and the three schedules are registered
+  `DECLARED_IN_CODE`, but `daily_prices` first fires at 00:00, so eager materialisation of
+  `security_return` is demonstrably armed rather than demonstrably working.
+* **market-verify has been red since 2026-09-08** on four failures that belong to other families —
+  `data_defect` and `sector_constituents` timing out as anon, the significant-holding check 500ing,
+  and the segment spine failing 5 of 12 refreshes. They are Phase 5/7 work. The consequence for
+  THIS phase is that gate (f) had to be evaluated by running the price invariants directly, and
+  that a cutover landing into a red gate cannot be verified by that gate.
+
 ### Phase 2 → 7 — Cutover by family (each family = its own PR set, its own planning session)
 
 Per family, the same recipe: (a) `ingest.facet` rows + backfill of the old `%_missing_at`/cursor
