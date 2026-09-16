@@ -370,6 +370,19 @@ only reads `SKILL.md` files under `.claude/skills/`, so the symlink is what make
   copies byte-identical.
 - **Adding a new skill:** commit it into the owning submodule first (`<submodule>/.agents/skills/<name>`
   + symlink), then copy the same folder + symlink into the umbrella root and commit there too.
+- **Ingestion on Dagster loads two skills, and they divide the work.** `dagster-expert` is Dagster's
+  official skill (dagster-io/skills, Apache-2.0), vendored **verbatim** into `muffin-ingest` and pinned
+  to the Dagster version the project runs: `skills-lock.json` records source, tag and hash, and it is
+  re-vendored at the matching tag on every Dagster upgrade, never edited. It owns the generic API.
+  `dagster-ingestion-best-practices` (canonical in `muffin-ingest`) is muffin's layer on top — the
+  rules, the planning and implementation stages, raw, modelling, isolation, structure, pitfalls — and
+  wins where they differ (this deployment is OSS, so `dg api`, `dg plus` and the Dagster+ MCP server
+  do not apply).
+- **Vendoring with the `skills` CLI has three traps.** It needs Node ≥ 22.20 while nvm here has 20.9,
+  and `skills@1.5.18` claims Node 18 but calls `util.styleText`, which arrived in 20.12 — run
+  `npx -p node@22.20.0 -p skills@<v> -- skills add …`. It sends telemetry unless `DO_NOT_TRACK=1`. And
+  `-a claude-code` alone **copies** into `.claude/skills`; `-a universal -a claude-code` gives this
+  repo's shape (content in `.agents/skills`, a Claude symlink).
 
 ## Repo hardening baseline (every repo, set 2026-08-08)
 
@@ -416,6 +429,13 @@ everywhere would turn every one-line Dockerfile bump and every umbrella submodul
   results that will never exist. GitHub's own merge button treats `skipping` as satisfied; nothing
   else does. Such a PR needs a human click or a `workflow`-scoped token. `langchain-opensandbox#2` sat
   in exactly this state.
+
+- **`muffin-ingest` is in no tier: it has no ruleset and no branch protection.** Measured 2026-09-16 —
+  `gh api repos/gururafiki/muffin-ingest/rules/branches/main` returns `[]`, and the branch-protection
+  API says "Branch not protected". The repo was created 2026-09-09, after this baseline, and the
+  rework design's "Tier-1 protection like `muffin-agent`" was never applied. Nothing on GitHub gates
+  its `main`, so "PR → checks → merge" holds there by discipline alone until a ruleset is added
+  (tracked in `todos.md`).
 
 The umbrella repo cannot have CodeQL — GitHub reports `languages: []` for it, so default setup is
 unavailable. It gets guardrails only. Don't keep re-trying it.
@@ -3789,3 +3809,13 @@ These rules govern how Claude approaches planning, implementation, and communica
 5. **Keep documentation up to date** — After every implementation, update README.md, docs/, roadmap.md, and any other relevant docs as applicable. Add VSCode launch configurations where reasonable. Always include documentation updates as the last step of implementation plans. When trade-offs or tech debt are accepted, document the limitations and add action items to roadmap.
 
 6. **Memorize lessons in CLAUDE.md** — If the user shares information that will be useful in future sessions (e.g. future roadmap tasks, corrections, disagreements, repeating feedback patterns, new constraints), record it in CLAUDE.md. When in plan mode, include the CLAUDE.md memory update as an explicit plan step.
+
+7. **Plan in stages, and write the spec to `docs/specs/<yyyy>-<mm>-<dd>-<name>.md`** — review what exists → data model → high-level architecture → low-level design → validate against the real provider → dependencies and isolation → UI → metrics → gap review. Present options with trade-offs at every stage, and ask rather than assume. The stages are spelled out in `dagster-ingestion-best-practices`. This location overrides the brainstorming skill's `docs/superpowers/specs/` default; the specs already there stay put.
+
+8. **Implement in stages that end live** — components → tests → a local run on a tiny subset → parity when replacing data → PR → a live run on a tiny subset → continuous ingestion and backfill, without waiting for the drain → observability, UI, docs → review.
+
+9. **Change the data model rather than work around it** — expand/contract: new tables beside the old, re-point readers, keep the old as a backup. Every action left for later gets a note at `docs/deferred/<yyyy>-<mm>-<dd>-<name>.md` (why, context links, what to do, done when) plus a dated line in `todos.md`.
+
+10. **Deploy only through a PR** in deployable repos (`muffin-ingest`, `muffin-deployment`, `muffin-ui`, `muffin-agent`, the `*-docker` repos): PR → checks green → merge. Umbrella docs, skills and submodule re-pins push directly.
+
+11. **Capture what you learn as memory or skills** — generalised feedback or a stated preference → memory, and the skill it concerns. A procedure that took several iterations or failed first (testing a pipeline locally, reaching Grafana, deploying, reading ingestion logs) → a new skill in the owning submodule, mirrored here.

@@ -1565,6 +1565,24 @@ A Python library + a task ledger in Postgres + Dagster, replacing the 7,891-line
 function. **Nothing has moved yet** — the edge function still ingests everything and families are
 cut over one at a time.
 
+### Deferred (dated) — each line has a note in `docs/deferred/`
+
+- [ ] due 2026-11-15 — Dagster run pruning deletes the materializations the partition grid relies on
+  (first affected: price history, 2026-12-10) — docs/deferred/2026-09-16-dagster-pruning-erases-partition-state.md
+- [ ] due 2026-10-16 (or before the first keyed provider's raw asset) — redact API keys from raw
+  document URLs — docs/deferred/2026-09-16-raw-request-credentials.md
+
+### Structure and tooling (2026-09-16)
+
+- [ ] **`muffin-ingest` to a `dg` workspace + uv + Dagster 1.13** — `libs/muffin-ingest-lib/` (no
+  Dagster) and `projects/muffin-ingest/` (`defs/<family>/` by stage), with names kept identical and
+  proven by a definitions snapshot test. The target layout is written up in
+  `dagster-ingestion-best-practices` › `references/project-structure.md`.
+- [ ] **`muffin-ingest` has no ruleset and no branch protection** — measured 2026-09-16
+  (`gh api repos/gururafiki/muffin-ingest/rules/branches/main` → `[]`). It was created after the
+  2026-08-08 hardening baseline, so "PR → checks → merge" holds there by discipline only. Adding a
+  Tier-1 ruleset (PR required, required `quality.yml` check) is a GitHub settings change — ask first.
+
 ### Phase 0 — stabilise — DONE 2026-09-09
 
 - [x] **Root disk 93% → 76%.** The `reclaim-old-docker-root` action had NEVER worked: its marker
