@@ -3762,6 +3762,91 @@ already on disk and never a re-fetch. Design:
   `yahoo_chart` and the openbb routes already did, and the test routes through the cache so the two
   rules give different answers.
 
+### Four days of failed runs that no gauge reported (2026-09-16)
+
+Found by accident while writing the operational skills, not by any alert: **every Dagster run from
+2026-09-13 to 2026-09-16 FAILED** — heartbeat, daily prices, indices, FX, pruning — and `price_bar`,
+`security_return` and `index_return` stopped at 2026-09-11. Fixed in muffin-ingest#39 and rolled.
+**The recovery was not complete, and the first scheduled night since, 2026-09-17 00:00 UTC,
+succeeded on every run while publishing a half price day, 1 of 61 index scopes and no FX.** Each
+cause is below; the data was re-run on 09-17 and the two code defects fixed in muffin-ingest#40.
+The user took four decisions the same day, shipped in muffin-ingest#42 and muffin-deployment#379;
+each deferred note records its decision:
+- the Yahoo chart endpoint refreshes synchronously on expiry, and FX fails a stale weekday;
+- `security_return` uses eager without the missing-deps gate, ignoring the history lane;
+- yfinance is paced at 4 s a call;
+- the heartbeat takes no pool.
+
+- **EVERY RUN RE-IMPORTS `definitions.py`, SO A MODULE-LEVEL SIDE EFFECT RUNS ONCE PER RUN.**
+  `metrics.start_exporter()` ran at import. A run is a subprocess that inherits
+  `PROMETHEUS_MULTIPROC_DIR`, so each run first **deleted every counter file** in the shared
+  directory, then tried to bind the port the code location already serves and died loading
+  definitions with `OSError: [Errno 98] Address already in use`. The fix makes the port decide
+  ownership: bind first; a process that finds it served is a run and leaves the directory alone.
+  **Dagster's own step subprocess reproduces it locally** — `dagster asset materialize` with the
+  directory set: the old code fails with Errno 98, the fix reaches the asset body.
+- **WHY NOTHING SAID SO.** The exporter's Prometheus target stayed UP; the unit tests called
+  `start_exporter` once per process, so a second caller never existed in them; Grafana has no panel
+  or alert over `dagster.runs` yet (Phase 3 step 3b); and Dagster OSS freshness policies do not
+  alert. **Checking that a new component serves is not checking that the runs around it still
+  succeed.** After any roll, launch the heartbeat and read its status.
+- **A RUN'S ERROR IS NOT IN `user_message`.** The event row's `user_message` is empty for engine
+  failures; the exception is under `dagster_event.event_specific_data.error` (`cls_name`, `message`,
+  `stack`). The `PIPELINE_FAILURE` event itself only says "marked as failed from outside the
+  execution context".
+- **http-cache HANDS THE FIRST REQUEST AFTER EXPIRY THE STALE ENTRY.** `proxy_cache_use_stale …
+  updating` with `proxy_cache_background_update on` serves the old body while refreshing in the
+  background. The FX spot backfill at 12:12:04Z was logged `STALE` and received Friday's chart
+  (`regularMarketTime` 2026-09-11 21:29Z), so `fx_rate` refused every point and **materialized four
+  partitions with 0 rows**. A lane that fetches each URL once per period therefore always reads the
+  previous period — `docs/deferred/2026-09-16-http-cache-serves-stale-to-daily-lanes.md`. Read
+  `docker service logs muffin_http-cache`: the log format leads with `$upstream_cache_status`.
+- **A RUN-GRANULARITY POOL IS HELD FOR THE WHOLE RUN.** Every stage-2 asset and the heartbeat use
+  `pool="sql"`, so the 43-minute prices backfill queued the indices and FX recovery runs for ~40
+  minutes. At midnight the whole chain ran serially, and the heartbeat started 111 s late, 4 s after
+  `daily_prices` ended. With `max_concurrent_runs: 3`, only a pool can do that —
+  `docs/deferred/2026-09-16-sql-pool-run-granularity-blocks-every-lane.md`.
+- **A SUCCESSFUL RUN IS NOT A COMPLETE PARTITION, AND THE COUNTER THAT SHOULD SAY SO SAID ZERO.**
+  yfinance refused call 329 of ~601 for the 09-16 price partition. `_collect` broke out of the loop
+  without adding the rest to `unasked`, although its budget and transport branches both do, so it
+  reported `unasked=0` beside `answered=5974 empty=586` of 12,017. That means 5,437 securities were
+  never asked, the partition materialised, and `every_askable_security_was_asked` passed. **Sum the
+  outcome counters against `subjects`**; a gap is a branch that forgot to count. #40 fixes the
+  counter. Whether a throttle should fail the partition is open:
+  `docs/deferred/2026-09-17-a-throttled-day-partition-still-materialises.md`.
+- **yfinance SENDS A SESSION IT HAS NOT CLOSED WITH `close: NaN`, AND NaN IS A FLOAT.** At 00:00:34
+  UTC on 09-17, four hours after the US close, 60 of 61 index proxies came back for 09-16 with
+  open/high/low/volume and a NaN close. `isinstance(close, float)` admitted it as the newest bar,
+  `_eligible` refused each whole series on `isfinite`, and 60 scopes kept 09-15. **Postgres cannot be
+  the backstop:** `numeric` accepts `'NaN'` and sorts it above every number, so
+  `price_bar_close_positive` (`close > 0`) passes it, and the price lane's `normalise` (`close <= 0`)
+  would have stored one. `prices.close_of` is now the one finite-and-positive rule every lane reads.
+  The backfill a few hours earlier never met this: by then the session had closed.
+- **`security_return` HAS NEVER BEEN MATERIALISED BY ITS `eager()` CONDITION**, and "the sensor ships
+  stopped" (fixed 09-11) was only the first blocker. Every materialisation on record was a hand-run.
+  The daemon stores the reason in `dagster.asset_daemon_asset_evaluations`: `~any_deps_missing` was
+  false. `price_bar` was missing its 09-11 partition, which no run had ever covered, and
+  `price_bar_history` has unfilled `security` partitions by design. An unpartitioned asset depends on
+  **every** upstream partition, so eager waits for a state Lane B never reaches —
+  `docs/deferred/2026-09-17-security-return-never-auto-materialises.md`.
+- **A `single_run` RANGE WRITES THE RUN'S METADATA ONTO EVERY PARTITION IN IT.** The FX retry's four
+  partitions all read `rows=82`, including 09-13, a Sunday with no rates. Find empty days by counting
+  the table per date, never from partition metadata.
+- **A ROLL KILLS IN-FLIGHT RUNS.** `DefaultRunLauncher` runs each one as a `multiprocessing` child
+  of the code-location server (`dagster/_grpc/server.py`, `StartRun`), so replacing that container
+  ends them, and `run_monitoring` is off. Wait for long runs, or re-launch them after the roll.
+- **Grafana's API rejects the admin password in its container environment (401).**
+  `GF_SECURITY_ADMIN_PASSWORD` is applied only when Grafana's database is first created. Measured
+  2026-09-17: the container's value and the password Grafana stored at first start have different
+  sha256, and the stored one, from the user's setup record, authenticates (`/api/user` 200 through
+  Access). So `GRAFANA_ADMIN_PASSWORD` is not the working credential until Ansible resets the stored
+  one. To read a panel without it, replay its SQL on the node as `metrics_ro` (`psql -U supabase_admin`,
+  then `set role metrics_ro` — `postgres` is not a superuser here and cannot `set role`).
+- **The Access service token opens every Access host for API calls**, not only `muffin-api`: 200 from
+  `muffin-dagster/server_info`, `muffin-grafana/api/health` and `muffin-portainer/api/system/status`
+  on 2026-09-17. It is a Terraform output and is not among `muffin-deployment`'s GitHub secrets, so
+  ask the user for it.
+
 ## Running an OpenSandbox server locally
 
 - **`docker run -d -p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock opensandbox/server:latest`.**

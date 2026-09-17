@@ -1571,6 +1571,29 @@ cut over one at a time.
   (first affected: price history, 2026-12-10) — docs/deferred/2026-09-16-dagster-pruning-erases-partition-state.md
 - [ ] due 2026-10-16 (or before the first keyed provider's raw asset) — redact API keys from raw
   document URLs — docs/deferred/2026-09-16-raw-request-credentials.md
+- [ ] check 2026-09-18 — FX spot writes ~41 rates for 09-17 with no hand-run (decided 09-17: synchronous
+  refresh on expiry, muffin-deployment#379, plus a stage-2 guard failing a stale weekday,
+  muffin-ingest#42) — docs/deferred/2026-09-16-http-cache-serves-stale-to-daily-lanes.md
+- [ ] check 2026-09-23 — `sql` pool granularity (the heartbeat was taken off the pool 09-17 in
+  muffin-ingest#42; op granularity still open) —
+  docs/deferred/2026-09-16-sql-pool-run-granularity-blocks-every-lane.md
+- [ ] check 2026-09-19 — `security_return` rebuilds by itself after `daily_prices` on the nights of 09-18
+  and 09-19 (decided 09-17: eager without the missing-deps gate, ignoring the history lane,
+  muffin-ingest#42) — docs/deferred/2026-09-17-security-return-never-auto-materialises.md
+- [ ] check 2026-09-24 — three nights of `raw_price_bars` with `throttled=0 unasked=0` after pacing to
+  4 s/call (muffin-ingest#42) — docs/deferred/2026-09-17-a-throttled-day-partition-still-materialises.md
+- [ ] check 2026-10-01 — the nightly finviz sector snapshot is stamped with the next calendar day —
+  docs/deferred/2026-09-17-sector-snapshot-dated-by-the-clock.md
+- [x] 2026-09-17 — `muffin-dagster-operations/scripts/evaluation_tree.py` docstring: an AND evaluates
+  later operands only over what earlier ones left true, so after a false operand the rest print
+  `false` (muffin-deployment#380)
+- [ ] small — reconcile Grafana's stored admin password with `GRAFANA_ADMIN_PASSWORD` in Ansible
+  (`grafana cli admin reset-admin-password` from the secret), so the secret is the working credential
+- [x] 2026-09-17 — recovery from the exporter incident (muffin-ingest#39). The 09-16 backfills
+  reached 09-15 but missed the 09-11 price partition, and the first scheduled night published a
+  half price day (throttle), 1 of 61 index scopes (NaN close) and no FX (stale cache). Re-run on
+  09-17 and verified: FX `aefcnkxt` (41 rates), indices `vfsaitpa` (61/61 scopes), prices `hsctpnih`
+  (09-11..09-16, ~11.5k bars a day, `unasked=0`), `security_return` hand-run `374da72e` (as_of 09-16).
 
 ### Structure and tooling (2026-09-16)
 
