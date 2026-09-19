@@ -3847,6 +3847,55 @@ each deferred note records its decision:
   on 2026-09-17. It is a Terraform output and is not among `muffin-deployment`'s GitHub secrets, so
   ask the user for it.
 
+### The two nights that judged four decisions, and the workspace move (2026-09-19)
+
+Three of the 2026-09-17 decisions held and one was falsified; the refactor that shipped alongside
+them is proven by a snapshot rather than by reading the diff.
+
+- **A RATE YOU CONTROL CANNOT BUY A BUDGET THE OTHER SIDE HAS WITHDRAWN.** Pacing yfinance to 4 s a
+  call (~15/min) was decided on a measurement — 601 calls unthrottled — and the 09-18 night proved
+  it: **602 calls, `answered=11282 empty=739 throttled=0 unasked=0`** against 12,021 subjects. The
+  very next night the provider refused at **call 138**, and the 10:42 recovery run refused at **call
+  138 again**, ten hours later at the same pace. Same number twice rules out the hour, the night's
+  cumulative volume and our own pacing: the allowance itself fell from ~600 calls to ~138 (~1,650
+  symbols) between two consecutive days. `market.price_bar` therefore holds **2,460 rows for Friday
+  2026-09-18** against 11,282 for 09-17. A second recovery was deliberately NOT launched — this file
+  already records that draining faster than a provider allows drains less.
+- **THE COUNTER FIX IS WHAT MADE THAT LEGIBLE, AND IT IS AN ARITHMETIC IDENTITY, NOT A REPORT.**
+  Both nights' counters sum to `subjects` EXACTLY (11,282 + 739 = 12,021; 2,320 + 420 + 9,516 =
+  12,256). Before muffin-ingest#40 the throttle branch forgot to count, so a night that asked 46% of
+  the universe reported `unasked=0` and the partition's completeness claim was silently false.
+- **AN `eager()` THAT IGNORES A PERPETUALLY-INCOMPLETE LANE FIRES; ONE THAT DOES NOT, NEVER WILL.**
+  `security_return` rebuilt itself one minute after each night's `daily_prices` (`b21560a1` 09-18
+  00:42, `c3b53619` 09-19 00:10, ~103k periods each) — the first automatic materialisations it has
+  ever had. `price_bar_history` still has unfilled `security` partitions, which is exactly the state
+  that blocked it before, so ignoring that lane is the load-bearing half of the condition.
+- **A CANARY MUST NOT QUEUE BEHIND WHAT IT WATCHES.** Off the `sql` pool the heartbeat waits **3-7 s**
+  across 48 hourly runs, including the midnight when `daily_prices` held the pool for 2,447 s —
+  against 111 s before. The lanes themselves are still serialised (`daily_indices` ~38 s,
+  `daily_prices` ~62 s behind `daily_fx`), which is the open half of that note.
+- **A REFACTOR IS PROVEN BY A SNAPSHOT TAKEN BEFORE IT, NOT BY READING THE DIFF.** muffin-ingest#43
+  moves the repo to a `dg` workspace (`libs/muffin-ingest-lib` with no Dagster, `projects/muffin-ingest`
+  with `defs/<family>/` by stage) and bumps Dagster 1.12.22 -> 1.13.22 in the same change. The gate is
+  a test committed FIRST that fingerprints every name Dagster keys state on plus the settings under
+  them, mutation-proven against ten identity changes; it passes untouched after the move, and the same
+  fingerprint was measured identical on both Dagster versions before anything moved. Names are state:
+  a rename orphans materialization history, instigator state and cursors, and nothing fails.
+- **FOUR THINGS ABOUT `dg`/uv WORTH NOT RE-DERIVING.** `dg`'s `[cli.telemetry]` is read from the
+  USER config (`~/.config/dg.toml`), never from the repo's `dg.toml`, so the only switch covering
+  both Dagster and `dg` is `telemetry: enabled: false` in the `dagster.yaml` that `DAGSTER_HOME`
+  points at. `load_from_defs_folder` finds the project by walking up to a `pyproject.toml` carrying
+  `[tool.dg.project]`, which is why the image installs the project rather than copying the package
+  beside its dependencies. An installed library needs a **`py.typed`** marker or every consumer's
+  mypy reports `missing library stubs` for code it used to check happily as a source tree. And the
+  `code_location_name` mismatch warning `dagster definitions validate` prints ~20 times does NOT
+  appear under `dagster api grpc`, which is how production loads — measured, 2.0 s to serving.
+- **THE IMAGE JOB WAS `main`-ONLY, SO THE DOCKERFILE WAS FIRST EXERCISED AFTER THE MERGE THAT COULD
+  BREAK IT.** Same shape as muffin-ui's native path that no PR check ever ran. It now builds on every
+  PR (loading into the runner's daemon, pushing only from `main`) and runs its three in-image checks
+  there: entrypoints, hub namespaces, and `definitions validate` as uid 10001. The whole arm64 build
+  is ~30 s with uv, so the gate is nearly free.
+
 ## Running an OpenSandbox server locally
 
 - **`docker run -d -p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock opensandbox/server:latest`.**

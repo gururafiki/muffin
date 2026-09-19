@@ -1,7 +1,18 @@
 # One long run holds the shared `sql` pool and queues every other lane behind it
 
-Created 2026-09-16 · **Check 2026-09-23** · Status: **first step decided and shipped 2026-09-17**
-(the heartbeat takes no pool); pool granularity stays open
+Created 2026-09-16 · **Check 2026-09-23** · Status: the heartbeat fix is **verified 2026-09-19**
+(waits 111 s -> 3-7 s); pool granularity stays open
+
+## Verified (2026-09-19)
+
+The canary is out of the queue. Heartbeat `wait_s` over the two nights runs **3–7 s** across 48
+hourly runs, including the midnights when all three daily lanes start at once — against **111 s**
+on 09-17, when it sat on `sql` behind `daily_prices`. The 09-18 night is the strong case: the price
+run held the pool for 2,447 s and the 00:07 heartbeat still waited 7 s.
+
+The rest stays open, and the same two nights re-measured it: `daily_indices` waited 38–39 s and
+`daily_prices` 62–64 s behind `daily_fx` at every midnight, so the lanes are still serialised by
+`granularity: run` — tolerable at 25 s of FX, and the thing to revisit if a lane's runtime grows.
 
 ## Decision (2026-09-17)
 

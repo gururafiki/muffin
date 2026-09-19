@@ -1571,17 +1571,22 @@ cut over one at a time.
   (first affected: price history, 2026-12-10) — docs/deferred/2026-09-16-dagster-pruning-erases-partition-state.md
 - [ ] due 2026-10-16 (or before the first keyed provider's raw asset) — redact API keys from raw
   document URLs — docs/deferred/2026-09-16-raw-request-credentials.md
-- [ ] check 2026-09-18 — FX spot writes ~41 rates for 09-17 with no hand-run (decided 09-17: synchronous
-  refresh on expiry, muffin-deployment#379, plus a stage-2 guard failing a stale weekday,
-  muffin-ingest#42) — docs/deferred/2026-09-16-http-cache-serves-stale-to-daily-lanes.md
-- [ ] check 2026-09-23 — `sql` pool granularity (the heartbeat was taken off the pool 09-17 in
-  muffin-ingest#42; op granularity still open) —
+- [x] 2026-09-19 — FX spot writes the day's own rates with no hand-run: 41 rates for every weekday
+  through 09-18 across two scheduled nights (was 0 rows). Note CLOSED —
+  docs/deferred/2026-09-16-http-cache-serves-stale-to-daily-lanes.md
+- [ ] check 2026-09-23 — `sql` pool granularity. The heartbeat half is VERIFIED (waits 111 s -> 3-7 s
+  over 48 runs); the lanes are still serialised — indices wait ~38 s and prices ~62 s behind FX at
+  every midnight, which is the part still open —
   docs/deferred/2026-09-16-sql-pool-run-granularity-blocks-every-lane.md
-- [ ] check 2026-09-19 — `security_return` rebuilds by itself after `daily_prices` on the nights of 09-18
-  and 09-19 (decided 09-17: eager without the missing-deps gate, ignoring the history lane,
-  muffin-ingest#42) — docs/deferred/2026-09-17-security-return-never-auto-materialises.md
-- [ ] check 2026-09-24 — three nights of `raw_price_bars` with `throttled=0 unasked=0` after pacing to
-  4 s/call (muffin-ingest#42) — docs/deferred/2026-09-17-a-throttled-day-partition-still-materialises.md
+- [x] 2026-09-19 — `security_return` rebuilt itself on both nights with no hand-run, one minute after
+  each `daily_prices` (runs `b21560a1` 09-18 00:42, `c3b53619` 09-19 00:10; ~103k periods each).
+  Note CLOSED — docs/deferred/2026-09-17-security-return-never-auto-materialises.md
+- [ ] **due 2026-09-20 — DECIDE: the 4 s pacing did not hold.** 09-18 was clean (602 calls,
+  `unasked=0`); on 09-19 the provider refused at **call 138** and again at call 138 on the 10:42
+  recovery, leaving 2,460 bars for Friday 09-18 against ~11.5k. Options are now A (fail and retry),
+  C (materialise + ERROR + re-ask the unasked) or D (a cursor that resumes where the refusal
+  happened); B is falsified. Re-measure the allowance before sizing any of them —
+  docs/deferred/2026-09-17-a-throttled-day-partition-still-materialises.md
 - [ ] check 2026-10-01 — the nightly finviz sector snapshot is stamped with the next calendar day —
   docs/deferred/2026-09-17-sector-snapshot-dated-by-the-clock.md
 - [x] 2026-09-17 — `muffin-dagster-operations/scripts/evaluation_tree.py` docstring: an AND evaluates
@@ -1594,6 +1599,13 @@ cut over one at a time.
   half price day (throttle), 1 of 61 index scopes (NaN close) and no FX (stale cache). Re-run on
   09-17 and verified: FX `aefcnkxt` (41 rates), indices `vfsaitpa` (61/61 scopes), prices `hsctpnih`
   (09-11..09-16, ~11.5k bars a day, `unasked=0`), `security_return` hand-run `374da72e` (as_of 09-16).
+
+- [ ] **muffin-ingest#43 is open and unmerged on purpose** — the `dg` workspace, Dagster 1.13.22 and
+  uv locks. Merging publishes `:latest`, which any later deploy would pick up, so it merges when the
+  roll is wanted. Gate met: the definitions snapshot taken before the move passes untouched, CI is
+  green including an in-image load as uid 10001. Outstanding: a local tiny-subset run against a
+  throwaway Postgres (Docker Desktop would not start here on 09-19), then a
+  `dagster-pipeline-local-test` skill written from it.
 
 ### Structure and tooling (2026-09-16)
 

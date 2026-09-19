@@ -1,7 +1,21 @@
 # `security_return` has never been materialised by its automation condition
 
-Created 2026-09-17 · **Due 2026-09-19** · Status: **decided and shipped 2026-09-17** — verify on the
-nights of 09-18 and 09-19
+Created 2026-09-17 · Status: **CLOSED 2026-09-19** — it rebuilt itself unaided on both nights
+
+## Verified (2026-09-19)
+
+Both nights rebuilt it with no hand-run, and the run that did it is an `__ASSET_JOB` launched by the
+automation sensor rather than by a schedule:
+
+- **09-18 00:42**, run `b21560a1`, 313 s — `daily_prices` ended at 00:41 after 2,447 s, and the
+  rebuild followed it by one minute: `securities=11756 with_returns=11712 periods=103028`.
+- **09-19 00:10**, run `c3b53619`, 283 s — `securities=11760 with_returns=11716 periods=103052`.
+
+So ignoring the history lane is what made it fire: `price_bar_history` still has unfilled `security`
+partitions, which is exactly the state that held it before. Note the 09-19 rebuild ran off a
+**partial** price day (the provider refused that night), so its newest `as_of` is honest about what
+was collected rather than about what the market did — see
+`2026-09-17-a-throttled-day-partition-still-materialises.md`.
 
 ## Decision (2026-09-17)
 

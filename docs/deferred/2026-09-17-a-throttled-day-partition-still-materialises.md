@@ -1,13 +1,29 @@
 # A throttled daily price run still materialises its partition
 
-Created 2026-09-17 · **Check 2026-09-24** · Status: counter fixed in muffin-ingest#40; **pacing
-decided and shipped 2026-09-17** (muffin-ingest#42) — watch three nights
+Created 2026-09-17 · **Due 2026-09-20** · Status: counter fixed and VERIFIED (muffin-ingest#40);
+**the pacing decision did NOT hold — measured 2026-09-19, decision reopened**
 
 ## Decision (2026-09-17)
 
 Option **B**, pace to the measured rate: `Yfinance.min_seconds_between_calls` 1.0 → 4.0 (~15
 calls/min; the 09-17 recovery ran at that rate with `throttled=0`). Shipped in muffin-ingest#42
 (rolled 11:42 UTC). The check stays WARN. Options A and C return only if nights still throttle.
+
+## What the three nights showed (2026-09-19)
+
+- **09-18 00:00 (partition 09-17): the decision worked.** 602 calls, `answered=11282 empty=739
+  throttled=0 unasked=0` against `subjects=12021`, 2,447 s. The counters sum to `subjects` exactly,
+  which is muffin-ingest#40 doing its job.
+- **09-19 00:00 (partition 09-18): refused at call 138 of ~613.** `answered=2320 empty=420
+  throttled=1 unasked=9516` — again summing exactly to `subjects=12256` — and the partition
+  materialised with **2,320 bars for a Friday** against ~11.5k on a normal day.
+- **The recovery re-run at 10:42 UTC hit the identical wall: `calls=138`, `unasked=9516`, 2,460
+  bars.** Same count, ten hours later, at the same 4 s pacing. So this is not the hour, not the
+  night's cumulative volume, and not a pace the run controls: between 09-18 and 09-19 the provider's
+  tolerance for this node fell from 602 calls to ~138 (~1,650 symbols).
+- Consequence: `market.price_bar` holds **2,460 rows for 2026-09-18** against 11,282 for 09-17, and
+  `security_return` rebuilt off the partial day. A second recovery was NOT launched: hammering a
+  refusing provider drains less, which this repo has already paid for once.
 
 ## Why it is deferred
 
@@ -33,17 +49,23 @@ trade between provider budget, freshness and how the partition grid reads, so it
 
 ## What to do
 
-1. Decide with the user. Options to present:
+1. Decide with the user — the options are now these, with B removed because it was tried:
    - **A. Fail the partition on a throttle.** Raise `dg.RetryRequested(max_retries=…,
      seconds_to_wait=…)` so Dagster retries later. Honest grid; the retry re-asks every subject,
      roughly doubling that night's calls.
-   - **B. Pace to the measured limit.** Set `min_seconds_between_calls` so a night stays under ~14
-     calls/min (~43 min for 601 calls), and keep A as the fallback.
+   - ~~**B. Pace to the measured limit.**~~ Shipped 09-17 at 4 s/call and **falsified 09-19**: two
+     runs ten hours apart both stopped at exactly 138 calls. A rate this side controls cannot buy a
+     budget the other side has withdrawn.
+   - **D. Resume where the refusal happened.** A cursor over the day's subjects, so the next run —
+     scheduled or a retry — asks only the `unasked` remainder instead of restarting at the top of
+     the weight order. Needs the ledger rather than a counter, and makes a full day take several
+     runs, which is what a shrinking budget implies whatever else is chosen.
    - **C. Materialise, but raise the check to `ERROR`** and add a "re-ask only the unasked" path via
      the ledger. Cheapest in calls, and the most code.
 2. After the choice, prove it with a test where the fake provider refuses mid-run.
-3. After #40 rolls, watch the next three nights' `unasked` and `throttled` metadata on
-   `raw_price_bars`.
+3. Whatever is chosen, re-measure the provider's actual allowance first: the 602-vs-138 collapse
+   between two consecutive nights is the input every option is sized against, and one more
+   observation says whether it is a new steady state or a temporary block.
 
 ## Done when
 

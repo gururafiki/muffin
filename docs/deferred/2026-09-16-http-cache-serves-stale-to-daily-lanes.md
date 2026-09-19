@@ -1,7 +1,15 @@
 # http-cache serves the previous fetch to a lane that fetches once per period
 
-Created 2026-09-16 · **Due 2026-09-18** · Status: **decided and shipped 2026-09-17** — verify on the
-2026-09-18 00:00 run
+Created 2026-09-16 · Status: **CLOSED 2026-09-19** — two scheduled nights each wrote the day's own
+rates with no human fetch in between
+
+## Verified (2026-09-19)
+
+`market.fx_rate` holds **41 rates for every weekday** through 09-18, the two nights since the
+synchronous-refresh location went live: run `041807db` (09-17) and `e0db8c74` (09-18, `documents=38
+points=228 live_points=38 outside_window=152 rows=41`). Before the fix the same lane wrote **0 rows**
+and materialised the partition anyway. The guard has not had to fire, which is the right outcome:
+nothing stale reached it.
 
 ## Decision (2026-09-17)
 
@@ -9,8 +17,10 @@ Option **A + C**. A 23-hour TTL was considered and rejected: the first request a
 is still served the old body.
 
 - muffin-deployment#379: `location /yahoo/v8/finance/chart` with no `updating` and
-  `proxy_cache_background_update off` (TTL stays 1 h; still stale on errors, 429 and 5xx). Deploy
-  dispatched 2026-09-17.
+  `proxy_cache_background_update off` (TTL stays 1 h; still stale on errors, 429 and 5xx). Deployed
+  2026-09-17 (run 35217512446, 11:47–11:58 UTC): http-cache restarted at 11:55:45 and the location
+  is in its live config. No chart request reached it by 13:05, so the first log proof of `EXPIRED`
+  or `MISS` rather than `STALE` is the 09-18 00:00 FX run.
 - muffin-ingest#42 (rolled 11:42 UTC): `fx_rate` fails a weekday partition with no rate inside its
   window from bodies that carry rates, naming it. Accepted edge: 25 Dec and 1 Jan fail.
 
