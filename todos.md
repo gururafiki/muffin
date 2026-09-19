@@ -1599,8 +1599,16 @@ cut over one at a time.
   the pipeline's writer and Grafana's reader missing. Production is unaffected (the roles predate
   the cutover). **Confirmed 2026-09-19 against the committed SQL** — the baseline names them 13
   times, first at line 10145, and `migrations/` has no `create role` at all, so it aborts BEFORE
-  that `alter role`. The apply-failure reproduction is still owed and is to be run under Docker —
+  that `alter role`. **REPRODUCED under Docker 2026-09-19**: the baseline fails on a container with
+  only the Supabase roles, and all 11 migrations apply once the two are created —
   docs/deferred/2026-09-19-a-rebuilt-database-has-no-ingest-or-metrics-role.md
+- [ ] **due 2026-09-26 — a rebuilt database is schema-correct and REFERENCE-EMPTY.** The baseline
+  has zero INSERT/COPY statements, so `market.data_source` is 0 against production's 24 and
+  `index_scope` 0 against 73 — while `return_period`, `ingest.facet` and `provider_budget` ARE
+  seeded by committed migrations, which is why nobody has noticed. The first write of every lane
+  then fails `fx_rate_source_code_fkey ... Key (source_code)=(yfinance) is not present`, and the
+  indices lane publishes nothing while succeeding. Found by the first real use of the local Docker
+  harness — docs/deferred/2026-09-19-a-rebuilt-database-has-no-reference-data.md
 - [ ] check 2026-10-01 — the nightly finviz sector snapshot is stamped with the next calendar day.
   **DECIDED 2026-09-19: option A** — stage 2 stamps it with the newest completed US session read
   from our own `price_bar` for `IVV`, so it agrees with the country rows by construction; on a night

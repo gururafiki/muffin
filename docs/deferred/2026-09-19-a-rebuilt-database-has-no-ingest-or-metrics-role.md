@@ -1,7 +1,20 @@
 # Nothing that runs today creates `ingest_rw` or `metrics_ro`
 
-Created 2026-09-19 · **Due 2026-09-26** · Status: **confirmed against the committed SQL**; the
-apply-failure reproduction is still owed, and must be done under Docker
+Created 2026-09-19 · **Due 2026-09-26** · Status: **REPRODUCED under Docker 2026-09-19** — and the
+same run found a larger sibling, `2026-09-19-a-rebuilt-database-has-no-reference-data.md`
+
+**The reproduction, in full.** A `postgres:17-alpine` container given only the roles the Supabase
+image itself creates (`anon`, `authenticated`, `service_role`, `supabase_admin`, `authenticator`,
+`supabase_auth_admin`, `supabase_storage_admin`) refuses the FIRST committed migration:
+
+```
+20260910000000_baseline.sql                          FAILED
+ERROR:  role "metrics_ro" does not exist
+```
+
+`create role ingest_rw nologin; create role metrics_ro nologin;` on a clean container, and all
+**eleven** committed migrations then apply in order with no other change. So the baseline is the
+first failure, not the `alter role ... bypassrls` the note originally named — that one never runs.
 
 **Confirmed 2026-09-19 by reading the files themselves, which needs no database and is therefore
 not a claim about anyone's local setup:** `migrations/20260910000000_baseline.sql` names these roles

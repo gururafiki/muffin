@@ -370,14 +370,17 @@ only reads `SKILL.md` files under `.claude/skills/`, so the symlink is what make
   copies byte-identical.
 - **Adding a new skill:** commit it into the owning submodule first (`<submodule>/.agents/skills/<name>`
   + symlink), then copy the same folder + symlink into the umbrella root and commit there too.
-- **Ingestion on Dagster loads two skills, and they divide the work.** `dagster-expert` is Dagster's
+- **Ingestion on Dagster loads three skills, and they divide the work.** `dagster-expert` is Dagster's
   official skill (dagster-io/skills, Apache-2.0), vendored **verbatim** into `muffin-ingest` and pinned
   to the Dagster version the project runs: `skills-lock.json` records source, tag and hash, and it is
   re-vendored at the matching tag on every Dagster upgrade, never edited. It owns the generic API.
   `dagster-ingestion-best-practices` (canonical in `muffin-ingest`) is muffin's layer on top — the
   rules, the planning and implementation stages, raw, modelling, isolation, structure, pitfalls — and
   wins where they differ (this deployment is OSS, so `dg api`, `dg plus` and the Dagster+ MCP server
-  do not apply).
+  do not apply). `dagster-pipeline-local-test` (canonical in `muffin-ingest`, added 2026-09-19) is
+  the third: implementation stage 3, a lane driven against **Postgres in Docker** — never a host
+  install — with the committed migrations applied and one partition of a tiny subset materialised.
+  Its `scripts/local_stack.sh` is the harness.
 - **Vendoring with the `skills` CLI has three traps.** It needs Node ≥ 22.20 while nvm here has 20.9,
   and `skills@1.5.18` claims Node 18 but calls `util.styleText`, which arrived in 20.12 — run
   `npx -p node@22.20.0 -p skills@<v> -- skills add …`. It sends telemetry unless `DO_NOT_TRACK=1`. And
@@ -429,6 +432,15 @@ everywhere would turn every one-line Dockerfile bump and every umbrella submodul
   results that will never exist. GitHub's own merge button treats `skipping` as satisfied; nothing
   else does. Such a PR needs a human click or a `workflow`-scoped token. `langchain-opensandbox#2` sat
   in exactly this state.
+
+  **NARROWER THAN IT READS, MEASURED 2026-09-19 ON muffin-ingest#49.** A PR touching ONLY a skill
+  folder (markdown and a shell script — nothing in either analysed language) showed
+  `CodeQL=NEUTRAL` with both `Analyze` jobs still pending, i.e. exactly the signature above, and
+  then resolved to `Analyze (actions)=SUCCESS`, `Analyze (python)=SUCCESS`, `CodeQL=SUCCESS` and a
+  CLEAN merge state. Default setup analyses the REPOSITORY at the merge commit, not the diff, so
+  with `actions` in the language set there is something to analyse on every PR. **Read a NEUTRAL as
+  pending until the `Analyze` jobs finish** — it is a transient here, and the dead end belongs to
+  repos whose only language has nothing to look at.
 
 - **`muffin-ingest` JOINED TIER 1 ON 2026-09-19; until then nothing on GitHub gated its `main`.**
   Measured 2026-09-16, `gh api repos/gururafiki/muffin-ingest/rules/branches/main` returned `[]` and
