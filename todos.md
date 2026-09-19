@@ -1587,6 +1587,12 @@ cut over one at a time.
   C (materialise + ERROR + re-ask the unasked) or D (a cursor that resumes where the refusal
   happened); B is falsified. Re-measure the allowance before sizing any of them —
   docs/deferred/2026-09-17-a-throttled-day-partition-still-materialises.md
+- [ ] **due 2026-09-26 — nothing that runs today creates `ingest_rw` or `metrics_ro`.** Both are
+  created only in `migrations-legacy/` (206 and 127), which `supabase db push` no longer applies, so
+  a database rebuilt from what is committed aborts at `alter role ingest_rw bypassrls` and leaves
+  the pipeline's writer and Grafana's reader missing. Production is unaffected (the roles predate
+  the cutover). Found by reading, NOT yet reproduced —
+  docs/deferred/2026-09-19-a-rebuilt-database-has-no-ingest-or-metrics-role.md
 - [ ] check 2026-10-01 — the nightly finviz sector snapshot is stamped with the next calendar day —
   docs/deferred/2026-09-17-sector-snapshot-dated-by-the-clock.md
 - [x] 2026-09-17 — `muffin-dagster-operations/scripts/evaluation_tree.py` docstring: an AND evaluates
