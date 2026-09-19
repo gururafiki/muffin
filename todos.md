@@ -1567,7 +1567,9 @@ cut over one at a time.
 
 ### Deferred (dated) — each line has a note in `docs/deferred/`
 
-- [ ] due 2026-11-15 — Dagster run pruning deletes the materializations the partition grid relies on
+- [x] 2026-09-19 — Dagster run pruning deletes the materializations the partition grid relies on —
+      DECIDED: stop pruning entirely (~1 MB/day measured, ~365 MB/year, and the grid query is
+      indexed). Retiring the job is part of the partitioning work above. Original note:
   (first affected: price history, 2026-12-10) — docs/deferred/2026-09-16-dagster-pruning-erases-partition-state.md
 - [ ] due 2026-10-16 (or before the first keyed provider's raw asset) — redact API keys from raw
   document URLs — docs/deferred/2026-09-16-raw-request-credentials.md
@@ -1581,7 +1583,15 @@ cut over one at a time.
 - [x] 2026-09-19 — `security_return` rebuilt itself on both nights with no hand-run, one minute after
   each `daily_prices` (runs `b21560a1` 09-18 00:42, `c3b53619` 09-19 00:10; ~103k periods each).
   Note CLOSED — docs/deferred/2026-09-17-security-return-never-auto-materialises.md
-- [ ] **due 2026-09-20 — BUILD: resume where the refusal happened, the Dagster-native way.** 09-18
+- [ ] **due 2026-09-26 — BUILD: partition raw to the provider's request grain.** Decided 2026-09-19
+  with the user and specced in `docs/specs/2026-09-19-partitioning-to-the-provider-grain.md`: the
+  price lane moves from a day grid to a TICKER grid (the vendor is asked once per ticker regardless
+  — 4 symbols measured as 6 chart requests), a merging I/O manager makes a partition extend rather
+  than be replaced, `prune_dagster_storage` is retired so the grid is durable, and refresh is chosen
+  per lane (cron / observable + `data_version_changed` / `on_missing`). Order: I/O manager and
+  retention first, then the new asset beside the old, then re-point and retire. **Supersedes the
+  throttle option list** — a refused night simply leaves partitions unmaterialised.
+- [x] ~~due 2026-09-20 — resume where the refusal happened~~ — SUPERSEDED by the above. 09-18
   was clean (602 calls, `unasked=0`); on 09-19 the provider refused at **call 138** and again at
   call 138 on the 10:42 recovery, leaving 2,460 bars for Friday 09-18 against ~11.5k, so B is
   falsified. The shape answered 2026-09-19: Dagster has no per-item primitive that fits (a

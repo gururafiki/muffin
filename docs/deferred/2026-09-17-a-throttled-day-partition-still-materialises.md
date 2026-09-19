@@ -9,6 +9,21 @@ Option **B**, pace to the measured rate: `Yfinance.min_seconds_between_calls` 1.
 calls/min; the 09-17 recovery ran at that rate with `throttled=0`). Shipped in muffin-ingest#42
 (rolled 11:42 UTC). The check stays WARN. Options A and C return only if nights still throttle.
 
+## SUPERSEDED 2026-09-19 — the resume mechanism is the partition grid
+
+Options A, C and D are all answers to "how does a DAY partition resume", and the decision taken the
+same afternoon removes the day partition. Once `raw_price_bars` is partitioned by TICKER and the
+I/O manager merges rather than replaces, a throttled night simply leaves ~9,000 partitions
+unmaterialised and the next run collects exactly those — no cursor, no re-ask of what succeeded, and
+the completeness claim is per security rather than per day. Design:
+`docs/specs/2026-09-19-partitioning-to-the-provider-grain.md`.
+
+What does NOT go away, and is now explicit in that spec: an allowance of ~2,740 requests against
+~12,021 securities means a full nightly sweep is unaffordable however it is partitioned. The grid
+makes the shortfall visible and resumable; prioritising the universe is a separate decision.
+
+The reasoning below is kept because it is what the decision was made against.
+
 ## The answer to "what is the most Dagster-native way" (2026-09-19)
 
 Asked by the user, answered from the 1.13.22 source rather than from memory. **Dagster's only

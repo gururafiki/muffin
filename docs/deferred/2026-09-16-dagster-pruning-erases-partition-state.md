@@ -1,5 +1,21 @@
 # Dagster run pruning erases the partition state the pipeline relies on
 
+**DECIDED 2026-09-19: stop pruning entirely.** `prune_dagster_storage` is retired rather than made
+selective. Measured before deciding: the steady state is **~1 MB/day** (231–1,036 rows/day across
+09-13..09-19; the 69 MB and 59 MB days in the record were the one-off history backfill), the table
+is 192 MB of which materializations are 40 MB, and Dagster's partial index
+`(asset_key, dagster_event_type, partition, id)` serves the grid query whatever the row count — so
+the job was destroying partition status to reclaim about **365 MB a year**, and size was never a
+latency question. The docstring's "1.5 GB-limited container" is the container's RAM; the data is on
+`/mnt/data` with 51 GB free.
+
+This becomes load-bearing rather than cosmetic, because the same afternoon's decision makes the
+partition grid the resume mechanism for the price lane
+(`docs/specs/2026-09-19-partitioning-to-the-provider-grain.md`). Per-subject partitioning takes
+growth to ~11 GB/year; revisit past ~20 GB, and prefer "keep the newest materialization per
+(asset, partition), prune the rest by age" over a flat age cut — status needs exactly one row per
+partition, so that rule is flat forever where an age cut is not.
+
 Created 2026-09-16 · **Due 2026-11-15** (first affected materializations age out 2026-12-10) · Status: open
 
 ## Why it is deferred

@@ -3920,9 +3920,12 @@ them is proven by a snapshot rather than by reading the diff.
   is ~30 s with uv, so the gate is nearly free.
 - **DAGSTER HAS NO PER-ITEM PRIMITIVE, AND THAT IS A MEASUREMENT RATHER THAN A PREFERENCE.** Asked
   for the most Dagster-native way to resume a partially-collected partition, the honest answer from
-  1.13.22 is that PARTITIONS are the only per-item state it offers and 12,350 securities x N days is
-  far past the ~25,000 practical ceiling — which is exactly why the ledger exists, and is the one
-  place this repo is deliberately not Dagster-native. What IS native and was not being used:
+  1.13.22 is that PARTITIONS are the only per-item state it offers, and a date x subject grid is
+  12,350 x 365 a year against a documented **100,000** per asset — which is why the ledger exists,
+  and is the one place this repo is deliberately not Dagster-native. **The ceiling is 100,000, not
+  the ~25,000 this file and the muffin-ingest README both claimed**, and the difference decides a
+  real design: one subject grid of 12,016 securities is well inside it and already runs in
+  production. What IS native and was not being used:
   `AutomationCondition.any_checks_match(AutomationCondition.check_failed())`
   (`automation_condition.py:467`, `:623`) re-requests PRECISELY the partition whose asset check
   failed, so the completeness check already written becomes the retry trigger with no sensor and no
@@ -3930,6 +3933,48 @@ them is proven by a snapshot rather than by reading the diff.
   passes as `null`. **The blocker is the I/O manager, not the orchestrator**: `ParquetIOManager`
   REPLACES a partition's file by design, so a run that asks only the remainder overwrites what the
   first run stored. Resumability at stage 1 is a question about file layout, not about scheduling.
+- **A BATCH OF 20 SYMBOLS IS TWENTY UPSTREAM REQUESTS, AND EVERY BUDGET DECISION HERE WAS SIZED ON
+  OUR CALL COUNT INSTEAD.** openbb's yfinance adapter calls `yf.download(..., threads=False)`, which
+  loops `for ticker in tickers` and issues `/v8/finance/chart/{ticker}` for each. Counted on the wire
+  2026-09-19 by hooking `YfData`: **4 symbols asked, 6 chart requests** — AAPL, MSFT, KO, and
+  `SAP.DE` **three times**, a suffixed foreign symbol costing extra round trips. So the 09-18 night
+  reported as 602 calls really asked the vendor ~12,021 times, the 09-19 refusal at "call 138" was
+  ~2,740, and a nightly cross-section needs ~12,021 requests against an allowance measured at
+  ~2,740. Pacing, the counter fix, the throttle options and the recovery backfill each improved the
+  REPORT rather than the spend. **Count URLs, not calls** — and note this file already said "the
+  vendor is asked ONCE PER SYMBOL whatever we do" without anything acting on it, because the
+  partition grid encoded the opposite.
+- **A PARTITION IS THE UNIT THE PROVIDER IS ASKED ABOUT — finer multiplies calls, coarser lies.**
+  finviz serves every sector group in ONE request, so partitioning by group would multiply calls by
+  77 for identical data; a day partition over a per-ticker provider stands for 12,021 independent
+  requests, so it is all-or-nothing and a refusal mid-way materialises a completeness claim that is
+  false. `raw_figi_ticker` is the shape that is already right: per-security partitions,
+  `multi_run(200)`, 10 jobs per OpenFIGI request — 200 partitions for 20 requests. Decided
+  2026-09-19: `docs/specs/2026-09-19-partitioning-to-the-provider-grain.md`.
+- **DAGSTER HAS NO MERGE PRIMITIVE, AND SELF-DEPENDENCY CANNOT SUBSTITUTE FOR ONE.**
+  `TimeWindowPartitionMapping(start_offset=-1)` is the documented self-dependency idiom and is
+  **time-window only**, so once the partition is the ticker there is no "previous" partition, only
+  the same one re-materialised. Extending therefore means a watermark plus an append, and the place
+  for it is the I/O MANAGER — one implementation instead of the rule at every call site, which this
+  codebase has watched rot four separate times.
+- **PRUNING DAGSTER'S EVENT LOG DELETES THE PARTITION GRID, TO RECLAIM ~365 MB A YEAR.**
+  `get_materialized_partitions` runs `select partition, max(id) … group by partition` against
+  `event_logs` itself, so deleting events deletes status. Measured 2026-09-19: steady state is
+  **~1 MB/day** (231–1,036 rows/day over 09-13..09-19; the 69 MB and 59 MB days were the one-off
+  history backfill), the whole table is 192 MB of which materializations are 40 MB, and Dagster
+  ships a partial index `(asset_key, dagster_event_type, partition, id)` that serves the grid query
+  whatever the row count — so size is a DISK question, never a latency one. `prune_dagster_storage`
+  is being retired. Its own docstring justified itself with "a database that shares a 1.5 GB-limited
+  container": that limit is the container's **RAM**, and the data sits on `/mnt/data` with 51 GB
+  free. Per-subject partitioning takes growth to ~11 GB/year; revisit past ~20 GB, and prefer "keep
+  the newest materialization per (asset, partition)" over a flat age cut, because status needs
+  exactly one row per partition and that rule is flat forever.
+- **SEC PUBLISHES A DAILY INDEX, SO "REFRESH WHEN A NEW REPORT LANDS" COSTS ONE REQUEST A DAY.**
+  `Archives/edgar/daily-index/<yyyy>/QTR<n>/form.<yyyymmdd>.idx` measured **780 KB in 0.35 s** with
+  form type, company, CIK and path per filing — 172 accounts forms on 09-18. One
+  `@observable_source_asset` over it covers ~3,516 issuers; polling each issuer's submissions would
+  be 3,516 requests to save a fetch. **Observe at the grain the provider PUBLISHES, not per
+  subject** — an observation that costs more than the work it gates is not an optimisation.
 - **The 1.13 workspace rolled 2026-09-19 13:42 UTC with nothing keyed on a name moving**: partition
   counts identical either side (`raw_price_bars` 18, `price_bar` 18, both history lanes 12,016) and
   the `instigators` table byte-identical. Recording those BEFORE the roll is what makes the second
