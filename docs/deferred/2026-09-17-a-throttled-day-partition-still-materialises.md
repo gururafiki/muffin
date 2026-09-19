@@ -9,6 +9,43 @@ Option **B**, pace to the measured rate: `Yfinance.min_seconds_between_calls` 1.
 calls/min; the 09-17 recovery ran at that rate with `throttled=0`). Shipped in muffin-ingest#42
 (rolled 11:42 UTC). The check stays WARN. Options A and C return only if nights still throttle.
 
+## The answer to "what is the most Dagster-native way" (2026-09-19)
+
+Asked by the user, answered from the 1.13.22 source rather than from memory. **Dagster's only
+per-item primitive is the partition grid, and it cannot carry this**: securities x days is 12,350 x N
+against a practical ceiling near 25,000 partitions, and rule 6 forbids a date x subject grid because
+a materialised cell would claim one security's day. There is no Dagster feature that tracks which of
+12,350 subjects inside partition 09-18 are done — that gap is why the ledger exists at all. The two
+halves AROUND it are native, and today neither is used:
+
+1. **The trigger to come back is an automation condition over the check we already have.**
+   `AutomationCondition.any_checks_match(AutomationCondition.check_failed())`
+   (`automation_condition.py:467` and `:623`) re-requests exactly the partition whose check failed.
+   `every_askable_security_was_asked` is that check; it has to become partition-aware (it reads the
+   latest materialization globally today) and rise from WARN to ERROR. Bound it with
+   `~in_progress()` and `in_latest_time_window(7 days)` so it chases recent days and never the whole
+   history. No sensor, no cursor, no retry loop of ours.
+2. **The "already done" set is the ledger, which already records it.** `ledger.record` calls
+   `ingest.complete(facet, subject, outcome, ...)` for every subject in every batch, and that
+   function already takes a watermark the price lane passes as `null`. The change is to pass the
+   window end and add one predicate to `ASKABLE_SUBJECTS`. One argument and one clause, in machinery
+   built for this — not a new subsystem.
+
+**The one real cost, and it is the open question.** `ParquetIOManager` REPLACES a partition's file
+by design ("appending would make a re-run silently double the data"), so a resumed run that asks
+only the remainder would overwrite Friday's 2,320 securities of raw with the remainder. Two ways
+out, and the user's call:
+- **(a) Union at subject granularity** — the asset reads the existing partition file and writes the
+  union, the newer answer winning per SUBJECT instead of per partition. One file per partition
+  survives, ~15 lines. Recommended.
+- **(b) One file per run inside a partition directory** — append-only, truer to "raw is the
+  provider's answer whole", but needs a custom `handle_output`/`load_input` pair and every stage-2
+  reader changes.
+
+Net effect: no new state store, Dagster does the re-requesting, and a throttled night leaves a red
+check that clears itself over the following runs — which is C and D taken together, with the parts
+each of them would have hand-rolled supplied by Dagster and by the ledger.
+
 ## What the three nights showed (2026-09-19)
 
 - **09-18 00:00 (partition 09-17): the decision worked.** 602 calls, `answered=11282 empty=739

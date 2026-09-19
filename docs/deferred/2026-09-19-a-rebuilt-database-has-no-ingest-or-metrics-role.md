@@ -1,7 +1,15 @@
 # Nothing that runs today creates `ingest_rw` or `metrics_ro`
 
-Created 2026-09-19 · **Due 2026-09-26** · Status: found by reading, **not yet reproduced** — the
-cheap proof is named below
+Created 2026-09-19 · **Due 2026-09-26** · Status: **confirmed against the committed SQL**; the
+apply-failure reproduction is still owed, and must be done under Docker
+
+**Confirmed 2026-09-19 by reading the files themselves, which needs no database and is therefore
+not a claim about anyone's local setup:** `migrations/20260910000000_baseline.sql` names these roles
+**13 times**, the first at line 10145 —
+`CREATE POLICY backlog_negative_cache_read ON market.backlog_negative_cache FOR SELECT TO anon,
+authenticated, metrics_ro` — and `grep -r 'create role' migrations/` matches **zero files**. So the
+baseline itself refuses on a database holding only the Supabase image's own roles; the
+`alter role ... bypassrls` in the later migration is the SECOND place it fails, not the first.
 
 ## What is missing
 

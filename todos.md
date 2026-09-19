@@ -1581,19 +1581,30 @@ cut over one at a time.
 - [x] 2026-09-19 — `security_return` rebuilt itself on both nights with no hand-run, one minute after
   each `daily_prices` (runs `b21560a1` 09-18 00:42, `c3b53619` 09-19 00:10; ~103k periods each).
   Note CLOSED — docs/deferred/2026-09-17-security-return-never-auto-materialises.md
-- [ ] **due 2026-09-20 — DECIDE: the 4 s pacing did not hold.** 09-18 was clean (602 calls,
-  `unasked=0`); on 09-19 the provider refused at **call 138** and again at call 138 on the 10:42
-  recovery, leaving 2,460 bars for Friday 09-18 against ~11.5k. Options are now A (fail and retry),
-  C (materialise + ERROR + re-ask the unasked) or D (a cursor that resumes where the refusal
-  happened); B is falsified. Re-measure the allowance before sizing any of them —
+- [ ] **due 2026-09-20 — BUILD: resume where the refusal happened, the Dagster-native way.** 09-18
+  was clean (602 calls, `unasked=0`); on 09-19 the provider refused at **call 138** and again at
+  call 138 on the 10:42 recovery, leaving 2,460 bars for Friday 09-18 against ~11.5k, so B is
+  falsified. The shape answered 2026-09-19: Dagster has no per-item primitive that fits (a
+  date x subject grid is 12,350 x N against a ~25k ceiling and breaks rule 6), so the two halves
+  around it are native — `AutomationCondition.any_checks_match(check_failed())` on a
+  partition-aware, ERROR-severity `every_askable_security_was_asked` re-requests the failed
+  partition, and the LEDGER's existing per-subject `ingest.complete` watermark says what to skip.
+  **Open: the raw file.** `ParquetIOManager` replaces a partition, so a resumed run would overwrite
+  the 2,320 already held — (a) union per subject, or (b) one file per run in a partition directory.
+  Re-measure the allowance before sizing either —
   docs/deferred/2026-09-17-a-throttled-day-partition-still-materialises.md
 - [ ] **due 2026-09-26 — nothing that runs today creates `ingest_rw` or `metrics_ro`.** Both are
   created only in `migrations-legacy/` (206 and 127), which `supabase db push` no longer applies, so
   a database rebuilt from what is committed aborts at `alter role ingest_rw bypassrls` and leaves
   the pipeline's writer and Grafana's reader missing. Production is unaffected (the roles predate
-  the cutover). Found by reading, NOT yet reproduced —
+  the cutover). **Confirmed 2026-09-19 against the committed SQL** — the baseline names them 13
+  times, first at line 10145, and `migrations/` has no `create role` at all, so it aborts BEFORE
+  that `alter role`. The apply-failure reproduction is still owed and is to be run under Docker —
   docs/deferred/2026-09-19-a-rebuilt-database-has-no-ingest-or-metrics-role.md
-- [ ] check 2026-10-01 — the nightly finviz sector snapshot is stamped with the next calendar day —
+- [ ] check 2026-10-01 — the nightly finviz sector snapshot is stamped with the next calendar day.
+  **DECIDED 2026-09-19: option A** — stage 2 stamps it with the newest completed US session read
+  from our own `price_bar` for `IVV`, so it agrees with the country rows by construction; on a night
+  the proxy has no bar it REFUSES rather than falling back to the clock. Not yet built —
   docs/deferred/2026-09-17-sector-snapshot-dated-by-the-clock.md
 - [x] 2026-09-17 — `muffin-dagster-operations/scripts/evaluation_tree.py` docstring: an AND evaluates
   later operands only over what earlier ones left true, so after a false operand the rest print
@@ -1615,14 +1626,16 @@ cut over one at a time.
 
 ### Structure and tooling (2026-09-16)
 
-- [ ] **`muffin-ingest` to a `dg` workspace + uv + Dagster 1.13** — `libs/muffin-ingest-lib/` (no
+- [x] **`muffin-ingest` to a `dg` workspace + uv + Dagster 1.13** — DONE 2026-09-19 (#43, rolled
+  13:42 UTC; partition counts and instigator states identical across the roll). — `libs/muffin-ingest-lib/` (no
   Dagster) and `projects/muffin-ingest/` (`defs/<family>/` by stage), with names kept identical and
   proven by a definitions snapshot test. The target layout is written up in
   `dagster-ingestion-best-practices` › `references/project-structure.md`.
-- [ ] **`muffin-ingest` has no ruleset and no branch protection** — measured 2026-09-16
-  (`gh api repos/gururafiki/muffin-ingest/rules/branches/main` → `[]`). It was created after the
-  2026-08-08 hardening baseline, so "PR → checks → merge" holds there by discipline only. Adding a
-  Tier-1 ruleset (PR required, required `quality.yml` check) is a GitHub settings change — ask first.
+- [x] **`muffin-ingest` has no ruleset and no branch protection** — DONE 2026-09-19. Ruleset
+  `23699949`, built from muffin-agent's live one and diffed against it; required contexts `checks`,
+  `definitions`, `image`. CodeQL default setup (`actions`, `python`, weekly) and Dependabot
+  (`uv` across the three locked environments, `docker`, `github-actions`) in muffin-ingest#44.
+  `rules/branches/main` now returns all seven rule types where it returned `[]` on 09-16.
 
 ### Phase 0 — stabilise — DONE 2026-09-09
 

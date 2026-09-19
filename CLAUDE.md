@@ -390,9 +390,9 @@ All nine repos are public and carry Dependabot (version + security updates), sec
 push protection, CodeQL, and a branch ruleset. Protection is **tiered on purpose** — full parity
 everywhere would turn every one-line Dockerfile bump and every umbrella submodule re-pin into a PR:
 
-- **Tier 1 — `muffin-agent`, `muffin-ui`, `muffin-deployment`:** PR required (0 approvals) + Copilot
-  review on push + code-quality + CodeQL gate + **a required status check** from the repo's own
-  `quality.yml`. No deletion, no force-push.
+- **Tier 1 — `muffin-agent`, `muffin-ui`, `muffin-deployment`, `muffin-ingest`:** PR required
+  (0 approvals) + Copilot review on push + code-quality + CodeQL gate + **a required status check**
+  from the repo's own `quality.yml`. No deletion, no force-push.
 - **Tier 2 — `openbb-mcp-docker`, `agent-chat-ui-docker`, `nuq-postgres-docker`,
   `langchain-opensandbox`:** no deletion, no force-push, CodeQL gate.
 
@@ -430,12 +430,23 @@ everywhere would turn every one-line Dockerfile bump and every umbrella submodul
   else does. Such a PR needs a human click or a `workflow`-scoped token. `langchain-opensandbox#2` sat
   in exactly this state.
 
-- **`muffin-ingest` is in no tier: it has no ruleset and no branch protection.** Measured 2026-09-16 —
-  `gh api repos/gururafiki/muffin-ingest/rules/branches/main` returns `[]`, and the branch-protection
-  API says "Branch not protected". The repo was created 2026-09-09, after this baseline, and the
-  rework design's "Tier-1 protection like `muffin-agent`" was never applied. Nothing on GitHub gates
-  its `main`, so "PR → checks → merge" holds there by discipline alone until a ruleset is added
-  (tracked in `todos.md`).
+- **`muffin-ingest` JOINED TIER 1 ON 2026-09-19; until then nothing on GitHub gated its `main`.**
+  Measured 2026-09-16, `gh api repos/gururafiki/muffin-ingest/rules/branches/main` returned `[]` and
+  the branch-protection API said "Branch not protected" — the repo was created 2026-09-09, after this
+  baseline, so "PR → checks → merge" held there by discipline alone. Ruleset **23699949** was built
+  FROM muffin-agent's live ruleset rather than retyped, and a normalised diff of the two is empty
+  apart from the required contexts, which are this repo's own `checks`, `definitions` and `image`.
+  CodeQL default setup (`actions`, `python`, weekly) and Dependabot came with it.
+  **`image` is required only because it stopped being `main`-only that same week** — requiring a
+  `main`-only job would have blocked every PR on a check that never reports, which is the
+  paths-filter trap wearing different clothes.
+- **THE ORDER OF THOSE FOUR STEPS IS LOAD-BEARING, AND TWO OF THEM DEADLOCK IF SWAPPED.** The
+  `dependabot.yml` PR goes in BEFORE the ruleset: once the ruleset is live, a PR whose diff is
+  config-only gets `skipping` from CodeQL and `code_scanning` waits forever for a result that will
+  never exist — the dead end recorded above, reached from the other side. And CodeQL default setup
+  must be enabled AND have finished a run before the rule exists, or the first PR blocks on results
+  for a commit nothing ever analysed. Enable `vulnerability-alerts` before `automated-security-fixes`
+  as always. Sequence: config PR → alerts → CodeQL → ruleset.
 
 The umbrella repo cannot have CodeQL — GitHub reports `languages: []` for it, so default setup is
 unavailable. It gets guardrails only. Don't keep re-trying it.
@@ -3895,6 +3906,22 @@ them is proven by a snapshot rather than by reading the diff.
   PR (loading into the runner's daemon, pushing only from `main`) and runs its three in-image checks
   there: entrypoints, hub namespaces, and `definitions validate` as uid 10001. The whole arm64 build
   is ~30 s with uv, so the gate is nearly free.
+- **DAGSTER HAS NO PER-ITEM PRIMITIVE, AND THAT IS A MEASUREMENT RATHER THAN A PREFERENCE.** Asked
+  for the most Dagster-native way to resume a partially-collected partition, the honest answer from
+  1.13.22 is that PARTITIONS are the only per-item state it offers and 12,350 securities x N days is
+  far past the ~25,000 practical ceiling — which is exactly why the ledger exists, and is the one
+  place this repo is deliberately not Dagster-native. What IS native and was not being used:
+  `AutomationCondition.any_checks_match(AutomationCondition.check_failed())`
+  (`automation_condition.py:467`, `:623`) re-requests PRECISELY the partition whose asset check
+  failed, so the completeness check already written becomes the retry trigger with no sensor and no
+  cursor of ours; and `ingest.complete` already takes a per-subject watermark that the price lane
+  passes as `null`. **The blocker is the I/O manager, not the orchestrator**: `ParquetIOManager`
+  REPLACES a partition's file by design, so a run that asks only the remainder overwrites what the
+  first run stored. Resumability at stage 1 is a question about file layout, not about scheduling.
+- **The 1.13 workspace rolled 2026-09-19 13:42 UTC with nothing keyed on a name moving**: partition
+  counts identical either side (`raw_price_bars` 18, `price_bar` 18, both history lanes 12,016) and
+  the `instigators` table byte-identical. Recording those BEFORE the roll is what makes the second
+  reading evidence rather than a shrug.
 
 ## Running an OpenSandbox server locally
 

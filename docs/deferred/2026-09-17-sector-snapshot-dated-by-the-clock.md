@@ -1,6 +1,20 @@
 # The nightly sector snapshot is stamped with the next day
 
-Created 2026-09-17 · **Check 2026-10-01** · Status: open, small, needs a decision
+Created 2026-09-17 · **Check 2026-10-01** · Status: **decided 2026-09-19 (option A)**, not yet built
+
+## Decision (2026-09-19)
+
+**A — stamp with the newest completed US session, read from data we already hold.** Stage 2 takes
+the newest `price_bar` date for a US proxy (`IVV`) and writes it as the sector rows' `as_of`. No new
+dependency, no calendar to maintain, and — the reason it wins — it is the SAME session date the 549
+country and group rows already carry, so the two halves of one night agree by construction rather
+than by two rules that can drift.
+
+Left explicit: on a night the price lane wrote nothing for the proxy (a throttled night, which is
+now a measured event rather than a hypothetical), stage 2 has no session to name. It must then
+REFUSE the snapshot rather than fall back to the clock — a sector row dated by `date.today()` is
+exactly the defect being closed, and falling back would reintroduce it precisely on the nights the
+data is least trustworthy. Test at 00:30 UTC both ways: with a proxy bar, and without one.
 
 ## Why it is deferred
 
