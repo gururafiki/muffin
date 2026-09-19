@@ -21,6 +21,11 @@ calls/min; the 09-17 recovery ran at that rate with `throttled=0`). Shipped in m
   bars.** Same count, ten hours later, at the same 4 s pacing. So this is not the hour, not the
   night's cumulative volume, and not a pace the run controls: between 09-18 and 09-19 the provider's
   tolerance for this node fell from 602 calls to ~138 (~1,650 symbols).
+- **A single call still works.** Driven through the deployed container at 12:5x UTC on 09-19, hours
+  after the second refusal: `price_history(["AAPL"], 2026-09-18)` returned 1 row, no warnings. So
+  this is a volume limit that trips after ~138 calls, not a standing block on the node — which is
+  what makes **D** (resume where the refusal happened) a real option rather than a hope. One
+  successful call says the door is open, not how wide.
 - Consequence: `market.price_bar` holds **2,460 rows for 2026-09-18** against 11,282 for 09-17, and
   `security_return` rebuilt off the partial day. A second recovery was NOT launched: hammering a
   refusing provider drains less, which this repo has already paid for once.
