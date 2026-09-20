@@ -2012,10 +2012,53 @@ Three things settled in planning that are worth not re-deriving:
       `pending_*` views, the `index.ts` handlers.
 - [ ] `muffin-ui` PR: full-range daily charts, currency-labelled prices, volume.
 
-### Phases 3-8 — the remaining family cutovers — not started
+### Phase 3 — universe and symbology — BUILT, DEPLOYED, AND SWITCHED OFF
 
-Symbols/universe, yfinance backlogs, SEC, regulators, macro/events, derived/serving, then retirement
-of the edge function. **Each gets its own planning session**, per the phased-work convention.
+Spec: [docs/specs/2026-09-20-turning-the-universe-lanes-on.md](docs/specs/2026-09-20-turning-the-universe-lanes-on.md).
+Steps 4, 5 and step 6's first half merged 2026-09-12..13 and deployed 09-17 — and **every standard
+sensor ships STOPPED**, so measured 2026-09-20 the discovery and symbology assets have ZERO
+materializations, `market.venue_listing` and `market.identifier_probe` are empty, and
+`market.untracked_listing` — re-pointed onto `venue_listing` by migration `20260913100000` —
+returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has been dead since the
+09-17 deploy and nothing reported it.
+
+- [x] **The venue sweep lost the pages it was resuming, and nothing said a venue was unfinished**
+      (muffin-ingest#58, merged, NOT yet rolled). `_sweep_venue` returns only the current run's
+      pages against a manager that replaces, so a backfill of a half-swept venue kept the tail —
+      while `_last_cursor`'s docstring claimed the file was "REBUILT … with every page fetched
+      since the beginning". Now `merge_on=["exch_code", "cursor_from"]`, a fresh walk marks the
+      partition `Complete` and replaces (OpenFIGI has no as-of, so a refresh is a re-walk), and
+      `venue_sweep_reached_its_last_page` NAMES the venues to re-materialise — resuming was always
+      meant to be an operator backfill, it just could not be aimed.
+- [x] **The ladder was seeding, and deleting from, the price lane's grid** (muffin-ingest#59).
+      `defs/symbology` imported `security_partitions` and re-asked a stale miss by DELETING the
+      security's partition — the state `nightly_prices` walks. Its population was
+      `is_tradeable = false`: 23,341 securities, **15,159 of them bonds**. Now its own
+      `symbology_subject` set, per-rung populations (5,697 / 1,618 measured), and
+      `missing() | (cron & ReAskAfter)` which never mutates the grid. Measured on 1.13.22:
+      `on_missing()` requests 0 of 2 partitions already in the grid, so it is the wrong rule for a
+      lane being switched on; a custom `AutomationCondition` works and a sensor cannot express the
+      re-ask without turning ten OpenFIGI jobs per request into one.
+- [x] **Three alerts shared one wrong summary** (muffin-deployment#383, merged, needs a deploy),
+      the worst being "market-verify has not run" arriving as "N backlog(s) have not moved in 24
+      hours". The GAUGES drift the old plan carried was already fixed.
+- [ ] **Prove both lanes on a tiny subset — locally, then live — then turn the sensors on.** One
+      small venue and two N-PORT accessions; read every counter, open the Parquet, query
+      `market.venue_listing` and `market.fund_holding`. Only then `default_status=RUNNING` in code,
+      one lane at a time, and backfill the rest. **The regression closes when the sweep has covered
+      the enabled venues**, not when the code merges.
+- [ ] **Check the registries actually ran.** `weekly_registries` next ticks Monday 2026-09-21; its
+      one previous tick died in the exporter incident, and a schedule that has never succeeded
+      looks identical to one that has not yet run. Read `security_cik` / `security_nse_filer`.
+- [ ] **Step 6's second half and step 7 wait on data**: the `security_identifier` surrogate key,
+      `listing`, the `symbol_resolution` matview and anon-latency re-measurement; then retiring the
+      universe/symbology handlers, the family's `pending_*` views, the twelve `%_missing_at`/cursor
+      columns and the ledger calls in `prices.py`.
+
+### Phases 4-8 — the remaining family cutovers — not started
+
+yfinance backlogs, SEC, regulators, macro/events, derived/serving, then retirement of the edge
+function. **Each gets its own planning session**, per the phased-work convention.
 
 ## Other P2
 - [ ] Add new tab to donate to Ukraine with links to different funds
