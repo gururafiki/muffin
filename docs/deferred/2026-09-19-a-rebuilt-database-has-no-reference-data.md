@@ -24,6 +24,31 @@ roles plus `ingest_rw`/`metrics_ro`, all eleven committed migrations apply clean
 | `market.currency` | 0 | 43 | learned by the ingest at runtime — correctly absent |
 | `market.security` | 0 | 27,893 | ingested from filings — correctly absent |
 
+**Two more found 2026-09-20, by the first local run of the discovery and symbology lanes:**
+
+| lookup table | rebuilt | production | what it is |
+|---|---|---|---|
+| `market.identifier_kind` | **0** | 7 | authored reference — `isin`, `cusip`, `figi`, `ticker`, `lei`, `cik`, `other` |
+| `market.exchange` | **0** | 59 | authored reference — the venue map, with each venue's provider suffix |
+
+`identifier_kind` is the sharper of the two: `security_identifier.kind_code` is a foreign key to it,
+so on a rebuilt database the universe cannot record a single identifier —
+
+```
+ForeignKeyViolation: insert or update on table "security_identifier"
+  violates "security_identifier_kind_code_fkey"
+DETAIL:  Key (kind_code)=(isin) is not present in table "identifier_kind".
+```
+
+`market.exchange` fails more quietly, which is worse: with no row the sweep's stage 2 falls back to
+`("", None)` and writes the BARE ticker as `provider_symbol`, so an Australian listing is filed as
+`BHP` rather than `BHP.AX` — a wrong symbol, with no error, in the column the price lane addresses
+the provider by. Both also carry NOT NULL `name` columns, so the seed cannot be a bare list of codes.
+
+That takes the count to **four** control tables (`data_source`, `index_scope`, `identifier_kind`,
+`exchange`), which is the argument for deriving the list rather than extending it by hand each time
+a lane is driven for the first time.
+
 So the pattern is **inconsistent rather than absent**: three control tables are seeded by files that
 survived the cutover and two are not, which is precisely why nothing has noticed.
 

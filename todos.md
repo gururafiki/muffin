@@ -1635,8 +1635,13 @@ cut over one at a time.
   `index_scope` 0 against 73 — while `return_period`, `ingest.facet` and `provider_budget` ARE
   seeded by committed migrations, which is why nobody has noticed. The first write of every lane
   then fails `fx_rate_source_code_fkey ... Key (source_code)=(yfinance) is not present`, and the
-  indices lane publishes nothing while succeeding. Found by the first real use of the local Docker
-  harness — docs/deferred/2026-09-19-a-rebuilt-database-has-no-reference-data.md
+  indices lane publishes nothing while succeeding. **2026-09-20 added two more, from the first
+  local run of the discovery and symbology lanes: `identifier_kind` (0 against 7 — and
+  `security_identifier.kind_code` is a foreign key to it, so a rebuilt database cannot record a
+  single identifier) and `exchange` (0 against 59, which fails QUIETLY: stage 2 then writes the
+  bare ticker as `provider_symbol`, so an Australian listing is filed `BHP` rather than `BHP.AX`).
+  Four tables now — derive the list rather than extending it each time a lane is first driven** —
+  docs/deferred/2026-09-19-a-rebuilt-database-has-no-reference-data.md
 - [ ] check 2026-10-01 — the nightly finviz sector snapshot is stamped with the next calendar day.
   **DECIDED 2026-09-19: option A** — stage 2 stamps it with the newest completed US session read
   from our own `price_bar` for `IVV`, so it agrees with the country rows by construction; on a night
