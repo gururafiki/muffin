@@ -2047,11 +2047,24 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
 - [x] **Three alerts shared one wrong summary** (muffin-deployment#383, merged, needs a deploy),
       the worst being "market-verify has not run" arriving as "N backlog(s) have not moved in 24
       hours". The GAUGES drift the old plan carried was already fixed.
-- [ ] **Prove both lanes on a tiny subset — locally, then live — then turn the sensors on.** One
-      small venue and two N-PORT accessions; read every counter, open the Parquet, query
-      `market.venue_listing` and `market.fund_holding`. Only then `default_status=RUNNING` in code,
-      one lane at a time, and backfill the rest. **The regression closes when the sweep has covered
-      the enabled venues**, not when the code merges.
+- [x] **Both lanes proven LOCALLY on real provider bytes, and it found three more defects**
+      (muffin-ingest#60, #61, #62). The sweep resumed from its own cursor (page 5, not page 0), the
+      merge took the partition file 5 -> 10 rows, a run refused on its first request kept all 10,
+      and 10 pages became **1,000 rows in `venue_listing`** -> `untracked_listing` returning 1,000
+      where production returns 0. The ladder resolved SAP to `SAPGF` as a ticker and `SAP.DE` as a
+      provider symbol — two correct answers to two different questions. #60: the parser emitted
+      `security_type_detail` and no table has it, behind a test that passed when the key was
+      ABSENT. #61: `SWEEP_PACING` was calibrated to 25 req/min and the allowance is **~5**, so the
+      lane paid a 429 every run — a full 59-venue pass is **~5 hours**, not the ~62 minutes the
+      spec estimated. #62: the ladder counted rows built, not rows written.
+- [ ] **Roll, run one venue partition LIVE, then turn the sensors on.** `default_status=RUNNING` in
+      code, one lane at a time, then backfill. A local run is a superuser against a database no
+      resource has written, so the `ingest_rw` grant and its RLS policy are still unexercised.
+      **The regression closes when the sweep has covered the enabled venues**, not when the code
+      merges — docs/deferred/2026-09-20-the-venue-sweep-is-what-refills-untracked-listing.md
+- [ ] **DECIDE: an OpenFIGI API key.** At the measured ~5 requests a minute a full venue sweep is
+      ~5 hours and the monthly refresh the same again. A key raises the allowance substantially;
+      it is a credential decision, so it is the user's.
 - [ ] **Check the registries actually ran.** `weekly_registries` next ticks Monday 2026-09-21; its
       one previous tick died in the exporter incident, and a schedule that has never succeeded
       looks identical to one that has not yet run. Read `security_cik` / `security_nse_filer`.

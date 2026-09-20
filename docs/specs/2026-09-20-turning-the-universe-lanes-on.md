@@ -58,9 +58,21 @@ the skill names as *the model*. None of that needed redesigning, and none of it 
 Rejected: re-pointing the view back to `exchange_listing` and switching once the sweep had filled
 the new base (the expand/contract order), and a union of both bases.
 
-Accepted cost: the Markets search stays empty until the sweep has covered the enabled venues —
-59 venues, 100 rows a page, `SWEEP_PACING = 2.5 s` against an anonymous limit of 25/min;
-`exchange_listing`'s 148,782 rows imply ~1,488 pages ≈ ~62 minutes of provider time across runs.
+Accepted cost: the Markets search stays empty until the sweep has covered the enabled venues.
+
+**The sizing was wrong by a factor of five and the local run corrected it.** The estimate here was
+59 venues × ~1,488 pages at 25 requests a minute ≈ 62 minutes. Measured 2026-09-20 against the real
+endpoint, after 65 s of silence each time:
+
+```
+paced 2.5 s   5 pages in 14.6 s, then 429 on request 6     (reproduced three times)
+paced 12 s    7 pages in 74.3 s, no 429 at all
+```
+
+The anonymous `/v3/filter` allowance is **~5 requests a minute**, not 25 — a ceiling measured on
+`/v3/mapping` that no longer holds here. `SWEEP_PACING` is 12 s as of muffin-ingest#61, and the
+honest figure is **~5 hours of provider time** spread over ~37 operator-driven runs. An API key
+would raise the allowance; that is a credential decision and is **open**.
 
 ### 2. The venue sweep resumes by backfill, and says which venues need one
 
@@ -98,6 +110,9 @@ with an ISIN regardless of what we hold (12,496).
 | The symbology sensor deleted partitions from the PRICE lane's grid | `security_partitions` imported by `defs/symbology` | muffin-ingest#59 — `symbology_subject` |
 | The rungs asked about `is_tradeable = false` — 23,341 securities, 15,159 bonds | measured against production | #59 — per-rung `not exists` populations |
 | Two raw assets hand-rolled the partition seam; an empty mapping raised `IndexError` and a key with no answer vanished | code | #58, #59 — `partitioned.by_partition` |
+| `parse_filter` emitted `security_type_detail`; every table spells it `figi_security_type`, and its test asserted `row["security_type"] is not row.get("security_type_detail")` — true when the key is ABSENT | the first real write: `column "security_type_detail" of relation "venue_listing" does not exist` | muffin-ingest#60 |
+| `SWEEP_PACING` was calibrated to 25 req/min; the allowance is ~5, so the lane paid a 429 every run | measured three ways | muffin-ingest#61 |
+| `security_symbology` reported the rows it BUILT — `symbols: 4, probes: 6` against 2 and 4 stored | the first real run | muffin-ingest#62 |
 | Three Grafana alerts shared `muffin-backlog-stalled`'s summary, including "market-verify has not run" | `rules.yml` | muffin-deployment#383 |
 
 The `rules.yml` GAUGES drift carried by the previous plan **was already fixed** and is not re-fixed.
@@ -119,12 +134,22 @@ Measured against Dagster 1.13.22 before being designed on:
 
 ## Rollout
 
-1. **#58 — the discovery lane, fixed.** Merged 2026-09-20 (`65a7af7`). Not yet rolled.
-2. **#59 — the symbology lane, fixed.** Open.
-3. **Local tiny subset** per `dagster-pipeline-local-test`: one small venue, two N-PORT accessions.
-4. **Roll, then a live tiny subset** — one venue partition and a handful of accessions, counters
-   read — then sensors RUNNING in code, one lane at a time, then backfill the rest.
-5. Deferred note for the drain; docs, memory, skill.
+1. **#58 — the discovery lane, fixed.** Merged.
+2. **#59 — the symbology lane, fixed.** Merged.
+3. **Local tiny subset — DONE 2026-09-20, and it found three more defects** (#60, #61, #62). Both
+   lanes proven end to end on real provider bytes:
+   - the sweep resumed from its own cursor (page 5, not page 0), the merge took the partition file
+     **5 → 10 rows**, and a run refused on its first request **kept all 10**;
+   - 10 stored pages → **1,000 rows in `market.venue_listing`** → `market.untracked_listing`
+     returning **1,000** where production returns 0, `provider_symbol` carrying `.AX`;
+   - the ladder resolved APPLE to `AAPL`/`AAPL` and SAP to **`SAPGF`** (OpenFIGI's US OTC line) and
+     **`SAP.DE`** (the local line) — two correct answers to two different questions;
+   - `venue_sweep_reached_its_last_page` failed on every unfinished venue, correctly.
+4. **#63 — what the harness taught**, back into `dagster-pipeline-local-test`.
+5. **Roll, then a live tiny subset** — one venue partition and a handful of accessions, counters
+   read — then sensors RUNNING in code, one lane at a time, then backfill the rest. **NOT YET
+   DONE.**
+6. Deferred note for the drain; docs, memory.
 
 **Out of scope, gated on these lanes producing data:** step 6's second half (the
 `security_identifier` surrogate key, `listing`, the `symbol_resolution` matview, anon-latency
@@ -143,4 +168,7 @@ twelve `%_missing_at`/cursor columns, the ledger in `prices.py`).
 
 ## Open questions
 
-None outstanding.
+- **An OpenFIGI API key.** The anonymous `/v3/filter` allowance measured ~5 requests a minute, which
+  makes a full venue sweep ~5 hours and the monthly refresh the same again. A free key raises it
+  substantially. This is a credential decision, so it is the user's — and until it is taken, the
+  sweep is a drip fed by operator backfills.
