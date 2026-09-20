@@ -1571,6 +1571,15 @@ cut over one at a time.
       DECIDED: stop pruning entirely (~1 MB/day measured, ~365 MB/year, and the grid query is
       indexed). Retiring the job is part of the partitioning work above. Original note:
   (first affected: price history, 2026-12-10) — docs/deferred/2026-09-16-dagster-pruning-erases-partition-state.md
+- [ ] check 2026-09-27 — every raw price partition still holds the pre-2026-09-12 shape until the
+  sweep rewrites it (40 of 40 sampled were legacy on 09-20). Each converts the first time it is
+  reached, ~5 nights for a pass, and NOTHING reports the progress — count the partitions still
+  carrying `trade_date` and expect 2, the two dead securities that keep theirs on purpose —
+  docs/deferred/2026-09-20-raw-price-partitions-convert-only-as-the-sweep-reaches-them.md
+- [ ] check 2026-09-27 — the day-partitioned price lane is still defined as the rollback
+  (`raw_price_bars`, day `price_bar`, `daily_prices_schedule` STOPPED, the old check). Retire it
+  once the sweep has proven itself, porting the 28 offline-replay tests rather than deleting them —
+  docs/deferred/2026-09-20-the-day-partitioned-price-lane-is-kept-as-the-rollback.md
 - [ ] due 2026-10-16 (or before the first keyed provider's raw asset) — redact API keys from raw
   document URLs — docs/deferred/2026-09-16-raw-request-credentials.md
 - [x] 2026-09-19 — FX spot writes the day's own rates with no hand-run: 41 rates for every weekday
@@ -1583,7 +1592,7 @@ cut over one at a time.
 - [x] 2026-09-19 — `security_return` rebuilt itself on both nights with no hand-run, one minute after
   each `daily_prices` (runs `b21560a1` 09-18 00:42, `c3b53619` 09-19 00:10; ~103k periods each).
   Note CLOSED — docs/deferred/2026-09-17-security-return-never-auto-materialises.md
-- [ ] **due 2026-09-26 — BUILD: partition raw to the provider's request grain.** Decided 2026-09-19
+- [x] **2026-09-20 — BUILT AND ROLLED: partition raw to the provider's request grain.** Decided 2026-09-19
   with the user and specced in `docs/specs/2026-09-19-partitioning-to-the-provider-grain.md`: the
   price lane moves from a day grid to a TICKER grid (the vendor is asked once per ticker regardless
   — 4 symbols measured as 6 chart requests), a merging I/O manager makes a partition extend rather
@@ -1593,9 +1602,13 @@ cut over one at a time.
   retired so the grid is durable. #53: the security lane extends from its own watermark, two
   cohorts (a window costs bytes, not requests). #56: `nightly_prices` sweeps a contiguous slice
   nightly and `daily_prices_schedule` is STOPPED but kept, so rollback is flipping schedules.
-  **Remaining: the roll**, which stops the old nightly collection and starts the new one — and
-  then, once the sweep is proven live, deleting the day lane with its 28 tests. **Supersedes the
-  throttle option list** — a refused night simply leaves partitions unmaterialised.
+  **ROLLED 2026-09-20** (image `3b2ec2b8…`): `nightly_prices` RUNNING, `daily_prices_schedule`
+  STOPPED, both read live from the code location. The first live run found the merge could never
+  converge — every partition predates the `date` its key names — fixed in #57, which makes a
+  full-history run REPLACE its partition and an extension merge into it. **Supersedes the throttle
+  option list** — a refused night simply leaves partitions unmaterialised. Its two remainders are
+  now their own notes (the conversion, and retiring the day lane), because a leftover buried in a
+  finished item is how an old path survives a year.
 - [x] ~~due 2026-09-20 — resume where the refusal happened~~ — SUPERSEDED by the above. 09-18
   was clean (602 calls, `unasked=0`); on 09-19 the provider refused at **call 138** and again at
   call 138 on the 10:42 recovery, leaving 2,460 bars for Friday 09-18 against ~11.5k, so B is
@@ -1640,7 +1653,7 @@ cut over one at a time.
   09-17 and verified: FX `aefcnkxt` (41 rates), indices `vfsaitpa` (61/61 scopes), prices `hsctpnih`
   (09-11..09-16, ~11.5k bars a day, `unasked=0`), `security_return` hand-run `374da72e` (as_of 09-16).
 
-- [ ] **muffin-ingest#43 is open and unmerged on purpose** — the `dg` workspace, Dagster 1.13.22 and
+- [x] ~~**muffin-ingest#43 is open and unmerged on purpose**~~ — MERGED and rolled 2026-09-19 13:42 UTC (partition counts and `instigators` identical either side), and the local tiny-subset run became the `dagster-pipeline-local-test` skill (#49/#50). Original: — the `dg` workspace, Dagster 1.13.22 and
   uv locks. Merging publishes `:latest`, which any later deploy would pick up, so it merges when the
   roll is wanted. Gate met: the definitions snapshot taken before the move passes untouched, CI is
   green including an in-image load as uid 10001. Outstanding: a local tiny-subset run against a
