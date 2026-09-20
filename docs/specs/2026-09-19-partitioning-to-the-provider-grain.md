@@ -93,6 +93,21 @@ Dagster offers no merge primitive, and this was checked rather than assumed: sel
 comment warns about: a partition file is no longer "the provider's latest answer, replacing the
 last" but "every answer we hold for this subject, newest winning per row key".
 
+**Amended 2026-09-20, by the first live run.** The merge keeps a stored row it cannot key — "I
+cannot tell whether this was superseded" resolving to keeping it — and that is right for an
+*extension* and wrong for a *full history*. Every one of the 12,016 partitions had been written
+before raw stopped adding `trade_date`, so none carried the `date` the key names: the watermark read
+nothing, every subject took the full-history path, and one partition went **4,496 → 8,998 rows**,
+the same history twice. Published bars stayed correct (stage 2 drops a row with no usable date), so
+nothing but the raw file could show it, and `rows_unkeyable` would have been permanently non-zero —
+a "something is wrong" counter with a standing population is not a signal.
+
+So the asset says which kind of answer each partition got (`partitioned.Complete` marks the loading
+cohort) and the manager replaces those while merging the rest. It is a set of partition keys, not a
+flag, because one run holds both. **An empty complete answer replaces nothing**: a dead symbol, a
+refusal and a holiday all return no rows, and writing that over a stored history would delete it to
+record a quiet day — enforced in the manager rather than trusted of each caller.
+
 ### 3. Stop pruning Dagster storage
 
 `prune_dagster_storage` is deleted. Measured: the steady state is **~1 MB/day** (231–1,036 rows/day
