@@ -1588,11 +1588,13 @@ cut over one at a time.
   price lane moves from a day grid to a TICKER grid (the vendor is asked once per ticker regardless
   — 4 symbols measured as 6 chart requests), a merging I/O manager makes a partition extend rather
   than be replaced, `prune_dagster_storage` is retired so the grid is durable, and refresh is chosen
-  per lane (cron / observable + `data_version_changed` / `on_missing`). **Step 1 DONE 2026-09-19
-  (muffin-ingest#52)**: `merge_on` metadata makes a partition extend rather than be replaced,
-  mutation-proven, and `prune_dagster_storage` is retired so the grid is durable. Remaining: the
-  per-ticker price lane (extend from a watermark, automation), then retire the day lane and move
-  the completeness check onto `price_bar`. **Supersedes the
+  per lane (cron / observable + `data_version_changed` / `on_missing`). **Steps 1-3 DONE, not yet rolled.**
+  #52: `merge_on` makes a partition extend rather than be replaced; `prune_dagster_storage`
+  retired so the grid is durable. #53: the security lane extends from its own watermark, two
+  cohorts (a window costs bytes, not requests). #56: `nightly_prices` sweeps a contiguous slice
+  nightly and `daily_prices_schedule` is STOPPED but kept, so rollback is flipping schedules.
+  **Remaining: the roll**, which stops the old nightly collection and starts the new one — and
+  then, once the sweep is proven live, deleting the day lane with its 28 tests. **Supersedes the
   throttle option list** — a refused night simply leaves partitions unmaterialised.
 - [x] ~~due 2026-09-20 — resume where the refusal happened~~ — SUPERSEDED by the above. 09-18
   was clean (602 calls, `unasked=0`); on 09-19 the provider refused at **call 138** and again at
