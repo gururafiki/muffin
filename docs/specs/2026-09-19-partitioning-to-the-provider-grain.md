@@ -108,6 +108,20 @@ flag, because one run holds both. **An empty complete answer replaces nothing**:
 refusal and a holiday all return no rows, and writing that over a stored history would delete it to
 record a quiet day — enforced in the manager rather than trusted of each caller.
 
+Proven live on three untouched legacy partitions once the fix was rolled: `rows_fetched 783,
+rows_kept 0, rows_superseded 777, rows_unkeyable 0, rows_total 783`, `trade_date` gone from the
+file, and stage 2 `dropped 0` where the pre-fix run reported 4,497.
+
+**TWO PARTITIONS KEEP A LEGACY ROW ON PURPOSE, so a non-zero `rows_unkeyable` there is not a
+defect.** Of the three partitions the pre-fix run doubled, Jardine Matheson's 4,496 legacy dates
+were measured to be **entirely contained** in the 4,502 just fetched — fully superseded, so its
+file was removed and rebuilt clean. The other two are securities the provider now answers nothing
+for (`dead: 1, answered: 0`), and each holds **one date the fetch no longer returns**
+(`fb51819a` 2026-07-17, `05dfe591` 2025-09-22). Deleting those would destroy raw evidence that
+cannot be re-obtained, which is what rule 3 forbids — so they stay, and the counter saying so is
+telling the truth. Measure which it is before removing a file; "superseded in substance" is a
+claim about dates, not about row counts.
+
 ### 3. Stop pruning Dagster storage
 
 `prune_dagster_storage` is deleted. Measured: the steady state is **~1 MB/day** (231–1,036 rows/day
