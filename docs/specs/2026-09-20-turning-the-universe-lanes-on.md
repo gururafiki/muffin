@@ -70,9 +70,21 @@ paced 12 s    7 pages in 74.3 s, no 429 at all
 ```
 
 The anonymous `/v3/filter` allowance is **~5 requests a minute**, not 25 — a ceiling measured on
-`/v3/mapping` that no longer holds here. `SWEEP_PACING` is 12 s as of muffin-ingest#61, and the
-honest figure is **~5 hours of provider time** spread over ~37 operator-driven runs. An API key
-would raise the allowance; that is a credential decision and is **open**.
+`/v3/mapping` that no longer holds here. `SWEEP_PACING` is 12 s as of muffin-ingest#61.
+
+**And then the PAGE COUNT was wrong in the other direction, measured 2026-09-21: ~209 minutes, not
+~5 hours.** The 1,488 pages came from `exchange_listing`'s whole 148,782 rows, and the sweep never
+asks for all of them — it sends `securityType2: 'Common Stock'`, so mutual funds and depositary
+receipts are out of scope by construction. Over the 59 enabled venues at that filter: **100,923
+rows, 1,043 pages, ~209 minutes**, with five venues (US 163 pages, GR 143, IB 55, LN 44, JP 41)
+exceeding `SWEEP_MAX_PAGES` and needing a second run. Two corrections in two days, in opposite
+directions, both from measuring rather than reasoning — the rate was assumed from a sibling
+endpoint and the volume from a table with a different filter. An API key would raise the
+allowance; that is a credential decision and is **open**.
+
+**Proven live 2026-09-21 on AU**: 22 pages, last `cursor_at` null, the check passed, 2,115 rows in
+`venue_listing` and `market.untracked_listing` off zero at **1,864**. The gap against the old AU
+directory is entirely the filter plus 19 delistings — see the deferred note.
 
 ### 2. The venue sweep resumes by backfill, and says which venues need one
 
@@ -169,6 +181,6 @@ twelve `%_missing_at`/cursor columns, the ledger in `prices.py`).
 ## Open questions
 
 - **An OpenFIGI API key.** The anonymous `/v3/filter` allowance measured ~5 requests a minute, which
-  makes a full venue sweep ~5 hours and the monthly refresh the same again. A free key raises it
+  makes a full venue sweep ~209 minutes and the monthly refresh the same again. A free key raises it
   substantially. This is a credential decision, so it is the user's — and until it is taken, the
   sweep is a drip fed by operator backfills.

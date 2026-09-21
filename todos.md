@@ -2017,7 +2017,7 @@ Three things settled in planning that are worth not re-deriving:
       `pending_*` views, the `index.ts` handlers.
 - [ ] `muffin-ui` PR: full-range daily charts, currency-labelled prices, volume.
 
-### Phase 3 — universe and symbology — BUILT, DEPLOYED, AND SWITCHED OFF
+### Phase 3 — universe and symbology — DISCOVERY IS LIVE; SYMBOLOGY IS STILL OFF
 
 Spec: [docs/specs/2026-09-20-turning-the-universe-lanes-on.md](docs/specs/2026-09-20-turning-the-universe-lanes-on.md).
 Steps 4, 5 and step 6's first half merged 2026-09-12..13 and deployed 09-17 — and **every standard
@@ -2044,7 +2044,8 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
       `on_missing()` requests 0 of 2 partitions already in the grid, so it is the wrong rule for a
       lane being switched on; a custom `AutomationCondition` works and a sensor cannot express the
       re-ask without turning ten OpenFIGI jobs per request into one.
-- [x] **Three alerts shared one wrong summary** (muffin-deployment#383, merged, needs a deploy),
+- [x] **Three alerts shared one wrong summary** (muffin-deployment#383, merged, deploy pending
+      alongside #384),
       the worst being "market-verify has not run" arriving as "N backlog(s) have not moved in 24
       hours". The GAUGES drift the old plan carried was already fixed.
 - [x] **Both lanes proven LOCALLY on real provider bytes, and it found three more defects**
@@ -2057,17 +2058,42 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
       ABSENT. #61: `SWEEP_PACING` was calibrated to 25 req/min and the allowance is **~5**, so the
       lane paid a 429 every run — a full 59-venue pass is **~5 hours**, not the ~62 minutes the
       spec estimated. #62: the ladder counted rows built, not rows written.
-- [ ] **Roll, run one venue partition LIVE, then turn the sensors on.** `default_status=RUNNING` in
-      code, one lane at a time, then backfill. A local run is a superuser against a database no
-      resource has written, so the `ingest_rw` grant and its RLS policy are still unexercised.
-      **The regression closes when the sweep has covered the enabled venues**, not when the code
-      merges — docs/deferred/2026-09-20-the-venue-sweep-is-what-refills-untracked-listing.md
+- [x] **Rolled, one venue proven LIVE, and the two discovery sensors turned on** — 2026-09-21,
+      muffin-ingest#66. AU swept 22 pages, last `cursor_at` null, the check PASSED, and the first
+      rows this lane has ever written: `venue_listing` **2,115** and `market.untracked_listing`
+      **1,864** — off zero for the first time since the 09-17 deploy. The `ingest_rw` grant and its
+      RLS policy held on that first real write. **The gap against the old directory is fully
+      explained**: old AU held 2,761 = 2,134 Common Stock + 540 Mutual Fund + 87 Depositary
+      Receipt, and the sweep asks only for Common Stock; of the 2,134, **19 are delistings and 0
+      FIGIs are new**. Sensors: measured before the PR, `dynamic_partitions` held ONE
+      `exchange_sweep` key, so a backfill had nothing to select; after the roll the two add-only
+      sensors seeded **59 venues and 74 N-PORT filings and materialised nothing**.
+- [ ] **Backfill the remaining 58 venues**, then re-backfill whatever
+      `venue_sweep_reached_its_last_page` still names. **Re-sized 2026-09-21: ~209 minutes, not
+      ~5 hours** — the 1,488-page estimate counted `exchange_listing`'s whole 148,782 rows, and
+      the sweep filters to Common Stock. Over the 59 enabled venues: 100,923 rows, 1,043 pages,
+      five of them (US 163, GR 143, IB 55, LN 44, JP 41) over `SWEEP_MAX_PAGES` and needing a
+      second run — docs/deferred/2026-09-20-the-venue-sweep-is-what-refills-untracked-listing.md
+- [ ] **DECIDE: turn `new_symbols_needed` on.** Deliberately left STOPPED by #66 while the two
+      discovery sensors went RUNNING, and the difference is the point: those two return
+      `run_requests=[]` and only make work visible, whereas the symbology rungs carry
+      `AutomationCondition.missing()` behind a RUNNING default automation sensor — so seeding that
+      grid starts asking the provider immediately (~7,300 partitions over three rungs, ~730
+      OpenFIGI mapping requests and ~1,618 Yahoo). That is a spend, and it shares the venue sweep's
+      upstream allowance, so it should not start in the same window.
 - [ ] **DECIDE: an OpenFIGI API key.** At the measured ~5 requests a minute a full venue sweep is
-      ~5 hours and the monthly refresh the same again. A key raises the allowance substantially;
-      it is a credential decision, so it is the user's.
+      ~209 minutes and the monthly refresh the same again, all serialised behind one pool. A key
+      raises the allowance substantially; it is a credential decision, so it is the user's.
 - [ ] **Check the registries actually ran.** `weekly_registries` next ticks Monday 2026-09-21; its
       one previous tick died in the exporter incident, and a schedule that has never succeeded
       looks identical to one that has not yet run. Read `security_cik` / `security_nse_filer`.
+- [ ] **Dagster captured no step stdout or stderr at all** — every step logged
+      `OSError: [Errno 30] Read-only file system: '/opt/dagster/home/storage'` and carried on,
+      because `compute_logs` was unconfigured and `$DAGSTER_HOME` is read-only on purpose. Found
+      2026-09-21 while reading the live sweep. Structured logging was unaffected, so the lanes
+      looked instrumented; what was missing is the only channel that carries a failure nobody
+      raised. muffin-deployment#384, needs a deploy —
+      docs/deferred/2026-09-21-dagster-captures-no-step-stdout-or-stderr.md
 - [ ] **Step 6's second half and step 7 wait on data**: the `security_identifier` surrogate key,
       `listing`, the `symbol_resolution` matview and anon-latency re-measurement; then retiring the
       universe/symbology handlers, the family's `pending_*` views, the twelve `%_missing_at`/cursor

@@ -1,7 +1,7 @@
 # `market.untracked_listing` is empty until the venue sweep has walked the venues
 
-Created 2026-09-20 · **Check 2026-09-27** · Status: the lane is fixed and proven; it has not been
-switched on, and nothing reports the drain
+Created 2026-09-20 · Updated 2026-09-21 · **Check 2026-09-27** · Status: PROVEN LIVE ON ONE VENUE
+and the view is off zero; 58 venues still to sweep
 
 ## Why it is deferred
 
@@ -31,9 +31,21 @@ paced 2.5 s   5 pages in 14.6 s, then 429 on request 6     (reproduced three tim
 paced 12 s    7 pages in 74.3 s, no 429 at all
 ```
 
-So ~5 requests a minute. At `SWEEP_PACING = 12 s` (muffin-ingest#61) and ~1,488 pages for 59
-venues, a full pass is **~5 hours of provider time** across ~37 runs of 40 pages each. Resuming is
-an operator backfill by design — `new_exchange_sweeps` only ADDS venues, and its own comment says
+So ~5 requests a minute, and `SWEEP_PACING = 12 s` (muffin-ingest#61) follows from it.
+
+**CORRECTED 2026-09-21: ~209 minutes, not ~5 hours.** The 1,488-page figure came from
+`exchange_listing`'s whole 148,782 rows, and the sweep does not ask for all of them — it sends
+`securityType2: 'Common Stock'`, so mutual funds and depositary receipts are out of scope by
+construction. Counted over the 59 ENABLED venues at that filter:
+
+```
+common-stock rows  100,923      pages (100/page)  1,043
+provider time      ~209 min     venues over SWEEP_MAX_PAGES (40)  5
+```
+
+The five needing a second pass are US (163 pages), GR (143), IB (55), LN (44) and JP (41) — the
+resume mechanism is what carries them, and it is now exercised live rather than assumed. Resuming
+is an operator backfill by design: `new_exchange_sweeps` only ADDS venues, and its own comment says
 "re-materialising them is an operator's call".
 
 ## Context
@@ -47,21 +59,47 @@ an operator backfill by design — `new_exchange_sweeps` only ADDS venues, and i
   **1,000 rows in `venue_listing`** with `provider_symbol` carrying the venue's `.AX` suffix —
   `untracked_listing` then returned 1,000.
 
+## Measured live, 2026-09-21 — AU
+
+The first venue swept in production, and the first rows the lane has ever written:
+
+```
+raw_exchange_sweep AU   22 pages, pages 0..21, last cursor_at = NULL  (the walk finished)
+venue_sweep_reached_its_last_page   PASSED
+market.venue_listing            2,115   all of them AU, all Common Stock
+market.untracked_listing        1,864   ← off zero for the first time since 2026-09-17
+```
+
+**The gap against the old directory is fully explained**, which was step 4 of this note and is the
+half that mattered. Old AU held 2,761 rows: **2,134 Common Stock + 540 Mutual Fund + 87 Depositary
+Receipt**. The 627 non-common-stock rows were never in this sweep's scope. Of the 2,134 common
+stocks, **19 are in the old table and not the new** — delistings since whenever that table was last
+walked — and **0 FIGIs are new**, so the current walk is a strict subset rather than a different
+answer. That is the expected shape for a venue whose directory was swept once and then frozen.
+
+Two things the live run found that the local one could not:
+
+* the `ingest_rw` grant and the RLS policy beside it hold — this was the first real write, and
+  `venue_listing` took 2,115 rows through `postgres_io` in 2.26 s;
+* a walk that FINISHED logged `resumes at '<stale cursor>'`, because the loop only advances
+  `cursor` when the provider hands one back. The check passed and the sentence disagreed with it.
+  Fixed in muffin-ingest#66.
+
 ## What to do
 
-1. Roll the image, then materialise ONE venue partition live and read its counters before anything
-   else. The local run is a superuser against a database no resource has written; the live run is
-   the first exercise of the `ingest_rw` grant and the RLS policy beside it (checked on the node:
-   `rolbypassrls = t`, `has_table_privilege(…, 'INSERT') = t`, so it should hold — but checked is
-   not the same as exercised).
-2. Start `new_exchange_sweeps` with `default_status=RUNNING` in code, never in the UI.
-3. Backfill the venues, then re-backfill whatever `venue_sweep_reached_its_last_page` still reports
+1. ~~Roll the image, then materialise ONE venue partition live~~ — **done 2026-09-21, see above.**
+2. ~~Start `new_exchange_sweeps` with `default_status=RUNNING` in code, never in the UI.~~ —
+   **muffin-ingest#66.** It had to come first after all: measured before that PR,
+   `dynamic_partitions` held exactly ONE `exchange_sweep` key (the AU one added by hand), so a
+   backfill had nothing to select. The sensor is add-only, so starting it spends nothing.
+3. Backfill the remaining 58 venues, then re-backfill whatever `venue_sweep_reached_its_last_page` still reports
    unfinished. That check IS the selection; there is no need to guess.
 4. Watch `select count(*) from market.untracked_listing` climb off zero, and compare it against
    `exchange_listing`'s 148,782 — they will not match (the sweep asks only for `Common Stock`, so
    every ADR is absent by construction), and the GAP is the thing to explain rather than the total.
-5. **Decide on an OpenFIGI API key.** At ~5 requests a minute the full pass is ~5 hours and the
-   monthly refresh the same again. A key raises the allowance; it is a credential decision.
+5. **Decide on an OpenFIGI API key.** At ~5 requests a minute the full pass is ~209 minutes and
+   the monthly refresh the same again, all of it serialised behind the `openfigi_filter` pool. A
+   key raises the allowance; it is a credential decision and is open with the user.
 
 ## Done when
 
