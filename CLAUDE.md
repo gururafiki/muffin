@@ -3870,6 +3870,93 @@ each deferred note records its decision:
   on 2026-09-17. It is a Terraform output and is not among `muffin-deployment`'s GitHub secrets, so
   ask the user for it.
 
+### The universe lanes were built, deployed, and switched off (2026-09-20/21)
+
+Steps 4-6a of the ingestion rework merged 2026-09-12/13 and deployed 09-17, and **every standard
+sensor in the code location ships STOPPED** — so the discovery and symbology assets had ZERO
+materializations. Six defects lived in that code precisely because nothing had ever driven it, and
+each is below with the evidence that produced it.
+
+- **A SERVING VIEW WAS RE-POINTED ONTO A BASE NO RUNNING LANE FILLS, AND NOTHING REPORTED IT FOR
+  THREE DAYS.** Migration `20260913100000` moved `market.untracked_listing` from `exchange_listing`
+  (148,782 rows) onto `market.venue_listing`, which only the OpenFIGI sweep fills. The sweep had
+  never run, so the view returned **0 rows**, the Markets search was dead, and `promote_listing`
+  answered `unknown figi` for everything. A migration can only see that the table EXISTS. Before
+  switching a view, check the lane's materializations, not its code — and note the whole failure is
+  invisible to CI, to the migration tests, and to every count in the system.
+- **A BACKFILL POLICY DOES NOT APPLY TO A SCHEDULE'S `RunRequest`, AND THAT OOM-KILLED THE FIRST
+  SCHEDULED NIGHT OF THE NEW PRICE LANE.** `nightly_prices` named its whole `SWEEP_SLICE` of 2,500
+  keys in one `RunRequest`; `BackfillPolicy.multi_run(25)` governs how a BACKFILL is split and was
+  never consulted. Measured 2026-09-21: `Killed process (python) anon-rss 2,199,804 kB` against the
+  2.5 GiB container at 00:06:57, `ChildProcessCrashException` at 00:07:08, and `market.price_bar`
+  gained nothing for three days (09-18 itself holds 2,462 bars against ~11.5k — the throttled
+  night). It is the worst case rather than the steady state because every partition still carries
+  the pre-09-12 shape, so every subject takes the FULL-HISTORY path. A schedule covering a slice
+  emits one `RunRequest` per run width, reads the width from the module that defines it, and puts
+  the tick in its `run_key`. Against the live grid that is **66 runs of at most 25** where it was
+  one run of 1,629.
+- **OPENFIGI'S `/v3/filter` ALLOWS ~5 REQUESTS A MINUTE ANONYMOUSLY, NOT 25.** The 25/min in this
+  file was measured on `/v3/mapping`. Measured 2026-09-20 after 65 s of silence each time: paced
+  2.5 s, **5 pages then 429 on request 6** (reproduced three times, including a run refused on its
+  FIRST request 35 s after the previous one); paced 12 s, **7 pages in 74.3 s with no 429**. So a
+  59-venue pass is **~5 hours of provider time**, not the ~62 minutes estimated from 25/min, and
+  `SWEEP_PACING` is 12 s. An API key raises the allowance and is a credential decision.
+- **A RESUMED SWEEP REPLACED ITS OWN FILE.** `_sweep_venue` returns only the pages fetched in THIS
+  run against a manager that replaces, so a re-materialisation kept the new tail and discarded
+  everything before it — while `_last_cursor`'s docstring asserted the file was "REBUILT each sweep
+  with every page fetched since the beginning". Postgres survived (`venue_listing` upserts on
+  `figi`), so only the raw file could show it. Fixed with `merge_on=["exch_code", "cursor_from"]`,
+  keyed on the cursor a page was fetched WITH — `cursor_at` is null on a walk's last page, so every
+  walk's final page would collide. A fresh walk marks the partition `Complete` and REPLACES
+  (OpenFIGI has no as-of, so a refresh is a re-walk and two walks must not coexist); a resume
+  merges. Proven live: resumed from page 5, file 5 → 10 rows, and a run refused on its first
+  request kept all 10.
+- **NOTHING COULD TELL A FINISHED VENUE FROM A STALLED ONE.** A venue that stops on page 40 or on a
+  429 is an ordinary materialized partition, and its freshness policy is satisfied the moment it
+  stops. Resuming is an operator backfill by design — `new_exchange_sweeps` only ADDS venues — so
+  the missing half was the SELECTION: `venue_sweep_reached_its_last_page` fails when the newest
+  page still carries a cursor and NAMES the venues, WARN and non-blocking because an unfinished
+  venue is the expected state during a load.
+- **THE SYMBOLOGY LADDER WAS SEEDING, AND DELETING FROM, THE PRICE LANE'S PARTITION GRID.**
+  `defs/symbology` imported `prices.partitions.security_partitions`, and `new_symbols_needed`
+  re-asked a stale miss by DELETING the security's partition. That grid is the state
+  `nightly_prices` walks and `no_security_is_far_behind_the_sweep` reads — the bars would have
+  survived and the record of collecting them would not. Its population was also
+  `security.is_tradeable = false`: **23,341 securities, 15,159 of them BONDS**, with no clause
+  excluding one that already held the evidence. `is_tradeable` is false by default and set by
+  promotion; it is not a symbol-resolution marker. The honest populations are **5,697** equities
+  missing a ticker and **1,618** missing a provider symbol.
+- **`on_missing()` IS "NEWLY MISSING", WHICH IS THE WRONG RULE FOR A LANE BEING SWITCHED ON.**
+  Measured on 1.13.22: **0 of 2** partitions already in the grid at the first tick, 2 of 2 added
+  between ticks. `missing()` requests both. A custom `AutomationCondition` also works and was driven
+  before being relied on — its identity is its CLASS NAME, it gets no resources, and it is
+  preferable to a sensor only because a sensor can request a partition or a contiguous RANGE, so a
+  scattered set becomes one run per subject.
+- **A PARSER COLUMN NO TABLE HAS, BEHIND A TEST THAT PASSED WHEN THE KEY WAS ABSENT.**
+  `parse_filter` emitted `security_type_detail`; every table spells it `figi_security_type`. The
+  writer takes its columns from the row's keys, so the disagreement existed only at the INSERT —
+  the first real write died with `column "security_type_detail" of relation "venue_listing" does not
+  exist`. Its test read `row["security_type"] is not row.get("security_type_detail")`, and `.get`
+  returns None for a missing key, so it passed whatever the column was called. **The captured AU
+  page cannot tell the fine type from the coarse one either** — every row reads `Common Stock`
+  twice — so the discriminating fixture is an ETF, `ETP` inside `Mutual Fund`.
+- **FOUR CONTROL TABLES A REBUILT DATABASE HAS NONE OF**, up from two: `data_source` (24 in
+  production), `index_scope` (73), `identifier_kind` (7) and `exchange` (59). `identifier_kind` is
+  the sharp one — `security_identifier.kind_code` is a foreign key to it — and `exchange` is the
+  quiet one: with no row the sweep's stage 2 falls back to an empty suffix and writes the BARE
+  ticker as `provider_symbol`, filing an Australian listing as `BHP` rather than `BHP.AX`. All
+  carry NOT NULL `name` columns.
+- **`dagster asset materialize` CANNOT RANGE A `multi_run` ASSET**, which is most of them: it
+  refuses and names `BackfillPolicy.single_run()` as the requirement. One partition at a time
+  exercises the SINGLE-partition path while the seam that breaks is the MAPPING one; drive a range
+  from a script with the two `dagster/asset_partition_range_*` tags. A stage-2 asset also needs its
+  upstreams in the graph as SOURCES, narrowed with `selection=`.
+- **A LOCAL RUN CANNOT REACH TWO LIVE GATES**, and "it passed locally" was doing more work than it
+  had earned: it is a superuser against a database no resource has ever written, so the `ingest_rw`
+  grant and the RLS policy beside it go unexercised (independent gates — a correct grant hides a
+  missing policy), as does the provider's real limit under production's other callers. Checked
+  separately on the node: `ingest_rw` has `rolbypassrls = t` and INSERT on `venue_listing`.
+
 ### The two nights that judged four decisions, and the workspace move (2026-09-19)
 
 Three of the 2026-09-17 decisions held and one was falsified; the refactor that shipped alongside
