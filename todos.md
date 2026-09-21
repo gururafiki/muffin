@@ -2087,6 +2087,14 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
 - [ ] **Check the registries actually ran.** `weekly_registries` next ticks Monday 2026-09-21; its
       one previous tick died in the exporter incident, and a schedule that has never succeeded
       looks identical to one that has not yet run. Read `security_cik` / `security_nse_filer`.
+- [ ] **BLOCKER 2026-09-21: the deploy cannot authenticate to Cloudflare.** Terraform apply fails
+      at REFRESH with `401 / code 10000 Authentication error` on every Cloudflare resource, before
+      Ansible runs — so nothing has deployed since 2026-09-17 11:47, and #383 and #384 are merged
+      and stranded. `CLOUDFLARE_API_TOKEN` was last set 2026-06-21 (three months); an expired TTL
+      fits and is UNVERIFIED. Needs the user: the secret's value is not readable from CI. Note the
+      ingest image roll is a separate SSH path and still works, which is why the discovery lane
+      went live anyway — a green roll says nothing about a deploy —
+      docs/deferred/2026-09-21-the-deploy-cannot-authenticate-to-cloudflare.md
 - [ ] **Dagster captured no step stdout or stderr at all** — every step logged
       `OSError: [Errno 30] Read-only file system: '/opt/dagster/home/storage'` and carried on,
       because `compute_logs` was unconfigured and `$DAGSTER_HOME` is read-only on purpose. Found
