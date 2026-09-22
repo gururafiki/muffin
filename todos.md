@@ -2068,12 +2068,30 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
       FIGIs are new**. Sensors: measured before the PR, `dynamic_partitions` held ONE
       `exchange_sweep` key, so a backfill had nothing to select; after the roll the two add-only
       sensors seeded **59 venues and 74 N-PORT filings and materialised nothing**.
-- [ ] **Backfill the remaining 58 venues**, then re-backfill whatever
-      `venue_sweep_reached_its_last_page` still names. **Re-sized 2026-09-21: ~209 minutes, not
-      ~5 hours** — the 1,488-page estimate counted `exchange_listing`'s whole 148,782 rows, and
-      the sweep filters to Common Stock. Over the 59 enabled venues: 100,923 rows, 1,043 pages,
-      five of them (US 163, GR 143, IB 55, LN 44, JP 41) over `SWEEP_MAX_PAGES` and needing a
-      second run — docs/deferred/2026-09-20-the-venue-sweep-is-what-refills-untracked-listing.md
+- [x] **All 59 venues swept and published — 2026-09-21.** `venue_sweep_reached_its_last_page`
+      PASSES (59 venues, 1,028 pages, 0 unfinished), `venue_listing` **99,459** rows,
+      `market.untracked_listing` **0 -> 84,220** = 98.6% of the old table's 100,923 common stocks,
+      the rest delisting turnover, plus 59 FIGIs it never had. Anon latency re-measured after the
+      base grew from 0 rows: 107 ms name / 14 ms symbol, best of three. Note CLOSED except the
+      deployed Markets search, which nobody has loaded yet —
+      docs/deferred/2026-09-20-the-venue-sweep-is-what-refills-untracked-listing.md
+- [x] **The OpenFIGI key was in the container's environment and never sent** (muffin-ingest#67).
+      Every OpenFIGI budget this repo measured was the anonymous one, measured while holding a
+      key. Keyed: `/v3/filter` sustains 0.3 s where anonymous refused request 6 at 2.5 s, and
+      `/v3/mapping` takes 100 jobs where anonymous 413s at 11. The backfill went from 39 venues in
+      58 minutes to 56 in ~5.
+- [ ] **`SWEEP_PACING_KEYED = 0.3 s` is too fast to sustain and should be ~2-3 s.** Measured on
+      the US sweep: `openfigi throttled US after 20 pages`, then `after 0 pages` on the pass
+      relaunched immediately, so passes alternate 20/0. It shipped on a 15-page probe that sat
+      just under the cliff. The lane behaves correctly throughout — this is a wrong constant, not
+      a defect.
+- [ ] **An OpenFIGI error arrives as HTTP 200 and is cached for 90 days.** Two venues failed twice
+      identically on a cached `{"error":"There was an error while processing this request."}`;
+      purged by hand, 2 of 1,582 OpenFIGI entries. The first scan reported 0 of 268,314 because
+      the bodies are gzipped and the check matched `Content-Encoding` with a capital C while nginx
+      stores headers lowercase. Also fix `parse_filter`, which calls every 200-with-error "a shape
+      problem in OUR request" — measured false —
+      docs/deferred/2026-09-21-an-error-wearing-a-200-is-cached-for-90-days.md
 - [ ] **DECIDE: turn `new_symbols_needed` on.** Deliberately left STOPPED by #66 while the two
       discovery sensors went RUNNING, and the difference is the point: those two return
       `run_requests=[]` and only make work visible, whereas the symbology rungs carry
@@ -2087,7 +2105,12 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
 - [ ] **Check the registries actually ran.** `weekly_registries` next ticks Monday 2026-09-21; its
       one previous tick died in the exporter incident, and a schedule that has never succeeded
       looks identical to one that has not yet run. Read `security_cik` / `security_nse_filer`.
-- [ ] **BLOCKER 2026-09-21: the deploy cannot authenticate to Cloudflare.** Terraform apply fails
+- [x] **RESOLVED 2026-09-21: the deploy could not authenticate to Cloudflare.** The replacement
+      token is **account-owned** (`cfat_` prefix), which verifies at
+      `/accounts/{id}/tokens/verify` (200) and answers **403 `9109`** at `/user/tokens/verify` by
+      design — so the obvious verify call reports a working token as invalid. Secret updated,
+      deploy green, #383 and #384 live. Original note:
+- [x] ~~**BLOCKER 2026-09-21: the deploy cannot authenticate to Cloudflare.**~~ Terraform apply fails
       at REFRESH with `401 / code 10000 Authentication error` on every Cloudflare resource, before
       Ansible runs — so nothing has deployed since 2026-09-17 11:47, and #383 and #384 are merged
       and stranded. `CLOUDFLARE_API_TOKEN` was last set 2026-06-21 (three months); an expired TTL
@@ -2095,7 +2118,10 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
       ingest image roll is a separate SSH path and still works, which is why the discovery lane
       went live anyway — a green roll says nothing about a deploy —
       docs/deferred/2026-09-21-the-deploy-cannot-authenticate-to-cloudflare.md
-- [ ] **Dagster captured no step stdout or stderr at all** — every step logged
+- [x] **Dagster captured no step stdout or stderr at all — FIXED AND VERIFIED 2026-09-21.**
+      After the deploy, a run writes `.out`/`.err`/`.complete` and the per-step `Errno 30` is
+      gone. Original note:
+- [x] ~~**Dagster captured no step stdout or stderr at all**~~ — every step logged
       `OSError: [Errno 30] Read-only file system: '/opt/dagster/home/storage'` and carried on,
       because `compute_logs` was unconfigured and `$DAGSTER_HOME` is read-only on purpose. Found
       2026-09-21 while reading the live sweep. Structured logging was unaffected, so the lanes

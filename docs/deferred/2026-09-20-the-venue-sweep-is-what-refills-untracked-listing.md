@@ -1,7 +1,7 @@
 # `market.untracked_listing` is empty until the venue sweep has walked the venues
 
-Created 2026-09-20 · Updated 2026-09-21 · **Check 2026-09-27** · Status: PROVEN LIVE ON ONE VENUE
-and the view is off zero; 58 venues still to sweep
+Created 2026-09-20 · Updated 2026-09-21 · **CLOSED** — all 59 venues swept, the view holds
+84,220 rows and the completeness check passes
 
 ## Why it is deferred
 
@@ -101,8 +101,47 @@ Two things the live run found that the local one could not:
    the monthly refresh the same again, all of it serialised behind the `openfigi_filter` pool. A
    key raises the allowance; it is a credential decision and is open with the user.
 
+## The full pass, measured 2026-09-21
+
+```
+venues swept                       59 of 59      venue_sweep_reached_its_last_page: PASSED
+raw pages held                  1,028            unfinished 0 · never_swept 0
+market.venue_listing           99,459
+market.untracked_listing       84,220            (was 0)
+old exchange_listing          148,820 all types · 100,923 Common Stock
+FIGIs the old table never had      59
+```
+
+**99,459 against 100,923 is 98.6%**, and the ~1,464 difference is delisting turnover: the old
+table accumulates and never retracts, having been walked once and frozen. 59 FIGIs are genuinely
+new.
+
+**What it actually cost, and it is not what this note predicted.** The ~209-minute estimate was
+for the ANONYMOUS budget — and `OPENFIGI_API_KEY` was in the container's environment the whole
+time, never sent (muffin-ingest#67). Keyed, 56 venues finished in about five minutes against 39 in
+fifty-eight unkeyed. So the honest cost of a refresh is minutes, not hours, and the API-key
+question this note carried was answered by reading the environment rather than by buying anything.
+
+**Two things the drain found**, both with their own notes:
+
+* **US needed 150 pages against `SWEEP_MAX_PAGES` 40**, so it took several passes — which is the
+  design working, and the check named it as the backfill selection rather than anyone guessing.
+* **`SWEEP_PACING_KEYED = 0.3 s` is too fast to sustain.** The provider says so directly:
+  `openfigi throttled US after 20 pages`, then `after 0 pages` on the immediately-relaunched pass.
+  ~20 requests then a refusal, so passes alternate 20/0 and the honest figure is nearer 2-3 s. It
+  shipped on a 15-page probe that sat just under the cliff — a measurement taken just below a
+  ceiling read as headroom.
+* **SM and PM failed twice identically on a CACHED ERROR**, not a flaky provider —
+  `docs/deferred/2026-09-21-an-error-wearing-a-200-is-cached-for-90-days.md`.
+
 ## Done when
 
-`market.untracked_listing` is non-trivial and its size is explained against the old directory, the
-Markets search returns rows in the deployed app, `venue_sweep_reached_its_last_page` passes for
-every venue, and this note records what the full pass actually took.
+~~`market.untracked_listing` is non-trivial and its size is explained against the old directory~~
+(84,220; 98.6% of the old common-stock set, the rest delisting turnover) · ~~
+`venue_sweep_reached_its_last_page` passes for every venue~~ (59/59, 0 unfinished) · ~~this note
+records what the full pass actually took~~ (~5 minutes keyed).
+
+**One item remains: the Markets search returning rows in the deployed app.** The data is there and
+the view answers; nobody has loaded the page. That is the only part of this note still open, and
+it belongs with an anon read-latency measurement — `untracked_listing`'s base went from 0 to
+99,459 rows, so the view's plan is not the one last measured.

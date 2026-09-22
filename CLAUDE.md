@@ -3957,6 +3957,93 @@ each is below with the evidence that produced it.
   missing policy), as does the provider's real limit under production's other callers. Checked
   separately on the node: `ingest_rw` has `rolbypassrls = t` and INSERT on `venue_listing`.
 
+### The universe loaded, and a key that had been in the environment all along (2026-09-21)
+
+The discovery lane went live and the venue directory was swept end to end: **59 of 59 venues,
+1,028 raw pages, `venue_sweep_reached_its_last_page` PASSING with 0 unfinished**, `venue_listing`
+**99,459** rows and `market.untracked_listing` **0 -> 84,220**. That is 98.6% of the old table's
+100,923 common stocks, with 59 FIGIs it never had and ~1,464 delistings it never retracted.
+Re-measured as ANON afterwards, because the view's base went from 0 to 99,459 rows: name search
+**107 ms**, symbol search **14 ms**, best of three, against a 2,000 ms budget.
+
+- **`OPENFIGI_API_KEY` WAS A GITHUB SECRET, WAS RENDERED INTO THIS SERVICE'S ENVIRONMENT, AND WAS
+  NEVER SENT.** `providers/openfigi.py` sent only a `Content-Type`, behind a module docstring
+  calling it "the free, KEYLESS symbology API". So **every OpenFIGI budget this file records was
+  the ANONYMOUS budget, measured while holding a key** — including the ~5 requests a minute
+  measured the day before, which set `SWEEP_PACING` to 12 s. Measured 2026-09-21 on the same key:
+  `/v3/filter` anonymous refused on request 6 at 2.5 s pacing, keyed sustained 15 pages at 0.3 s;
+  `/v3/mapping` anonymous **413 at 11 jobs** ("Request may only contain 10 mapping jobs"), keyed
+  **100 jobs, 413 at 101**. The provider states both ceilings in its own 413, so they are two
+  constants and the caller CHOOSES — one number is wrong in one configuration, and wrong upward is
+  a 413 that fails the run. The backfill went from 39 venues in 58 minutes to 56 in about five.
+  **Before measuring a provider's limit, check what credentials the container already has** — the
+  environment is part of the measurement.
+- **AND THE FIRST KEYED CONSTANT WAS STILL TOO FAST, BECAUSE A MEASUREMENT TAKEN JUST UNDER A
+  CLIFF READS AS HEADROOM.** `SWEEP_PACING_KEYED = 0.3` shipped on a probe that stopped at 15
+  pages. The provider named the real ceiling during the US sweep: `openfigi throttled US after 20
+  pages`, then `after 0 pages` on the pass relaunched immediately after. So passes alternate 20/0
+  and the honest sustained figure is nearer 2-3 s. The LANE was correct throughout — it filed what
+  it fetched, stayed resumable, and the check named the venue — which is the difference between a
+  wrong constant and a defect. **Probe until the provider refuses, not until you are satisfied.**
+- **AN ERROR WEARING AN HTTP 200 IS CACHED, AND HERE THAT IS FOR NINETY DAYS.** Two venues failed
+  the backfill twice, identically — which a transient cannot do. Both walked cleanly when asked
+  directly; through http-cache the node got `cache: HIT` and
+  `{"error":"There was an error while processing this request."}`. OpenFIGI answers a transient
+  server fault with a **200**, `proxy_cache_valid 200 90d` stores it, and
+  `proxy_ignore_headers Cache-Control` removes the provider's own chance to prevent it.
+  `nginx.conf`'s header already says *"anything that is not a 200 is not cached — a cached 429 or
+  5xx is poison"*: correct, and blind to poison that arrives as a 200. **One second of provider
+  trouble becomes three months of a request that cannot succeed.** Contained by luck at two
+  entries; the same hiccup on the US request would have frozen the largest venue until December.
+  See `docs/deferred/2026-09-21-an-error-wearing-a-200-is-cached-for-90-days.md`.
+- **THE SCAN THAT SAID "0 POISONED OF 268,314" WAS THE DETECTOR DESTROYING WHAT IT DETECTS —
+  twice over.** OpenFIGI answers **gzipped**, so the body is not plaintext on disk; and the
+  gzip check matched `Content-Encoding` with a capital C while **nginx stores headers lowercase**.
+  The honest scan (decompressing, lowercase-aware) found **1,582 OpenFIGI entries of 268,358 and
+  exactly 2 holding an error**. Same family as the `http-cache-covers-every-provider` guard that
+  truncated `https://host` at `https:`. **A cache entry is also LOCATABLE without scanning**: the
+  key is `"$request_method|$proxy_host|$request_uri|$body_key"` with
+  `$body_key = ngx.md5(<raw request body>)`, and the filename is `md5(key)` at `levels=1:2` — it
+  found the file first try, which is the right way to purge one rather than grepping 268k files.
+- **A CLOUDFLARE ACCOUNT-OWNED TOKEN IS VALID AND ANSWERS 401 AT `/user/tokens/verify`.** The
+  deploy failed at Terraform REFRESH with `401 / code 1000` on every Cloudflare resource, and
+  nothing had deployed since 2026-09-17. A replacement token verified 401 too — at the USER
+  endpoint. It is an **account-owned** token (`cfat_` prefix): `/accounts/{id}/tokens/verify`
+  returns 200, `zones`, `accounts` and every Access resource return 200, and `/user` returns
+  **403 `9109: Valid user-level authentication not found`** by design. **Verify a token against the
+  scope it is issued for**, and note the roll path is independent — `maintenance.yml roll-ingest`
+  goes over SSH and `docker service update`, so the ingest image rolled fine throughout a deploy
+  outage. A green roll says nothing about whether a deploy would work.
+- **DAGSTER HAD BEEN CAPTURING NO STEP STDOUT OR STDERR AT ALL**, one
+  `OSError: [Errno 30] Read-only file system: '/opt/dagster/home/storage'` per step since the code
+  location was built: `compute_logs` was unconfigured and `$DAGSTER_HOME` is read-only on purpose
+  (telemetry once crash-looped the daemon writing there). Structured logging was unaffected, which
+  is why the lanes looked fully instrumented — what was missing is the only channel carrying a
+  failure nobody raised, and this deployment's three supervisor kills are distinguishable IN THE
+  LOG AND NOWHERE ELSE. Fixed with a second writable mount (muffin-deployment#384). **The
+  webserver's copy must be WRITABLE and that was checked, not assumed**: tailing a LIVE step calls
+  `LocalComputeLogSubscriptionManager.watch()`, which does `ensure_dir(directory)` before
+  scheduling its observer, so `:ro` would have raised `Errno 30` the moment someone opened the log
+  tab — the exact defect, reproduced one service over by the fix for it.
+- **A FINISHED WALK LOGGED THAT IT RESUMES.** `_sweep_venue` only advances `cursor` when the
+  provider hands one back, so a walk reaching the last page leaves it holding the cursor the FINAL
+  page was fetched with. The first live AU sweep logged `resumes at 'QW9Fc1Fr…'` beside a
+  `venue_sweep_reached_its_last_page` that correctly PASSED — and a reader believes the sentence,
+  not the check. The resume point now comes from the same field the check reads, so the two cannot
+  disagree.
+- **A SENSOR THAT SHIPS STOPPED IS A LANE THAT DOES NOT EXIST**, and the measurement that proves
+  it is the partition grid: before muffin-ingest#66, `dynamic_partitions` held **ONE**
+  `exchange_sweep` key — the one added by hand — so the backfill had nothing to select. Both
+  discovery sensors return `run_requests=[]`, so starting them made 59 venues and 74 filings
+  VISIBLE and materialised nothing. That is why they went on while `new_symbols_needed` did not:
+  its rungs carry `AutomationCondition.missing()` behind a RUNNING default automation sensor, so
+  seeding that grid starts asking the provider immediately.
+- **TWO SENSORS ARE RUNNING ONLY AS DATABASE STATE.** `new_securities_need_history` and
+  `new_currencies_need_history` report `stored=RUNNING` rather than `DECLARED_IN_CODE` — they were
+  toggled in the UI at some point, so nothing in the repo says they should be on and a state reset
+  silently turns them off. Ask Dagster (`instance.all_instigator_state()`), never the enum in the
+  `instigators` table, and never the code alone.
+
 ### The two nights that judged four decisions, and the workspace move (2026-09-19)
 
 Three of the 2026-09-17 decisions held and one was falsified; the refactor that shipped alongside
