@@ -84,8 +84,23 @@ Proven before shipping:
 - **By mutation:** 13 mutations, each caught. Two fixtures first passed with their rule deleted,
   because over a constant grid the date rule lands on the same keys.
 
+**Two overlaps that are expected, stated so a check does not read them as the defect:**
+
+- **One time, on 2026-09-26: 1,071 keys.** The 09-25 night jumped BACKWARDS to [2300, 4800), and
+  the transition resumes after that night's last key. So 09-26 sweeps [4800, 7300), and
+  [4800, 5871) of that was already swept on 09-24. That costs ~0.4 of a night once. From 09-27 on,
+  each night continues after the previous one.
+- **Standing: the fourth-previous night, by 5 × 2,500 − N keys.** Every night asks for a full
+  slice and wraps at the end of the grid, so while N is between 10,000 and 12,500 a night overlaps
+  the night four before it by that amount (~232 at N = 12,268). Each key is still swept every
+  N / 2,500 ≈ 4.9 nights. This is the cost of equal-sized nights over a grid that is not a
+  multiple of the slice, not a jump.
+
 ## Done when
 
-Consecutive ticks with a growing grid are proven disjoint by a test in which the grid grows
-between ticks, the chosen rule is live, and a week of ticks shows no night re-sweeping one of the
-previous four.
+- Consecutive ticks with a growing grid are proven disjoint by a test in which the grid grows
+  between ticks. **Done:** muffin-ingest#78.
+- The chosen rule is live. **Done:** rolled 2026-09-25.
+- From 09-27 on, a week of ticks shows each night starting right after the previous night's
+  `muffin/sweep_last`, disjoint from the previous three, and overlapping the fourth-previous by no
+  more than 5 × 2,500 − N keys.
