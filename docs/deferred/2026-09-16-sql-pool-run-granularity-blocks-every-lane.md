@@ -1,7 +1,8 @@
 # One long run holds the shared `sql` pool and queues every other lane behind it
 
-Created 2026-09-16 · **Check 2026-09-23** · Status: the heartbeat fix is **verified 2026-09-19**
-(waits 111 s -> 3-7 s); pool granularity stays open
+Created 2026-09-16 · **Check 2026-09-26** · Status: the heartbeat fix is **verified 2026-09-19**
+(waits 111 s -> 3-7 s). The lanes' wait is fixed by `dagster/priority` (muffin-ingest#78, rolled
+2026-09-25 20:34 UTC), to be verified on the 2026-09-26 night. Pool granularity stays open.
 
 ## Verified (2026-09-19)
 
@@ -37,6 +38,18 @@ in 1.13.22). Tagging `daily_fx` and `daily_indices` above the sweep, or the swee
 the two short lanes take the next free `sql` slot. Their wait would then be at most one price run
 (~55 s), with the pool layout unchanged. This is the skill's "order by run length" rule, applied
 in the scheduler instead of by the operator.
+
+## Decision (2026-09-25) — priority, not granularity
+
+`daily_fx` and `daily_indices` carry `dagster/priority: 1` through their jobs' `run_tags`
+(`muffin_ingest_dagster/lib/priority.py`). The scheduler merges a job's `run_tags` into every run it
+creates, and the coordinator sorts by priority before checking pools, so each short lane takes the
+next free `sql` slot. It should wait at most one price run (~55 s), never the sweep. This removes
+the symptom and leaves the pool layout as it is. The granularity question below is still open, and
+it is still the only thing that would let a short lane run BESIDE a price run rather than after it.
+
+**Live check, 2026-09-26 00:00 UTC:** both runs carry `dagster/priority=1`, and each waits less than
+two minutes.
 
 ## Decision (2026-09-17)
 

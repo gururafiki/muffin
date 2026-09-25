@@ -1,7 +1,7 @@
 # The nightly price sweep's rotation jumps whenever the universe grows
 
-Created 2026-09-25 · **Decide before the universe next grows** · Status: open. The defect is
-measured and reproduced, and the fix is a choice between two designs
+Created 2026-09-25 · **Check 2026-10-02** · Status: **DECIDED 2026-09-25: option B**, shipped in
+muffin-ingest#78 and rolled at 20:34 UTC. Open until a week of nights has run on it.
 
 ## What happened
 
@@ -64,6 +64,25 @@ contiguous range, so a scattered stalest set becomes hundreds of runs.
 
 Recommendation: **B** — it is the only one with no discontinuity at all. A is the smaller change if
 the discontinuity once per 2,500 additions is acceptable.
+
+## Decision and what shipped (2026-09-25)
+
+**B**, approved by the user.
+- **The anchor.** Every run carries `muffin/sweep_night` and `muffin/sweep_last`. The next tick
+  reads the newest night strictly before its own and resumes after that night's last key.
+- **Retried ticks and failed nights.** Tonight is excluded, so a retried tick yields the same run
+  keys. A failed night still advances.
+- **Fallbacks.** The highest range end of an untagged night (the 09-26 transition), then the date
+  rule, never zero.
+- **Wrapping.** Slices wrap past the end of the grid, and no run straddles it.
+
+Proven before shipping:
+- **Against production run storage:** tonight resumes at 4800, and re-evaluating 09-25 resumes at
+  5871 (the old rule chose 2300).
+- **By a dry run of the deployed schedule after the roll:** 100 requests, run keys
+  `739885-4800` … `739885-7275`, all tagged `2026-09-26`.
+- **By mutation:** 13 mutations, each caught. Two fixtures first passed with their rule deleted,
+  because over a constant grid the date rule lands on the same keys.
 
 ## Done when
 

@@ -4198,6 +4198,56 @@ move — rather than by a test.
   `unasked 0`. The counters sum to `requested`: 2,465 answered + 35 `dead`, and the 35 are exactly
   the securities with nothing stored, whose symbol the provider rejected alone.
 
+### The nightly lanes: where the sweep resumes, who goes first (2026-09-25)
+
+Three defects in the 00:00 UTC lanes, each measured first, fixed in muffin-ingest#78, and one
+labelling defect fixed in #79 before the Yahoo rung's first run. Spec:
+[docs/specs/2026-09-25-the-nightly-lanes.md](docs/specs/2026-09-25-the-nightly-lanes.md).
+
+- **A ROTATION DERIVED FROM THE SIZE OF WHAT IT ROTATES OVER JUMPS WHENEVER THE SIZE CHANGES.**
+  `nightly_prices` started at `(day * 2500) % len(keys)`. One new security (12,267 -> 12,268)
+  re-mapped every slice, and the 09-25 night re-swept exactly the keys of the two nights before
+  while 6,056 securities sat 8-14 days stale. **Anchor on a KEY:** dynamic partitions list in
+  insertion order (`get_dynamic_partitions` orders by id), so growth appends and never moves one.
+  **A schedule has no cursor, but the runs it launched are durable state it can read back.** Each
+  run now carries `muffin/sweep_night` + `muffin/sweep_last`, and the next tick reads them with
+  `get_runs(RunsFilter(tags={dagster/schedule_name}))`. Tonight's own runs are excluded, so a
+  retried tick yields the same run keys, and a failed night still advances.
+- **OVER A CONSTANT GRID THE OLD RULE AND THE NEW ONE LAND ON THE SAME KEYS, AND TWO GUARDS PASSED
+  WITH THEIR RULE DELETED.** The date rule advances exactly one slice a night until the size
+  changes. So "fall back to the old range end" and "ignore failed nights" were both certified by
+  fixtures that could not tell them from the date rule. Growing the grid between nights, plus an
+  assertion that the rules disagree, is what made them fail when mutated. This is the "make the
+  candidate rules disagree" lesson, where the disagreement only exists under growth.
+- **QUEUE ORDER AT A SHARED TICK IS AN ACCIDENT OF WHICH SCHEDULE TICKED FIRST.** Two ~20 s lanes
+  waited 6,185 s (09-23) and 6,069 s (09-24) behind 100 price runs, and on 09-25 neither waited.
+  `dagster/priority` in a job's `run_tags` is merged into every run the scheduler creates, and the
+  coordinator sorts by it before checking pools. **A `scheduleDryRun` does NOT show it**: the dry
+  run returns the RunRequest's tags only. Verify a job-level tag by importing the deployed
+  definitions in the code-location container.
+- **VERIFY A SCHEDULE'S NEXT TICK AGAINST THE DEPLOYED CODE BEFORE IT FIRES.** Two read-only
+  checks, both done for #78:
+  - *Before the PR:* exec the new module's source in the webserver container and call it with
+    `build_schedule_context(instance=DagsterInstance.get(), scheduled_execution_time=…)` against
+    production's real run storage.
+  - *After the roll:* the GraphQL `scheduleDryRun(selectorData, timestamp)` mutation. It launches
+    nothing and returns the run requests the deployed code would emit.
+- **YAHOO'S DAILY BARS HAVE A GAP THAT FILLS ITSELF AND ONE THAT DOES NOT, AND A WIDER WINDOW COSTS
+  BYTES, NOT REQUESTS.** The NaN close at 00:00 UTC was healed by re-reading the newest stored day.
+  A day `null` for days afterwards was re-read only if a cohort-mate happened to be behind it.
+  `REREAD = 7 days` makes it a rule. The vendor is asked once per ticker whatever the range.
+- **AN OBSERVATION MUST NAME THE PROVIDER THAT ANSWERED, AND THE KEY MADE THE WRONG LABEL
+  DESTRUCTIVE.** `plan_symbols` labelled every symbol probe `openfigi`, whichever rung supplied
+  the value. With `identifier_probe` keyed `(security_id, scheme, provider)`, the Yahoo rung's first
+  run would have stored Yahoo's hits as OpenFIGI's and overwritten OpenFIGI's misses. Found by
+  reading the code before running the rung, not after. Each rung that asked now earns its own row,
+  and the flags are REQUIRED (a default is a claim about what was asked, made by whoever did not
+  say).
+- **THE MARKETS SEARCH WAS CHECKED IN THE BROWSER, NOT INFERRED FROM THE TABLE.** "Hollywood Bowl"
+  returns `BOWL.L` as "Listed, not tracked yet", and the view folds away the Frankfurt duplicate.
+  The same visit found the app still calling `market-refresh` for three resources D2 retired, a
+  403 on every non-admin load (`docs/deferred/2026-09-25-the-app-still-refreshes-retired-resources.md`).
+
 ### The two nights that judged four decisions, and the workspace move (2026-09-19)
 
 Three of the 2026-09-17 decisions held and one was falsified; the refactor that shipped alongside

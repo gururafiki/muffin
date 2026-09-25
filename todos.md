@@ -1595,20 +1595,21 @@ cut over one at a time.
   docs/deferred/2026-09-20-the-day-partitioned-price-lane-is-kept-as-the-rollback.md
 - [ ] **DECIDE by 2026-10-08 — the Yahoo rung of the symbol ladder has never run, on purpose.**
   One request per subject on the price sweep's allowance; ~690 equities still lack a yfinance
-  symbol after the OpenFIGI rungs (692 on 09-25). Proposed: a 50-subject midday sample, then read the next
-  night's `throttled` before doing the rest —
+  symbol after the OpenFIGI rungs (692 on 09-25). APPROVED 2026-09-25: a 50-subject sample, then
+  read the next night's `throttled` before doing the rest. Prerequisite shipped: muffin-ingest#79,
+  so a Yahoo answer is recorded as `provider = 'yahoo'` rather than as OpenFIGI's. Sample scheduled
+  after the 09-26 sweep —
   docs/deferred/2026-09-24-the-yahoo-rung-is-an-operator-backfill.md
 - [ ] due 2026-10-16 (or before the first keyed provider's raw asset) — redact API keys from raw
   document URLs — docs/deferred/2026-09-16-raw-request-credentials.md
 - [x] 2026-09-19 — FX spot writes the day's own rates with no hand-run: 41 rates for every weekday
   through 09-18 across two scheduled nights (was 0 rows). Note CLOSED —
   docs/deferred/2026-09-16-http-cache-serves-stale-to-daily-lanes.md
-- [ ] **DECIDE — `sql` pool granularity, and it got WORSE on 2026-09-21.** The heartbeat half is
-  VERIFIED (waits 111 s -> 3-7 s). The lanes: since the price lane became 100 bounded runs, the
-  daily lane queued after them waits for ALL of them — `daily_indices` **6,185 s** on 09-23,
-  `daily_fx` **6,069 s** on 09-24 (was ~38 s), and on 09-25 neither (FX 8 s, indices 49 s): it
-  depends on which runs the tick queued first. New cheapest option: `dagster/priority` on the two
-  short lanes, native to the queue coordinator, pool layout untouched —
+- [ ] **check 2026-09-26 — the short lanes jump the queue: `dagster/priority: 1` on `daily_fx` and
+  `daily_indices`, shipped in muffin-ingest#78 (rolled 2026-09-25 20:34 UTC).** They had waited
+  behind all 100 price runs: `daily_indices` 6,185 s on 09-23, `daily_fx` 6,069 s on 09-24. The
+  09-26 night must show both runs tagged and each waiting under two minutes. The heartbeat half was
+  verified 09-19. Pool granularity itself stays open —
   docs/deferred/2026-09-16-sql-pool-run-granularity-blocks-every-lane.md
 - [x] 2026-09-19 — `security_return` rebuilt itself on both nights with no hand-run, one minute after
   each `daily_prices` (runs `b21560a1` 09-18 00:42, `c3b53619` 09-19 00:10; ~103k periods each).
@@ -2196,23 +2197,34 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
       slot for ever. Run monitoring cannot catch it: `DefaultRunLauncher` does not support worker
       health checks. Record the in-flight run ids before the update and `report_run_failed` the
       ones still `STARTED` once the new location has loaded.
-- [ ] **DECIDE — the nightly price sweep's rotation jumps whenever the universe grows.** The slice
-      is `(day × 2500) mod N`, so ONE added security re-maps every future slice: on 09-25 N went
-      12,267 -> 12,268 and the whole night re-swept securities from 09-23/24 (overlaps 1,071 +
-      1,429, reproduced exactly from the formula) while 7,268 waited. Staleness that day: 6,056
-      securities 8–14 days old. Options: fixed slots (`day % ceil(N/2500)`) or resume after the
-      last key the previous tick requested (recommended — no discontinuity at all) —
+- [ ] **check 2026-10-02 — the nightly price sweep resumes after the last key the previous night
+      asked for. DECIDED (option B) and shipped 2026-09-25 in muffin-ingest#78.** The slice used to
+      be `(day × 2500) mod N`, so ONE added security re-mapped every future slice: on 09-25 N went
+      12,267 -> 12,268 and the whole night re-swept securities from 09-23/24 while 6,056 sat 8-14
+      days stale. Each run now carries `muffin/sweep_night` + `muffin/sweep_last`, read back from
+      run storage. A deployed dry run of 09-26 gives 100 runs from 4800. Done when a week of nights
+      shows none re-sweeping the previous one —
       docs/deferred/2026-09-25-the-price-sweep-rotation-jumps-when-the-universe-grows.md
-- [ ] **An extension re-reads only from its cohort's OLDEST watermark**, so a day the provider fills
-      after we have passed it is re-read by accident of cohort membership, never by rule. Measured
-      2026-09-24: Yahoo's 09-22 bar is `null` for KO, CZR, EMBC and PRAA (MSFT, SPY and JPM carry
-      it), and 1,060 of the night's US securities stop at 09-21. A window costs bytes, not
-      requests, on this provider — so re-asking a trailing week from each watermark is nearly
-      free. Propose, do not just do: it widens every extension's payload ~5x.
-- [ ] **`/` has 6.1 GB free after a dangling-only prune** (2026-09-24, 918 MB reclaimed; containerd
-      32 GB on the 45 GB boot volume). The prune job fails below 5 GB, so two or three more image
-      rolls without a prune will reach the floor. The structural fix — containerd's root off `/` —
-      is the `todos.md § Observability` item.
+- [ ] **check 2026-10-02 — each extension re-reads a trailing week (`REREAD = 7 days`). DECIDED
+      and shipped 2026-09-25 in muffin-ingest#78.** A day the provider filled after we had passed
+      it used to be re-read only by accident of cohort membership: Yahoo's 09-22 bar was still
+      `null` for KO, CZR, EMBC and PRAA two days on. Bytes, not requests: the vendor is asked once
+      per ticker whatever the range. Check that those four hold a 09-22 bar once the sweep has
+      reached them again. Spec: docs/specs/2026-09-25-the-nightly-lanes.md
+- [ ] **`/` has ~6 GB free after each dangling-only prune** (2026-09-24 and twice on 09-25, 918 MB
+      reclaimed each time; containerd ~32 GB on the 45 GB boot volume). Every roll pulls ~0.9 GB,
+      so a roll without a prune after it walks toward the job's 5 GB floor. The structural fix —
+      containerd's root off `/` — is the `todos.md § Observability` item.
+- [ ] check 2026-10-09 — **the app still calls `market-refresh` for three resources D2 retired**
+      (`instrument-performance`, `instrument-prices`, `sector-performance`, disabled since
+      2026-09-12). Seen in the browser 2026-09-25: every Markets load by a non-admin logs a 403 and
+      writes a failed `refresh_run` row. Harmless, stale, and a muffin-ui PR of its own —
+      docs/deferred/2026-09-25-the-app-still-refreshes-retired-resources.md
+- [x] **2026-09-25 — the Markets search works end to end, checked in the browser.** "Hollywood Bowl"
+      returns "Listed, not tracked yet · BOWL.L · HOLLYWOOD BOWL GROUP PLC · LN" from
+      `untracked_listing` (84,201 rows), with the Frankfurt duplicate `2H4.DE` folded away by the
+      view's name dedupe. The regression the discovery lane was built to close is closed in the app,
+      not just in the table.
 - [ ] **Step 6's second half and step 7 wait on data**: the `security_identifier` surrogate key,
       `listing`, the `symbol_resolution` matview and anon-latency re-measurement; then retiring the
       universe/symbology handlers, the family's `pending_*` views, the twelve `%_missing_at`/cursor

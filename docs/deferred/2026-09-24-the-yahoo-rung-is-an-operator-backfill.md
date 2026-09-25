@@ -45,12 +45,23 @@ The rung asks only about equities with an ISIN and **no yfinance provider symbol
   may be venues keyless Yahoo does not carry either (this repo has recorded the Philippines, the
   UAE, Kuwait and Chile).
 
+## Prerequisite, shipped 2026-09-25
+
+The ladder used to label every symbol probe `openfigi`, whichever rung answered. So this rung's
+first run would have stored Yahoo's hits as OpenFIGI's, and a Yahoo miss would have overwritten
+OpenFIGI's miss under the same key. muffin-ingest#79 (rolled 20:48 UTC) records one probe per rung
+asked, under that rung's own name (`openfigi` / `yahoo`). The hit rate below can now be read
+straight off `identifier_probe where provider = 'yahoo'`.
+
+**Scheduled:** the 50-subject sample runs after the 2026-09-26 sweep finishes (~02:00 UTC). That is
+~22 hours before the next sweep, and it keeps the first night of the new rotation clean to verify.
+
 ## What to do
 
 1. Backfill `raw_yahoo_symbol` + `security_symbology` for a sample of ~50 partitions from the
    NEEDS_SYMBOL population, at midday UTC, well away from the 00:00 sweep. Read the rung's
    counters (`subjects`, `asked`) and the probes it produced:
-   `select outcome, count(*) from market.identifier_probe where scheme = 'symbol' and observed_at > <start> group by 1`.
+   `select outcome, count(*) from market.identifier_probe where scheme = 'symbol' and provider = 'yahoo' and observed_at > <start> group by 1`.
 2. Read the next night's `raw_price_history` counters (`throttled`, `unasked`). A non-zero value
    means the sample competed with the sweep.
 3. If the hit rate is worth it and the night was clean, backfill the rest in slices of a few
