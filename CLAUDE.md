@@ -3550,10 +3550,13 @@ exception, and two were real.** The design this precedes is
   `symbol_cache_classification`, nine for `clear_symbol_caches`, seven for `sector_constituents`.
   `create or replace view` can only APPEND columns, so the earliest definer can never replace the
   latest one's shape and must `drop` first: a real window, every deploy, in which a view and its
-  dependents do not exist. `stack/supabase/repeatable/` now holds ONE definition per object,
-  extracted from the database by `.github/scripts/extract_repeatable.py` and checked in CI both
-  ways — the bundle must equal what the migrations produce, and applying it must re-extract
-  identically.
+  dependents do not exist. `stack/supabase/schemas/` (first written as `repeatable/`; renamed
+  since) now holds ONE definition per object, extracted from the database by
+  `.github/scripts/extract_repeatable.py` and checked in CI both ways — the bundle must equal what
+  the migrations produce, and applying it must re-extract identically. **So a migration that
+  changes a view also changes its file here**: CI's `migrations` job fails with "the repeatable
+  bundle no longer matches the migrations", and its `repeatable-bundle` artifact IS the regenerated
+  bundle (`gh run download <run> -n repeatable-bundle`), so copy the changed file from it.
 - **`drop view` LOSES THE ACL, and the first run of that check said so: `anon cannot read 40
   serving view(s)`** — the app's entire read path. `create or replace function` is the opposite
   (it PRESERVES the ACL, which is why a grant in a re-run migration can only ever ADD a privilege),
@@ -4266,6 +4269,29 @@ labelling defect fixed in #79 before the Yahoo rung's first run. Spec:
   and `--syntax-check` fails with `failed at splitting arguments, either an unbalanced jinja2 block
   or quotes`. The repo's offline guards (bash-only syntax, inline Jinja) both passed. Run
   `ansible-playbook --syntax-check ansible/muffin_stack.yml` locally before pushing an Ansible change.
+- **THE SECTOR PAGE'S STOCK LIST WAS EMPTY FOR ABOUT TWO WEEKS, AND EVERY LATENCY PROBE PASSED.**
+  `sector_constituents` answered `57014` to the app's own query: 14.2 s for Information Technology
+  against anon's 3 s, so the page fell back to "No stocks yet".
+  - **Cause:** a per-constituent `LATERAL` over `fund_holding_current`, whose per-fund `max(as_of)`
+    aggregate over all of `fund_holding` the planner re-ran for each of 1,691 constituents (75M index
+    reads). The N-PORT lane's growing history pushed it over; nothing in the view changed.
+  - **Fix:** a `materialized` CTE, hash-joined: 129 ms, 0 rows different (muffin-deployment#391).
+    This is the fifth occurrence of the lateral-per-row shape.
+  - **The guard could not see it:** `check_anon_read_latency.py` timed eighteen reads and not this
+    one, so it stayed green throughout. It was found by opening the page in a browser to verify
+    something else.
+  - **Rule:** a new page read gets a probe in that list in the same change.
+  - **It also explained `data_defect`'s 53 s**, which reads this view whole: 0.68 s afterwards.
+    The 09-12 note above guessed `performance` and ruled itself out without finding the real cause.
+- **EVERY DEPLOY ENDS WITH A FULL `pg_dump`, AND ANON READS TIME OUT WHILE IT RUNS.**
+  - `Seed one backup now (async)` in `muffin_stack.yml` has no condition.
+  - Measured after the 22:40 deploy: 7 of 20 guarded reads returned `57014` for ~4.5 minutes, and
+    all passed once the dump ended.
+  - So "a one-off timeout right after a deploy is contention" has a named cause. **Measure latency
+    only after `pgrep -fc '[m]uffin-db-backup.sh'` reads 0.** The bracket stops pgrep matching its
+    own ssh command line.
+  - docs/deferred/2026-09-25-every-deploy-runs-a-full-backup.md
+
 - **THE BOOT VOLUME GROWS IN PLACE, AND THE PARTITION DOES NOT FOLLOW.**
   - With `ignore_changes = [source_details[0].source_id]`, provider 8.26.0 sends `UpdateBootVolume`
     for a `boot_volume_size_in_gbs` change. Only a `source_id` change goes through `UpdateInstance`'s

@@ -2229,17 +2229,31 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
       - 95 + 100 GB data = 195 of the 200 GB Always Free allowance, so this is the last grow;
         next time is the containerd-root move.
       - The prune job stays: dangling images still accumulate, just with ten times the room.
-- [ ] check 2026-09-26 — **the app no longer calls `market-refresh` for resources D2 retired.**
-      FIXED 2026-09-25, verification pending:
+- [x] **2026-09-25 — the app no longer calls `market-refresh` for resources D2 retired.**
+      Verified live: 0 `refresh_run` rows for them from 22:09 to 22:48 UTC across page loads, and
+      none of the names left in the served bundle.
       - muffin-deployment#389: the function answers **410** for all ten, naming the replacing lane,
         before the admin gate. Probed live 22:08 UTC: `fx-rates`, `instrument-performance` and a
         bare request all got 410; `instrument-profile` still got 403.
       - muffin-ui#133: the four hooks no longer auto-refresh, and the sector, country and group
         pages have no Refresh button.
       - `security-refresh` lost a returns step that upserted into a view.
-      - Done when the browser shows no such call and `refresh_run` gains no rows for them after
-        22:09 UTC —
+      - Note CLOSED —
       docs/deferred/2026-09-25-the-app-still-refreshes-retired-resources.md
+- [x] **2026-09-25 — the sector page lists stocks again**, checked in the browser: "Stocks ·
+      weights from XLK", NVDA 14.65%, AAPL 12.85%, MSFT 8.38%. It had been empty for about two weeks:
+      `sector_constituents` answered `57014` (14.2 s against anon's 3 s), because a per-constituent
+      lateral re-ran `fund_holding_current`'s per-fund aggregate 1,691 times.
+      - muffin-deployment#391 computes the weights once. As anon, the IT page now takes 249 ms and a
+        country drill-down 144 ms, with rows identical to the old view.
+      - It also fixed `data_defect`, which reads the view whole: **53 s -> 0.68 s**. The 09-12 guess
+        that `performance` made it slow was wrong.
+      - The page's two queries are now in the anon latency guard, which had no probe for it.
+- [ ] check 2026-10-02 — **every deploy ends with a full pg_dump, and anon reads time out while it
+      runs.** Measured after the 22:40 deploy: 7 of 20 guarded reads returned `57014` for ~4.5 min,
+      and all passed once the dump ended. The `Seed one backup now (async)` task has no condition.
+      Recommended: seed only when the newest backup is older than ~20 h —
+      docs/deferred/2026-09-25-every-deploy-runs-a-full-backup.md
 - [x] **2026-09-25 — the Markets search works end to end, checked in the browser.** "Hollywood Bowl"
       returns "Listed, not tracked yet · BOWL.L · HOLLYWOOD BOWL GROUP PLC · LN" from
       `untracked_listing` (84,201 rows), with the Frankfurt duplicate `2H4.DE` folded away by the

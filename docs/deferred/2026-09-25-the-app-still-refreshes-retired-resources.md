@@ -1,7 +1,8 @@
 # The app still asks `market-refresh` for resources the D2 cutover retired
 
-Created 2026-09-25 · **Check 2026-10-09** · Status: **fixed 2026-09-25, verification pending** —
-muffin-deployment#389 (the function refuses them, 410) and muffin-ui#133 (the app stops asking).
+Created 2026-09-25 · Status: **CLOSED 2026-09-25, verified live** — muffin-deployment#389 (the
+function refuses them, 410) and muffin-ui#133 (the app stops asking). The 2026-09-26 01:55 UTC
+check-in re-counts `refresh_run` over the night.
 
 ## What was seen
 
@@ -89,6 +90,14 @@ only fail. Nobody had pressed it since 09-12.
 
 ## Verification
 
-- [ ] In the browser: the Markets, sector and stock pages make no `market-refresh` call.
-- [ ] `market.refresh_run` since the deploys: no rows for a retired resource. A browser still
-      holding the old bundle may add 410s, but no 403 and no work.
+- [x] **The function, probed live at 22:08 UTC:**
+      - `fx-rates`, `instrument-performance` and a bare request (default `sector-performance`) each
+        answered 410 with the replacing lane;
+      - `instrument-profile` still answered 403, since the gate catches retired names only.
+- [x] **The served bundle** (`entry-12216195….js`) contains none of the retired names, and does
+      contain the new `security-refresh` copy.
+- [x] **In the browser, 22:19-22:47 UTC:** the Markets, sector and stock pages made no
+      `market-refresh` call. The old 403 and "universe refresh failed" messages are gone; the one
+      remaining console error is the known React #418.
+- [x] **`market.refresh_run` from 22:09 UTC** (after my own probes) to 22:48: **zero** rows for any
+      retired resource, across repeated page loads.
