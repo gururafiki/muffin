@@ -1092,7 +1092,10 @@ Grafana + Prometheus + cAdvisor + node-exporter + postgres-exporter + Portainer 
 with `market.refresh_run` / `backlog_sample` / `universe_sample` and http-cache's `/metrics`.
 See `muffin-deployment/README.md` § Observability. What was deliberately NOT done:
 
-- [ ] **CONTAINERD'S ROOT IS STILL ON `/`, AND THAT IS THE REAL DISK RISK.** Measured on the node
+- [x] ~~**CONTAINERD'S ROOT IS STILL ON `/`, AND THAT IS THE REAL DISK RISK.**~~ **SUPERSEDED
+  2026-09-25: the user chose to grow the boot volume (46.6 -> 95 GB, muffin-deployment#389) rather
+  than move containerd's root.** `/` went from 89% to 37% (58 GB free), grown online with no reboot.
+  Moving the root stays available if `/` climbs again; the 80% alert is the trigger. Measured on the node
   2026-08-27: `/` is at **70% (31 G of 45 G)** while `/mnt/data` sits at **9% of 98 G**. Docker
   reports `DockerRootDir=/mnt/data/docker`, but it also reports
   `driver-type: io.containerd.snapshotter.v1` — with the **containerd image store, images live
@@ -1108,7 +1111,8 @@ See `muffin-deployment/README.md` § Observability. What was deliberately NOT do
   every image layer on a live node — so it wants its own change and its own rollback plan.
   The `muffin-disk-filling` alert now fires at 80% so this cannot arrive as a surprise.
 
-- [ ] **`/` IS AT 76% AND CLIMBING WITH EVERY DEPLOY — this is now the most pressing item here.**
+- [x] ~~**`/` IS AT 76% AND CLIMBING WITH EVERY DEPLOY — this is now the most pressing item here.**~~
+  **Resolved 2026-09-25 by growing the boot volume to 95 GB (see the item above): `/` at 37%.**
   70% on the morning of 2026-08-27, 76% by the evening after eight deploys, while `/mnt/data` sits
   at 9% of 98 GB. Every image pull lands in `/var/lib/containerd` on the ROOT filesystem, because
   Docker uses the containerd image store and `daemon.json`'s `data-root` does not control it. The
@@ -1597,8 +1601,12 @@ cut over one at a time.
   One request per subject on the price sweep's allowance; ~690 equities still lack a yfinance
   symbol after the OpenFIGI rungs (692 on 09-25). APPROVED 2026-09-25: a 50-subject sample, then
   read the next night's `throttled` before doing the rest. Prerequisite shipped: muffin-ingest#79,
-  so a Yahoo answer is recorded as `provider = 'yahoo'` rather than as OpenFIGI's. Sample scheduled
-  after the 09-26 sweep —
+  so a Yahoo answer is recorded as `provider = 'yahoo'` rather than as OpenFIGI's.
+  Sample scheduled after the 09-26 sweep. The user then said to go ahead with the rest, so:
+  - at 01:55 UTC on 09-27, 300 more subjects, if the sample's hit rate is at least ~10% and the
+    09-27 night shows `throttled 0` and `unasked 0`;
+  - the remaining ~340 on 09-28, under the same conditions;
+  - otherwise stop and ask —
   docs/deferred/2026-09-24-the-yahoo-rung-is-an-operator-backfill.md
 - [ ] due 2026-10-16 (or before the first keyed provider's raw asset) — redact API keys from raw
   document URLs — docs/deferred/2026-09-16-raw-request-credentials.md
@@ -1609,7 +1617,8 @@ cut over one at a time.
   `daily_indices`, shipped in muffin-ingest#78 (rolled 2026-09-25 20:34 UTC).** They had waited
   behind all 100 price runs: `daily_indices` 6,185 s on 09-23, `daily_fx` 6,069 s on 09-24. The
   09-26 night must show both runs tagged and each waiting under two minutes. The heartbeat half was
-  verified 09-19. Pool granularity itself stays open —
+  verified 09-19. Pool granularity: the user DECIDED 2026-09-25 to keep run granularity plus these
+  tags, so the note closes if the 09-26 waits are under two minutes —
   docs/deferred/2026-09-16-sql-pool-run-granularity-blocks-every-lane.md
 - [x] 2026-09-19 — `security_return` rebuilt itself on both nights with no hand-run, one minute after
   each `daily_prices` (runs `b21560a1` 09-18 00:42, `c3b53619` 09-19 00:10; ~103k periods each).
@@ -2211,14 +2220,25 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
       `null` for KO, CZR, EMBC and PRAA two days on. Bytes, not requests: the vendor is asked once
       per ticker whatever the range. Check that those four hold a 09-22 bar once the sweep has
       reached them again. Spec: docs/specs/2026-09-25-the-nightly-lanes.md
-- [ ] **`/` has ~6 GB free after each dangling-only prune** (2026-09-24 and twice on 09-25, 918 MB
-      reclaimed each time; containerd ~32 GB on the 45 GB boot volume). Every roll pulls ~0.9 GB,
-      so a roll without a prune after it walks toward the job's 5 GB floor. The structural fix —
-      containerd's root off `/` — is the `todos.md § Observability` item.
-- [ ] check 2026-10-09 — **the app still calls `market-refresh` for three resources D2 retired**
-      (`instrument-performance`, `instrument-prices`, `sector-performance`, disabled since
-      2026-09-12). Seen in the browser 2026-09-25: every Markets load by a non-admin logs a 403 and
-      writes a failed `refresh_run` row. Harmless, stale, and a muffin-ui PR of its own —
+- [x] **2026-09-25 — the boot volume is 95 GB and `/` has 58 GB free (was 5.3 GB, 89%).** The
+      user chose to grow it rather than move containerd's root. muffin-deployment#389:
+      - `boot_volume_size_in_gbs = 95`, resized IN PLACE. A branch `mode=plan` showed `"47" -> "95"`
+        with 0 to destroy, and OCI took 25 s with no reboot.
+      - A new first pre_task (rescan, `growpart`, `resize2fs`, online and idempotent) grew
+        `/dev/sda1` to 91 GB.
+      - 95 + 100 GB data = 195 of the 200 GB Always Free allowance, so this is the last grow;
+        next time is the containerd-root move.
+      - The prune job stays: dangling images still accumulate, just with ten times the room.
+- [ ] check 2026-09-26 — **the app no longer calls `market-refresh` for resources D2 retired.**
+      FIXED 2026-09-25, verification pending:
+      - muffin-deployment#389: the function answers **410** for all ten, naming the replacing lane,
+        before the admin gate. Probed live 22:08 UTC: `fx-rates`, `instrument-performance` and a
+        bare request all got 410; `instrument-profile` still got 403.
+      - muffin-ui#133: the four hooks no longer auto-refresh, and the sector, country and group
+        pages have no Refresh button.
+      - `security-refresh` lost a returns step that upserted into a view.
+      - Done when the browser shows no such call and `refresh_run` gains no rows for them after
+        22:09 UTC —
       docs/deferred/2026-09-25-the-app-still-refreshes-retired-resources.md
 - [x] **2026-09-25 — the Markets search works end to end, checked in the browser.** "Hollywood Bowl"
       returns "Listed, not tracked yet · BOWL.L · HOLLYWOOD BOWL GROUP PLC · LN" from

@@ -4248,6 +4248,36 @@ labelling defect fixed in #79 before the Yahoo rung's first run. Spec:
   The same visit found the app still calling `market-refresh` for three resources D2 retired, a
   403 on every non-admin load (`docs/deferred/2026-09-25-the-app-still-refreshes-retired-resources.md`).
 
+### Retiring for real, and a boot volume that grows in place (2026-09-25)
+
+- **A DISABLED CRON ROW RETIRES A SCHEDULE, NOT A RESOURCE.** D2 disabled ten rotation rows and kept
+  their handlers. The app went on asking for three of them on every Markets load (a 403 and a failed
+  `refresh_run` row per non-admin visit), and an admin's call would have run the handler — `fx-rates`
+  writing `market.fx_rate` beside the Dagster lane that owns it. `market-refresh` now answers **410**
+  for all ten before the admin gate, naming the replacing lane, and `logic-check.ts` holds that list
+  equal to the `-- RETIRES:` markers in both directions (muffin-deployment#389, muffin-ui#133).
+  Retiring something means refusing it where it is served, not only where it is scheduled.
+- **A write into a view that became a view is dead code that still costs a provider call.**
+  `security-refresh` recomputed one symbol's returns and upserted them into `market.performance`,
+  which D2 made a view. The upsert could only fail, after a full history fetch. Grep the handlers
+  for writes to every relation a cutover turns into a view.
+- **ANSIBLE SPLITS A FREE-FORM `shell:` BODY WITH ITS OWN ARGUMENT SPLITTER, WHICH KNOWS NOTHING
+  ABOUT BASH COMMENTS.** An apostrophe in `# OCI's …` inside the script is an unbalanced quote to it,
+  and `--syntax-check` fails with `failed at splitting arguments, either an unbalanced jinja2 block
+  or quotes`. The repo's offline guards (bash-only syntax, inline Jinja) both passed. Run
+  `ansible-playbook --syntax-check ansible/muffin_stack.yml` locally before pushing an Ansible change.
+- **THE BOOT VOLUME GROWS IN PLACE, AND THE PARTITION DOES NOT FOLLOW.**
+  - With `ignore_changes = [source_details[0].source_id]`, provider 8.26.0 sends `UpdateBootVolume`
+    for a `boot_volume_size_in_gbs` change. Only a `source_id` change goes through `UpdateInstance`'s
+    source details, which swaps the image.
+  - Measured: the plan read `"47" -> "95"` with 0 to destroy, and OCI took **25 s** with no reboot.
+  - The kernel needs a rescan, then `growpart` and `resize2fs`, all online. That is now the first
+    pre_task in `muffin_stack.yml`.
+  - Run a Terraform change to the instance as `deploy.yml --ref <branch> -f mode=plan` BEFORE merging,
+    and read the instance's own line, not just the replacement list.
+  - 95 GB boot + 100 GB data = 195 of the 200 GB Always Free allowance, so this was the last grow.
+    Next time it is containerd's root off `/`.
+
 ### The two nights that judged four decisions, and the workspace move (2026-09-19)
 
 Three of the 2026-09-17 decisions held and one was falsified; the refactor that shipped alongside

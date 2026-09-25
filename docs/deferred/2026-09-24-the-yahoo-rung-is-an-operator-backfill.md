@@ -1,7 +1,8 @@
 # The Yahoo rung of the symbol ladder has never been run, on purpose
 
-Created 2026-09-24 · **Check 2026-10-08** · Status: open — a decision about spending the price
-sweep's provider allowance, so it is the user's
+Created 2026-09-24 · **Check 2026-10-08** · Status: approved and scheduled. The user approved the
+sample on 2026-09-25, then said to go ahead with the rest on the same conditions. The steps below
+run from scheduled check-ins; a failed condition stops them and goes back to the user.
 
 ## Why it is deferred
 
@@ -67,6 +68,12 @@ straight off `identifier_probe where provider = 'yahoo'`.
 3. If the hit rate is worth it and the night was clean, backfill the rest in slices of a few
    hundred on separate days. Otherwise record the hit rate here and close the note as
    "not worth the allowance".
+   **Concretely, as scheduled on 2026-09-25:**
+   - 50 on 09-26 after the sweep.
+   - 300 on 09-27 at ~02:00 UTC, if the sample's hit rate is at least ~10% and the 09-27 night
+     shows `throttled 0` and `unasked 0`.
+   - The remaining ~340 on 09-28, on the same two conditions read off the 09-28 night.
+   - Each slice excludes subjects that already hold a `provider = 'yahoo'` probe.
 4. Only if it should run continuously: give the rung a condition behind a cron gate (like
    `ReAskAfter`), and delete the test that forbids one in the same change.
 

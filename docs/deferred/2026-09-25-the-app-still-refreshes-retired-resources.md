@@ -1,7 +1,7 @@
 # The app still asks `market-refresh` for resources the D2 cutover retired
 
-Created 2026-09-25 · **Check 2026-10-09** · Status: open, low severity. Every call fails harmlessly
-and the app keeps the data it already has. It belongs in its own muffin-ui PR.
+Created 2026-09-25 · **Check 2026-10-09** · Status: **fixed 2026-09-25, verification pending** —
+muffin-deployment#389 (the function refuses them, 410) and muffin-ui#133 (the app stops asking).
 
 ## What was seen
 
@@ -60,3 +60,35 @@ resource is exempt from the stalled-resource rule.
 
 A Markets or stock page load makes no `market-refresh` call for a disabled resource, and
 `market.refresh_run` gains no rows for them.
+
+## What was done (2026-09-25)
+
+**The function refuses them.** muffin-deployment#389 answers **410** for all ten resources D2
+retired, with the Dagster lane that replaced each. The refusal comes before the admin gate and
+`begin_refresh`, so nothing is claimed or fetched whoever asks.
+- `logic-check.ts` holds the `RETIRED` map equal to the migrations' `-- RETIRES:` markers in both
+  directions, and checks the gate's position.
+- Six mutations, each caught.
+
+The unverified question above ("what an admin's call does") no longer matters: it cannot reach a
+handler. Production showed it had not happened. Since 09-12, `refresh_run` recorded only rotation
+skips from before the migration landed, plus today's 403.
+
+**`security-refresh` lost its returns step.** It recomputed one symbol's returns through the retired
+path and upserted them into `market.performance`, which has been a view since D2 (`relkind v`). Every
+press of the stock page's Refresh cost a provider request and up to 15 s, for a write that could
+only fail. Nobody had pressed it since 09-12.
+
+**The app stops asking.** muffin-ui#133:
+- The four hooks are read-only: no mutation and no stale-triggered effect. The `refreshing` field,
+  the "updating" badge it fed, and `isStale` are gone with them.
+- The sector, country and group pages lose the Refresh button, since everything they show is
+  Dagster's.
+- Markets keeps one, for `instrument-profile`, which is still live.
+- `RESOURCE_INFO` drops the retired names.
+
+## Verification
+
+- [ ] In the browser: the Markets, sector and stock pages make no `market-refresh` call.
+- [ ] `market.refresh_run` since the deploys: no rows for a retired resource. A browser still
+      holding the old bundle may add 410s, but no 403 and no work.

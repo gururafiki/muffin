@@ -51,6 +51,12 @@ it is still the only thing that would let a short lane run BESIDE a price run ra
 **Live check, 2026-09-26 00:00 UTC:** both runs carry `dagster/priority=1`, and each waits less than
 two minutes.
 
+**Granularity: decided by the user 2026-09-25 — keep run granularity plus the priority tags.** Op
+granularity would let a short lane run beside a price run rather than after one, but with priority
+the most it waits is one price run (~55 s), and nothing needs more. If the 09-26 waits are under two
+minutes, this note closes as decided. If they are not, the decision goes back to the user with the
+numbers.
+
 ## Decision (2026-09-17)
 
 - muffin-ingest#42 (rolled 11:42 UTC): `ledger_health` takes no pool, so the canary no longer
