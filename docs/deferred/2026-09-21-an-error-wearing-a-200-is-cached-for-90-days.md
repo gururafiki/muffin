@@ -1,7 +1,7 @@
 # OpenFIGI returns its errors as HTTP 200, so http-cache stores them for 90 days
 
-Created 2026-09-21 · **Check before the next venue refresh** · Status: two entries purged by hand;
-the mechanism is unchanged and will recur
+Created 2026-09-21 · **CLOSED 2026-09-22** by muffin-ingest#69 + muffin-deployment#385 (deployed
+09-22 21:57 UTC, directive verified in the running http-cache config on 09-24)
 
 ## What happened
 
@@ -85,3 +85,22 @@ raise and fail the run.
 
 An OpenFIGI error body is not cached (or is bypassed on the retry), a transient error leaves the
 venue resumable rather than failing the run, and this note records the mechanism chosen.
+
+## Closed — the mechanism chosen
+
+The caller decides, because nginx decides cacheability from the status line before any body
+filter could see the error. `parse_filter` now tells the two errors apart instead of calling every
+200-with-error "ours":
+
+- `Invalid key '…'` is ours and permanent, so it raises at once and spends no second request.
+- `There was an error while processing this request.` is theirs, so it is re-asked ONCE with
+  `X-Muffin-Cache-Bypass: 1`. nginx maps that header to `proxy_cache_bypass`, which skips the stored
+  entry AND stores the fresh answer over it, so one retry also un-poisons the entry for every later
+  caller. `proxy_no_cache` would have left the bad entry in place.
+- The same error twice becomes `OpenFigiUnavailable`, the same fact as a 429. The sweep stops,
+  files what it fetched, and stays resumable, and `venue_sweep_reached_its_last_page` names the
+  venue.
+
+An error nobody recognises is treated as theirs on purpose. Reading a transient as ours would fail
+a run and need a human at 3am. Reading ours as a transient only leaves a venue unfinished on a
+dashboard.

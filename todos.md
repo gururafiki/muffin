@@ -1571,23 +1571,44 @@ cut over one at a time.
       DECIDED: stop pruning entirely (~1 MB/day measured, ~365 MB/year, and the grid query is
       indexed). Retiring the job is part of the partitioning work above. Original note:
   (first affected: price history, 2026-12-10) — docs/deferred/2026-09-16-dagster-pruning-erases-partition-state.md
+- [x] 2026-09-23 — `nightly_prices` failed 66 of 66 runs on 09-22 (`DagsterInvalidMetadata`:
+  `add_output_metadata` called once per PARTITION inside the merging manager), so `price_bar`
+  published nothing 09-18..09-22. Fixed in muffin-ingest#68; 100 of 100 on 09-23 and 09-24.
+- [x] 2026-09-24 — `security_return` cancelled at `ingest_rw`'s 120 s timeout on 09-23 and 09-24
+  (`group by` over 57.5M bars). muffin-ingest#72 probes per security within the read window: 26 s
+  for the enumeration, 246 s end to end, 11,711 securities with returns.
 - [ ] check 2026-09-27 — every raw price partition still holds the pre-2026-09-12 shape until the
   sweep rewrites it (40 of 40 sampled were legacy on 09-20). Each converts the first time it is
   reached, ~5 nights for a pass, and NOTHING reports the progress — count the partitions still
   carrying `trade_date` and expect 2, the two dead securities that keep theirs on purpose —
+  **Progress 2026-09-24:** the 09-21 night OOM'd and the 09-22 night failed (#68), so only two
+  nights have converted — `loading_full_history` 2,499 + 2,500 of 12,267. Expect the pass to end
+  ~2026-09-28, not 09-27.
+  **Measured 2026-09-25 by schema: 5,228 of 12,027 files converted, 6,799 legacy.** The 09-25 night
+  converted none, because the rotation jump above sent it back over 09-23/24's slices. It did prove
+  the EXTENSION path at scale: 2,465 securities extended from their watermark, **12,750 rows
+  fetched against ~12.3 M** on a full-history night, `throttled 0 unasked 0`, 35 `dead`.
   docs/deferred/2026-09-20-raw-price-partitions-convert-only-as-the-sweep-reaches-them.md
 - [ ] check 2026-09-27 — the day-partitioned price lane is still defined as the rollback
   (`raw_price_bars`, day `price_bar`, `daily_prices_schedule` STOPPED, the old check). Retire it
   once the sweep has proven itself, porting the 28 offline-replay tests rather than deleting them —
   docs/deferred/2026-09-20-the-day-partitioned-price-lane-is-kept-as-the-rollback.md
+- [ ] **DECIDE by 2026-10-08 — the Yahoo rung of the symbol ladder has never run, on purpose.**
+  One request per subject on the price sweep's allowance; ~690 equities still lack a yfinance
+  symbol after the OpenFIGI rungs (692 on 09-25). Proposed: a 50-subject midday sample, then read the next
+  night's `throttled` before doing the rest —
+  docs/deferred/2026-09-24-the-yahoo-rung-is-an-operator-backfill.md
 - [ ] due 2026-10-16 (or before the first keyed provider's raw asset) — redact API keys from raw
   document URLs — docs/deferred/2026-09-16-raw-request-credentials.md
 - [x] 2026-09-19 — FX spot writes the day's own rates with no hand-run: 41 rates for every weekday
   through 09-18 across two scheduled nights (was 0 rows). Note CLOSED —
   docs/deferred/2026-09-16-http-cache-serves-stale-to-daily-lanes.md
-- [ ] check 2026-09-23 — `sql` pool granularity. The heartbeat half is VERIFIED (waits 111 s -> 3-7 s
-  over 48 runs); the lanes are still serialised — indices wait ~38 s and prices ~62 s behind FX at
-  every midnight, which is the part still open —
+- [ ] **DECIDE — `sql` pool granularity, and it got WORSE on 2026-09-21.** The heartbeat half is
+  VERIFIED (waits 111 s -> 3-7 s). The lanes: since the price lane became 100 bounded runs, the
+  daily lane queued after them waits for ALL of them — `daily_indices` **6,185 s** on 09-23,
+  `daily_fx` **6,069 s** on 09-24 (was ~38 s), and on 09-25 neither (FX 8 s, indices 49 s): it
+  depends on which runs the tick queued first. New cheapest option: `dagster/priority` on the two
+  short lanes, native to the queue coordinator, pool layout untouched —
   docs/deferred/2026-09-16-sql-pool-run-granularity-blocks-every-lane.md
 - [x] 2026-09-19 — `security_return` rebuilt itself on both nights with no hand-run, one minute after
   each `daily_prices` (runs `b21560a1` 09-18 00:42, `c3b53619` 09-19 00:10; ~103k periods each).
@@ -2017,7 +2038,7 @@ Three things settled in planning that are worth not re-deriving:
       `pending_*` views, the `index.ts` handlers.
 - [ ] `muffin-ui` PR: full-range daily charts, currency-labelled prices, volume.
 
-### Phase 3 — universe and symbology — DISCOVERY IS LIVE; SYMBOLOGY IS STILL OFF
+### Phase 3 — universe and symbology — BOTH LANES LIVE (discovery 2026-09-21, symbology 2026-09-24)
 
 Spec: [docs/specs/2026-09-20-turning-the-universe-lanes-on.md](docs/specs/2026-09-20-turning-the-universe-lanes-on.md).
 Steps 4, 5 and step 6's first half merged 2026-09-12..13 and deployed 09-17 — and **every standard
@@ -2080,29 +2101,52 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
       key. Keyed: `/v3/filter` sustains 0.3 s where anonymous refused request 6 at 2.5 s, and
       `/v3/mapping` takes 100 jobs where anonymous 413s at 11. The backfill went from 39 venues in
       58 minutes to 56 in ~5.
-- [ ] **`SWEEP_PACING_KEYED = 0.3 s` is too fast to sustain and should be ~2-3 s.** Measured on
+- [x] **FIXED 2026-09-22 (muffin-ingest#69): `SWEEP_PACING_KEYED` is 3 s.** Walking a 44-page venue
+      UNTIL REFUSED: 1.0 s and 2.0 s both refused at page 21, 3.0 s ran all 44 — a ~20-request
+      bucket refilling at 17-25 a minute. Original:
+- [x] ~~**`SWEEP_PACING_KEYED = 0.3 s` is too fast to sustain and should be ~2-3 s.**~~ Measured on
       the US sweep: `openfigi throttled US after 20 pages`, then `after 0 pages` on the pass
       relaunched immediately, so passes alternate 20/0. It shipped on a 15-page probe that sat
       just under the cliff. The lane behaves correctly throughout — this is a wrong constant, not
       a defect.
-- [ ] **An OpenFIGI error arrives as HTTP 200 and is cached for 90 days.** Two venues failed twice
+- [x] **FIXED AND LIVE 2026-09-22 (muffin-ingest#69 + muffin-deployment#385).** `Invalid key` is
+      ours and raises; `There was an error while processing this request.` is theirs and is re-asked
+      once with `X-Muffin-Cache-Bypass: 1`, which nginx maps to `proxy_cache_bypass` — it stores the
+      fresh answer OVER the poisoned entry. Verified in the running http-cache config. Original:
+- [x] ~~**An OpenFIGI error arrives as HTTP 200 and is cached for 90 days.**~~ Two venues failed twice
       identically on a cached `{"error":"There was an error while processing this request."}`;
       purged by hand, 2 of 1,582 OpenFIGI entries. The first scan reported 0 of 268,314 because
       the bodies are gzipped and the check matched `Content-Encoding` with a capital C while nginx
       stores headers lowercase. Also fix `parse_filter`, which calls every 200-with-error "a shape
       problem in OUR request" — measured false —
       docs/deferred/2026-09-21-an-error-wearing-a-200-is-cached-for-90-days.md
-- [ ] **DECIDE: turn `new_symbols_needed` on.** Deliberately left STOPPED by #66 while the two
+- [x] **DECIDED 2026-09-22 (the user: after the sweep, OpenFIGI rungs first) and LIVE 2026-09-24.**
+      Turning it on took five PRs, because the lane had never run: #70 switched the two mapping
+      rungs on (the Yahoo rung stays an operator backfill on purpose) and stopped recording a
+      skipped question as a miss; #71 let the adopting step fire without the unautomated rung;
+      #73 found that the rungs' condition had never reached the daemon at all (a Python subclass
+      is not serialisable — 6,984 partitions seeded, 1,807 ticks, nothing requested) and moved it
+      to a code-location sensor; #75 stopped one Paris listing claimed by Worldline's two
+      securities from failing a whole batch; #76 declared the two history sensors RUNNING in code.
+      Rung backfill `bkcixkyu` succeeded in one pass. Original:
+- [x] ~~**DECIDE: turn `new_symbols_needed` on.**~~ Deliberately left STOPPED by #66 while the two
       discovery sensors went RUNNING, and the difference is the point: those two return
       `run_requests=[]` and only make work visible, whereas the symbology rungs carry
       `AutomationCondition.missing()` behind a RUNNING default automation sensor — so seeding that
       grid starts asking the provider immediately (~7,300 partitions over three rungs, ~730
       OpenFIGI mapping requests and ~1,618 Yahoo). That is a spend, and it shares the venue sweep's
       upstream allowance, so it should not start in the same window.
-- [ ] **DECIDE: an OpenFIGI API key.** At the measured ~5 requests a minute a full venue sweep is
+- [x] **RESOLVED 2026-09-21: the key already existed and was never sent** (muffin-ingest#67,
+      above). Original:
+- [x] ~~**DECIDE: an OpenFIGI API key.**~~ At the measured ~5 requests a minute a full venue sweep is
       ~209 minutes and the monthly refresh the same again, all serialised behind one pool. A key
       raises the allowance substantially; it is a credential decision, so it is the user's.
-- [ ] **Check the registries actually ran.** `weekly_registries` next ticks Monday 2026-09-21; its
+- [x] **Checked 2026-09-24: `weekly_registries` SUCCEEDED on 09-21** (run `1b6bd00b`).
+      `security_cik` matched 10,388 SEC filers and updated 219 securities (`security.cik` set:
+      3,738); `security_nse_filer` read 2,570 NSE equities and updated 0, the old function having
+      already resolved them. The assets are named after their jobs; the tables they write are
+      `market.security` (`cik`) and `market.security_filer` (`sec` 3,738, `nse` 628). Original:
+- [x] ~~**Check the registries actually ran.**~~ `weekly_registries` next ticks Monday 2026-09-21; its
       one previous tick died in the exporter incident, and a schedule that has never succeeded
       looks identical to one that has not yet run. Read `security_cik` / `security_nse_filer`.
 - [x] **RESOLVED 2026-09-21: the deploy could not authenticate to Cloudflare.** The replacement
@@ -2128,6 +2172,47 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
       looked instrumented; what was missing is the only channel that carries a failure nobody
       raised. muffin-deployment#384, needs a deploy —
       docs/deferred/2026-09-21-dagster-captures-no-step-stdout-or-stderr.md
+- [x] **DONE 2026-09-24 — repaired and adopted in one backfill** (`txnczkep`, 6,984 partitions, 35
+      runs, all SUCCESS, ~22 min, no provider call — it re-reads the stored rung files through the
+      #77 ladder). After it: `symbol/hit` 0 -> **830**, misses on securities that hold a symbol
+      759 -> **3** (the three false misses from 09-22's first runs, which no rung re-asks and #77's
+      `STALE_MISSES` now ignores), all 6,984 partitions adopted, securities missing a yfinance
+      symbol 762 -> **692**, `collapsed 0`, 4 listings held elsewhere, 0 ambiguous. Original:
+- [x] ~~**Backfill the symbology partitions whose runs failed.**~~ A failed `eager()` request counts as
+      handled and is never re-requested, so the 200 partitions of `d30fad7a` (the WLN.PA defect,
+      fixed by #75) and the 200 of `6c99d13c` (killed by the #75 roll) stay unadopted until
+      someone backfills them. Select by state, not by run: rungs materialised, `security_symbology`
+      not.
+- [x] **Every locally-resolved symbol was recorded as a MISS** — FIXED, ROLLED AND REPAIRED 2026-09-24 (see the backfill above). 759 on 2026-09-24, 0 symbol
+      hits. Two writers for one probe key, and the writer keeps the last. muffin-ingest#77 puts the
+      local rung on the ladder and makes `STALE_MISSES` return only subjects still missing the
+      evidence (6,391 -> 5,634), so the 30-day re-ask cannot loop. After the roll, a
+      `security_symbology` backfill re-derives every probe from the stored rung files (no provider
+      call) and repairs the 759 — the same backfill as the 400 failed partitions above.
+- [x] **The roll fails the runs it kills — muffin-deployment#387, merged 2026-09-24.** Driven on
+      production with inert ids before merging (a finished run left alone, a missing id reported).
+      Original: `muffin-roll-ingest.sh` warns `N run(s) in flight`
+      and moves on; the killed run stays `STARTED` and, with `granularity: run`, holds its pool
+      slot for ever. Run monitoring cannot catch it: `DefaultRunLauncher` does not support worker
+      health checks. Record the in-flight run ids before the update and `report_run_failed` the
+      ones still `STARTED` once the new location has loaded.
+- [ ] **DECIDE — the nightly price sweep's rotation jumps whenever the universe grows.** The slice
+      is `(day × 2500) mod N`, so ONE added security re-maps every future slice: on 09-25 N went
+      12,267 -> 12,268 and the whole night re-swept securities from 09-23/24 (overlaps 1,071 +
+      1,429, reproduced exactly from the formula) while 7,268 waited. Staleness that day: 6,056
+      securities 8–14 days old. Options: fixed slots (`day % ceil(N/2500)`) or resume after the
+      last key the previous tick requested (recommended — no discontinuity at all) —
+      docs/deferred/2026-09-25-the-price-sweep-rotation-jumps-when-the-universe-grows.md
+- [ ] **An extension re-reads only from its cohort's OLDEST watermark**, so a day the provider fills
+      after we have passed it is re-read by accident of cohort membership, never by rule. Measured
+      2026-09-24: Yahoo's 09-22 bar is `null` for KO, CZR, EMBC and PRAA (MSFT, SPY and JPM carry
+      it), and 1,060 of the night's US securities stop at 09-21. A window costs bytes, not
+      requests, on this provider — so re-asking a trailing week from each watermark is nearly
+      free. Propose, do not just do: it widens every extension's payload ~5x.
+- [ ] **`/` has 6.1 GB free after a dangling-only prune** (2026-09-24, 918 MB reclaimed; containerd
+      32 GB on the 45 GB boot volume). The prune job fails below 5 GB, so two or three more image
+      rolls without a prune will reach the floor. The structural fix — containerd's root off `/` —
+      is the `todos.md § Observability` item.
 - [ ] **Step 6's second half and step 7 wait on data**: the `security_identifier` surrogate key,
       `listing`, the `symbol_resolution` matview and anon-latency re-measurement; then retiring the
       universe/symbology handlers, the family's `pending_*` views, the twelve `%_missing_at`/cursor

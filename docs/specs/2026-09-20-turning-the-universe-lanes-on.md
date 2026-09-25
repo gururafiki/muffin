@@ -126,6 +126,14 @@ with an ISIN regardless of what we hold (12,496).
 | `SWEEP_PACING` was calibrated to 25 req/min; the allowance is ~5, so the lane paid a 429 every run | measured three ways | muffin-ingest#61 |
 | `security_symbology` reported the rows it BUILT — `symbols: 4, probes: 6` against 2 and 4 stored | the first real run | muffin-ingest#62 |
 | Three Grafana alerts shared `muffin-backlog-stalled`'s summary, including "market-verify has not run" | `rules.yml` | muffin-deployment#383 |
+| `OPENFIGI_API_KEY` was in the container's environment and never sent — every OpenFIGI budget measured here was the anonymous one | keyed vs anonymous, same hour | muffin-ingest#67 |
+| `SWEEP_PACING_KEYED = 0.3 s` came from a probe that stopped at 15 pages | walked until refused: 1 s and 2 s refused at page 21, 3 s ran 44 | muffin-ingest#69 |
+| A transient OpenFIGI error arrives as a 200 and http-cache kept it for 90 days | two venues failed twice on a cached body | #69 + muffin-deployment#385 — re-ask once past the cache with `proxy_cache_bypass` |
+| A skipped symbol rung was recorded as a `miss` | 3 of the first 3 subjects | muffin-ingest#70 — `asked_symbol` |
+| `security_symbology` was plain `eager()` and the Yahoo rung is unautomated on purpose, so it could never fire | driven on 1.13.22: 0 of 1 requested | muffin-ingest#71 — `any_deps_missing().ignore(...)` + `allow_missing_partitions` |
+| **The rungs' condition never reached the daemon**: `ReAskAfter` is a Python subclass, so the location shipped `automation_condition = None` | 6,984 partitions seeded, 1,807 ticks, nothing requested | muffin-ingest#73 — `symbology_rungs`, a `use_user_code_server=True` sensor |
+| One Paris listing claimed by Worldline's two securities failed a whole batch on `(provider_code, symbol)` | `UniqueViolation … (yfinance, WLN.PA)` | muffin-ingest#75 — the holder keeps it, an ambiguous claim adopts neither |
+| The two history sensors were RUNNING only because someone clicked them | `all_instigator_state()` | muffin-ingest#76 |
 
 The `rules.yml` GAUGES drift carried by the previous plan **was already fixed** and is not re-fixed.
 
@@ -133,10 +141,14 @@ The `rules.yml` GAUGES drift carried by the previous plan **was already fixed** 
 
 Measured against Dagster 1.13.22 before being designed on:
 
-- **A custom `AutomationCondition` works.** `evaluate()` is called, `context.candidate_subset` is an
-  `EntitySubset` with `compute_intersection_with_partition_keys`, and the intended partition is
-  requested. Its identity is its class name (`get_node_unique_id` hashes `self.name`), so renaming
-  it is a state change.
+- **A custom `AutomationCondition` works — IN-PROCESS, and that turned out to prove nothing.**
+  `evaluate()` is called, `context.candidate_subset` is an `EntitySubset` with
+  `compute_intersection_with_partition_keys`, and the intended partition is requested. Its identity
+  is its class name (`get_node_unique_id` hashes `self.name`), so renaming it is a state change.
+  **CORRECTION 2026-09-24:** the daemon never receives a condition that is not serialisable, so the
+  default automation sensor never evaluated the rungs; this validation ran through
+  `evaluate_automation_conditions`, which executes in-process where the class exists. Such a
+  condition needs a `use_user_code_server=True` sensor (muffin-ingest#73).
 - **`on_missing()` is the wrong rule for a lane being switched on.** It requested **0 of 2**
   partitions already in the grid at the first tick and 2 of 2 added between ticks. `missing()`
   requests both.
@@ -158,9 +170,10 @@ Measured against Dagster 1.13.22 before being designed on:
      **`SAP.DE`** (the local line) — two correct answers to two different questions;
    - `venue_sweep_reached_its_last_page` failed on every unfinished venue, correctly.
 4. **#63 — what the harness taught**, back into `dagster-pipeline-local-test`.
-5. **Roll, then a live tiny subset** — one venue partition and a handful of accessions, counters
-   read — then sensors RUNNING in code, one lane at a time, then backfill the rest. **NOT YET
-   DONE.**
+5. **Roll, then a live tiny subset — DONE.** Discovery: AU proven live, both sensors RUNNING and
+   all 59 venues swept on 2026-09-21 (#66, #67), `untracked_listing` 0 -> 84,220. Symbology: the
+   rungs switched on 2026-09-23 (#70) and able to fire only from 2026-09-24 (#71, #73, #75, #76);
+   rung backfill `bkcixkyu` succeeded in one pass and the adopting step drained behind it.
 6. Deferred note for the drain; docs, memory.
 
 **Out of scope, gated on these lanes producing data:** step 6's second half (the
@@ -172,7 +185,8 @@ twelve `%_missing_at`/cursor columns, the ledger in `prices.py`).
 
 - The search stays empty while the sweep runs; the deferred note is what stops that being forgotten
   a second time.
-- OpenFIGI anonymous is 25/min and the measured 429 arrived on request 21. `openfigi_filter` and
+- ~~OpenFIGI anonymous is 25/min and the measured 429 arrived on request 21.~~ Superseded: the
+  key was sent from 2026-09-21 (#67) and the keyed sweep is paced at 3 s (#69). `openfigi_filter` and
   `openfigi_mapping` are separate pools at limit 1 but the same upstream allowance — stage the
   sweep and the ladder rather than starting both in one night.
 - Rollback is stopping a sensor: no schema change, no deploy. The discovery schema is already
@@ -180,7 +194,8 @@ twelve `%_missing_at`/cursor columns, the ledger in `prices.py`).
 
 ## Open questions
 
-- **An OpenFIGI API key.** The anonymous `/v3/filter` allowance measured ~5 requests a minute, which
+- ~~**An OpenFIGI API key.**~~ **RESOLVED 2026-09-21: the key already existed and was never sent**
+  (muffin-ingest#67). Original: The anonymous `/v3/filter` allowance measured ~5 requests a minute, which
   makes a full venue sweep ~209 minutes and the monthly refresh the same again. A free key raises it
   substantially. This is a credential decision, so it is the user's — and until it is taken, the
   sweep is a drip fed by operator backfills.

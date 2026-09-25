@@ -14,6 +14,30 @@ The rest stays open, and the same two nights re-measured it: `daily_indices` wai
 `daily_prices` 62–64 s behind `daily_fx` at every midnight, so the lanes are still serialised by
 `granularity: run` — tolerable at 25 s of FX, and the thing to revisit if a lane's runtime grows.
 
+## Re-measured 2026-09-24 — the lane's runtime grew, and the wait went from seconds to hours
+
+Since 2026-09-21 the price lane is `nightly_prices`: **100 bounded runs of 25 securities**, each
+holding `sql` (and `yahoo`) for its whole ~55 s, ~93 minutes in total. The 100 price runs are
+created at 00:00:00 in the same tick as `daily_fx` and `daily_indices`, so whichever daily lane
+lands after them in the queue waits for all 100:
+
+| night | lane that waited | wait | runs |
+|---|---|---|---|
+| 09-23 | `daily_indices` | **6,185 s** | FX 7 s, prices 53-6,125 s |
+| 09-24 | `daily_fx` | **6,069 s** | indices 8 s, prices 49-6,010 s |
+| 09-25 | neither | FX 8 s, indices 49 s | prices 90-5,744 s |
+
+So FX or index returns publish ~1.7 hours late on any night the tick happens to queue a daily lane
+after the sweep: two of the three nights measured. The
+heartbeat is unaffected (7-9 s, no pool).
+
+A fourth option, not considered in 2026-09-17: **`dagster/priority`**. `QueuedRunCoordinatorDaemon`
+sorts queued runs by that tag, highest first (`_priority_sort`, `queued_run_coordinator_daemon.py`
+in 1.13.22). Tagging `daily_fx` and `daily_indices` above the sweep, or the sweep below 0, lets
+the two short lanes take the next free `sql` slot. Their wait would then be at most one price run
+(~55 s), with the pool layout unchanged. This is the skill's "order by run length" rule, applied
+in the scheduler instead of by the operator.
+
 ## Decision (2026-09-17)
 
 - muffin-ingest#42 (rolled 11:42 UTC): `ledger_health` takes no pool, so the canary no longer

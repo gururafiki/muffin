@@ -4042,7 +4042,161 @@ Re-measured as ANON afterwards, because the view's base went from 0 to 99,459 ro
   `new_currencies_need_history` report `stored=RUNNING` rather than `DECLARED_IN_CODE` — they were
   toggled in the UI at some point, so nothing in the repo says they should be on and a state reset
   silently turns them off. Ask Dagster (`instance.all_instigator_state()`), never the enum in the
-  `instigators` table, and never the code alone.
+  `instigators` table, and never the code alone. **Declared RUNNING in code 2026-09-24
+  (muffin-ingest#76).**
+- **CORRECTION, 2026-09-24, to the bullet two above:** seeding the symbology grid did NOT start
+  asking the provider. The rungs' condition contains a Python subclass, so the daemon never received
+  it and the default sensor never evaluated them — see the next section.
+
+### The symbology lane, able to fire at last, and two outages in lanes already live (2026-09-22..25)
+
+The discovery lane loaded the universe on 09-21. This is the symbology lane behind it, switched on
+(muffin-ingest#70) and then made to work (#71, #73, #75), plus two outages found the same days in
+lanes that were already live (#68, #72). **Every defect below passed its whole test suite, and each
+was found by reading what production did** — a run's error, a probe table, a queue that would not
+move — rather than by a test.
+
+- **`add_output_metadata` MAY BE CALLED ONCE PER OUTPUT, AND ONLY A RANGE RUN CALLS IT TWICE.**
+  `market.price_bar` published nothing from 2026-09-18 to 09-22. The 09-22 night was the first on
+  which `nightly_prices` emitted its bounded runs — the OOM fix working, 66 runs of ≤25 partitions —
+  and **all 66 failed** with `DagsterInvalidMetadata: Tried to add metadata for key(s) that already
+  have metadata`, because the merging manager's `dump_to_path` runs once per PARTITION and emitted
+  its keys from inside it. Every I/O-manager test and every hand-run had materialised ONE partition,
+  the one shape that cannot fail this way, and the previous night's OOM masked it. Now tallied per
+  partition and emitted once as sums (#68); per-partition metadata is not expressible at all, since
+  Dagster copies the one dict onto every partition's event. **The test needs two passes**: on a
+  first write nothing is stored and the merge path records nothing, so only a second night, with
+  history in every partition, reproduces it. Live: 100 of 100 runs on 09-23 and on 09-24, counters
+  summing to `requested` (2,436 answered + 64 empty; 2,455 + 45), `throttled 0`, `unasked 0`.
+- **A PROBE THAT STOPS WHILE SATISFIED STOPS JUST SHORT OF THE LIMIT.** `SWEEP_PACING_KEYED = 0.3 s`
+  came from a 15-page probe. Production then refused the US sweep after 20 pages, and after 0 pages
+  on the pass relaunched behind it. Re-measured by walking a 44-page venue UNTIL REFUSED: 1.0 s and
+  2.0 s both refused at page **21**, while 3.0 s ran all 44 pages. That is a ~20-request bucket
+  refilling at 17-25 a minute, so the pacing is now **3 s** (#69).
+- **AN ERROR WEARING A 200 IS EITHER OURS OR THEIRS, AND THE CODE SAID IT WAS ALWAYS OURS.**
+  `parse_filter` asserted that a 200-with-error was "a shape problem in OUR request". Measured:
+  `Invalid key '…'` is ours and permanent; `There was an error while processing this request.` is
+  theirs and transient, and http-cache had stored it for 90 days. Theirs is now re-asked ONCE with
+  `X-Muffin-Cache-Bypass: 1` (#69), which nginx maps to **`proxy_cache_bypass`**
+  (muffin-deployment#385). That skips the stored entry AND stores the fresh answer over it, so one
+  retry un-poisons the entry for every later caller; `proxy_no_cache` would leave the poison in
+  place. An unrecognised error is treated as theirs on purpose: a transient read as ours pages a
+  human at 3am, while ours read as a transient only leaves a venue unfinished on a dashboard.
+- **A SKIPPED QUESTION RECORDED AS A NEGATIVE ANSWER.** `plan_symbols` emitted a `symbol` probe
+  unconditionally, so a subject whose symbol rungs were SKIPPED because the evidence was already
+  held — the common case — went into `identifier_probe` as `miss`, **for 3 of the first 3 subjects
+  ever run**. A miss is the negative cache the re-ask acts on, so this is the `%_missing_at` defect
+  in the new ledger. `asked_symbol` is read off the raw files, never assumed (#70).
+- **`eager()` WAITS FOR EVERY UPSTREAM PARTITION, SO AN UPSTREAM LEFT UNAUTOMATED ON PURPOSE MEANS
+  THE DOWNSTREAM NEVER FIRES.** `raw_yahoo_symbol` carries no condition deliberately: Yahoo search is
+  one request per subject, on the budget of the price sweep, which the provider cut off at call 138
+  on 09-19. `security_symbology` was plain `eager()`, so it would have collected OpenFIGI's answers
+  into Parquet forever and adopted none, with every run green. `.replace("any_deps_missing",
+  AutomationCondition.any_deps_missing().ignore(<that asset>))` keeps the gate for the rungs that DO
+  land. The input then needs `AssetIn(metadata={"allow_missing_partitions": True})` —
+  `UPathIOManager`'s built-in — or the permitted run dies loading a file that was never written, as
+  six runs did on 09-22. **A condition permitting a run is not the run surviving it** (#71). Compare
+  `security_return`'s `.without(~any_deps_missing())`, which is right there because its history lane
+  is never complete.
+- **A CUSTOM `AutomationCondition` IS INVISIBLE TO THE DAEMON, AND EVERY OTHER SIGNAL SAYS IT
+  WORKS.** #70-#72 rolled at 03:48 UTC on 09-24 and `new_symbols_needed` seeded **6,984**
+  partitions. Fifteen hours and **1,807** sensor ticks later, not one rung had been requested.
+  Dagster ships a condition to the AssetDaemon only if EVERY node in it is whitelisted for
+  serialisation (`is_serializable` is `all(children)`). `ReAskAfter` is a Python subclass, so the
+  location sent a display snapshot and `automation_condition = None`
+  (`external_data.resolve_automation_condition_args`), and the default sensor skipped the asset,
+  its built-in `missing()` branch included. The UI still showed the condition from the snapshot.
+  Every test passed, because `evaluate_automation_conditions` runs in-process where the Python object
+  exists — **which is also how the class was "driven before being relied on" on 09-20.** The rungs
+  could not fire from the day they shipped (09-12). The fix is
+  `AutomationConditionSensorDefinition(use_user_code_server=True, default_status=RUNNING)` —
+  `symbology_rungs`, Beta, ≤500 targets, STOPPED by default — with the default sensor retargeted to
+  `all() - <the rungs>`, since two automation sensors may not share an asset (#73). It is guarded
+  location-wide with Dagster's own predicate: every non-serialisable condition must be covered by a
+  RUNNING `SensorType.AUTOMATION` sensor. The rung backfill then completed in a single pass.
+- **ONE LISTING, ONE SECURITY: `on conflict` COVERS THE KEY IT NAMES AND NO OTHER.** The first
+  adopting batches died on `security_provider_symbol_provider_code_symbol_key` with the key
+  `(yfinance, WLN.PA)`. Worldline holds TWO securities (`FR0011981968`, `FR00140182K6`) and OpenFIGI
+  correctly names the same Paris line for both, while the upsert's `on conflict` names only
+  `(security_id, provider_code)`. Choosing the current ISIN is identity consolidation (step 6b), so
+  adoption decides nothing. The existing holder keeps the listing, a batch that claims one listing
+  for two securities adopts NEITHER, and both cases are counted (`symbols_held_elsewhere`,
+  `symbols_ambiguous`) (#75). This is the partial-unique-index lesson again, on another table.
+- **TWO WRITERS FOR ONE KEY, AND THE WRITER KEEPS THE LAST: EVERY LOCAL LINE ADOPTED AS A MISS.**
+  After the first full drain, `identifier_probe` held **0** `symbol/hit` rows and **1,396**
+  `symbol/miss` rows, while the securities missing a yfinance symbol fell 1,618 -> 762. **759 of
+  the misses belonged to securities that DID hold a symbol.** National Healthcare Properties' own
+  local-rung answer names `NHP`, and `NHP` was adopted while its probe read `miss`. `core.py`
+  appended the local pick's row and `hit` probe, then `plan_symbols`' output — and `plan_symbols`
+  picked the local line only from the TICKER rung's hits (`exchCode: US`), saw nothing, and
+  recorded a `miss` under the same `(security_id, scheme, provider)`. `dedupe_by` keeps the LAST
+  row. Every existing test fed both mapping rungs the same body, so the two rules agreed and
+  nothing could tell them apart; the new fixture has the ticker rung answer with OpenFIGI's refusal
+  and the local rung with AAPL, and the original code fails it with the production shape. The fix
+  puts the local rung on the ladder (muffin-ingest#77). **The miss was also a loop in waiting**: a
+  rung skips a subject whose evidence is held, so a stale miss for one never refreshes, and
+  `stale_misses` would have re-requested it every day from ~2026-10-22. `STALE_MISSES` now returns
+  a miss only while that scheme's evidence is still missing: 6,391 -> 5,634 securities, measured
+  on production.
+- **A ROLL'S ORPHAN HOLDS THE POOL.** A roll kills in-flight runs, and a killed run stays `STARTED`.
+  With `granularity: run` it keeps its `sql` slot, and every later run queues behind a dead process
+  until `instance.report_run_failed(run)`. Measured after the #75 roll: `6c99d13c` started at
+  19:27:21 on the old code location, logged its last event at 19:27:31 as the container was
+  replaced, and held its slot until it was reported failed BY HAND at 19:28:52. Nothing else would
+  ever have released it.
+  **Run monitoring cannot catch it here**: `DefaultRunLauncher` does not override
+  `supports_check_run_worker_health`, whose base implementation returns False. So the roll itself
+  must fail what it killed, and since muffin-deployment#387 it does: it records the in-flight run
+  ids after the pull, and once the new location has loaded it reports the ones still live as
+  failed. If it exits early, every exit names them.
+- **A FAILED `eager()` REQUEST COUNTS AS "HANDLED" AND IS NEVER RETRIED.** `since_last_handled`
+  counts the REQUEST, so a partition whose run failed is not re-requested until an upstream
+  updates, and a rung that has answered never updates again. Measured: nothing requested the 200
+  partitions of `d30fad7a` (which failed at 19:15 on the WLN.PA defect) or the 200 of the orphan,
+  while ~120 later runs drained around them. Once the cause is fixed, BACKFILL the partitions whose
+  upstream is materialised and whose own is not.
+- **ENUMERATE A GROWING TABLE BY PROBING IT, NOT AGGREGATING IT — AND A SEMI-JOIN IS NOT A PROBE.**
+  `security_return` was cancelled at `ingest_rw`'s **120 s** `statement_timeout` on 09-23 and 09-24,
+  before one return was computed. `securities_with_bars` was a `group by` over `market.price_bar` —
+  57.5M rows, 10 GB, 61 yearly partitions, and growing every night. `where exists` measured > 110 s,
+  because the planner flattens it into a **Parallel Hash Semi Join over every partition**.
+  `cross join lateral (… limit 1)` cannot be flattened, so it stays one primary-key probe per
+  security, and bounding it by the window the run READS prunes 55 of the 61 partitions: **26 s** for
+  11,760 securities (#72). The window is passed once to both queries, so excluding a security with
+  no bar in it changes nothing. That was proven on a sixteenth of the universe: 733 securities in
+  the same positions, 0 differing. Live: 246 s, 11,711 securities with returns, 103,338 periods,
+  `collapsed 0`.
+- **YAHOO'S DAILY BARS HAVE TWO KINDS OF GAP AT 00:00 UTC, AND ONLY ONE FILLS ITSELF.** Of the 2,500
+  securities swept on the 09-24 night, **1,060 US** ones stop at Monday 09-21. Compared with Yahoo's
+  own chart that evening: the 09-23 close was NaN at fetch time (the 09-17 index behaviour, now in
+  most US securities) and is populated now. The lane stored the vendor's row, stage 2 refused the
+  NaN, and the next extension re-asks the newest stored day INCLUSIVELY, so that gap fills itself.
+  **09-22, however, is `null` in Yahoo itself** for KO, CZR, EMBC and PRAA, while MSFT, SPY and JPM
+  have it, still two days later. An extension re-asks only from its cohort's OLDEST watermark, so a
+  day Yahoo fills after we have passed it gets re-read only by accident of cohort membership, never
+  by rule. Japan's 120 securities stopping at 09-18 are correct: 09-21..23 were its holidays.
+- **A REPAIR THAT RE-READS STORED RAW COSTS NOTHING, AND IS HOW A DEFECT IN STAGE 2 IS UNDONE.**
+  After #77 rolled, one backfill of `security_symbology` over all 6,984 partitions (35 runs, ~22
+  minutes, no provider call) re-derived every probe from the rung files already on disk:
+  `symbol/hit` 0 -> 830, misses on securities holding a symbol 759 -> 3, the 400 partitions of the
+  two failed runs adopted, `collapsed 0`. The 3 left are the three false misses from 09-22's first
+  runs: their symbol rungs were skipped, so no re-read can produce a new observation over them, and
+  #77's `STALE_MISSES` ignores them. This is the payoff of keeping raw whole: the wrong rows were
+  corrected without asking OpenFIGI a single question again.
+- **A POSITION DERIVED FROM `day mod N` IS NOT A ROUND-ROBIN ONCE N CAN CHANGE.** `nightly_prices`
+  starts its slice at `(day × 2500) % len(keys)`, and its docstring promised one slice a night. On
+  09-25 ONE new security took N from 12,267 to 12,268, and the whole night landed on [2300, 4800):
+  1,071 securities from 09-23's slice and 1,429 from 09-24's, **none of the 7,268 still waiting**.
+  The formula reproduces both overlaps exactly. Staleness that day: 6,056 securities 8–14 days old.
+  A modulus of something that grows gives an unrelated answer on every growth. So derive a
+  position from something growth cannot move: fixed slots, or the last key the previous tick
+  requested. Open for decision:
+  `docs/deferred/2026-09-25-the-price-sweep-rotation-jumps-when-the-universe-grows.md`.
+- **THE EXTENSION PATH WORKS AT SCALE, AND IT IS ~1000x CHEAPER IN BYTES.** The 09-25 night
+  extended 2,465 securities from their own watermark and fetched **12,750 rows**, against ~12.3 M on
+  each full-history night, for about the same number of calls (330 vs 300), with `throttled 0` and
+  `unasked 0`. The counters sum to `requested`: 2,465 answered + 35 `dead`, and the 35 are exactly
+  the securities with nothing stored, whose symbol the provider rejected alone.
 
 ### The two nights that judged four decisions, and the workspace move (2026-09-19)
 
