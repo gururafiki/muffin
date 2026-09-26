@@ -2295,7 +2295,7 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
                   origin, and a guard that a location serves its call's host) and #84 (the lane
                   runs itself: `on_missing()` fetch, eager resolve). Then AGG alone against the
                   edge snapshot taken 2026-09-26 (13,267 holdings, weight 101.881320, 13,266 with
-                  debt terms, checksums in the session scratchpad), then the other 77 filings.
+                  debt terms; md5 over (security, weight, market value) `0cf5756e7093084de0c151a5dd626bf8`, over the debt terms `d4c4bfa3df8d5e3b432c23e1b6e5c862`), then the other 77 filings.
             - [ ] 1b muffin-deployment#395 green and HELD until the lane has run and matched the
                   edge — retiring `fund-holdings` before would stop fund ingestion outright.
       - [ ] Stage 2 — share class for every equity (~125 OpenFIGI requests), `security_listing`
