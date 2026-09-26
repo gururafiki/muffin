@@ -2285,31 +2285,35 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
             retire the ten universe resources and delete the twenty Phase 2/3 handlers, the ten
             `pending_*` views and their guards; `security_price_span` replaces the retired history
             columns.
-            - [ ] 1a muffin-ingest#81 merged and live since 21:40 (the #394 deploy rolled it; see the
-                  deferred note below). **The live check found the lane had NEVER RUN:**
-                  `raw_nport_filing`, `discovered_security` and `fund_holding` had zero
-                  materialisations — the sensor only made filings visible, and the 78 were never
-                  backfilled — so every fund-holdings table came from the edge resource. Its first
-                  real fetch then 404'd: `primary_doc` asked the cache's `sec-data` location
-                  (data.sec.gov) for an EDGAR archive (www.sec.gov). Fixes: muffin-ingest#85 (the
-                  origin, and a guard that a location serves its call's host) and #84 (the lane
-                  runs itself: `on_missing()` fetch, eager resolve). Then AGG alone against the
-                  edge snapshot taken 2026-09-26 (13,267 holdings, weight 101.881320, 13,266 with
-                  debt terms; md5 over (security, weight, market value) `0cf5756e7093084de0c151a5dd626bf8`, over the debt terms `d4c4bfa3df8d5e3b432c23e1b6e5c862`), then the other 77 filings.
-            - [ ] 1b muffin-deployment#395 green and HELD until the lane has run and matched the
-                  edge — retiring `fund-holdings` before would stop fund ingestion outright.
+            - [x] **1a — VERIFIED 2026-09-26.** The live check found the N-PORT lane had NEVER RUN
+                  (zero materialisations: the sensor only made filings visible). Its first real
+                  run then failed three ways, each fixed and mutation-proven: the cache location
+                  proxied to the wrong host (muffin-ingest#85), a held LEI got a second issuer row
+                  (#86), and a read UUID broke `json.dumps` (#87); #84 makes the lane run itself.
+                  AGG then matched the edge exactly (holdings checksum identical; debt terms zero
+                  differences in all five fields against the 03:00 backup — 2,120 zero coupons
+                  differ only as `0` vs `0.0`). All 78 filings ran: 70 funds identical to the edge,
+                  4 (EMB, ICLN, IEUR, TIP) ahead of it by 10,103 rows.
+            - [x] **1b — muffin-deployment#395, deployed and VERIFIED 2026-09-26.** Ten resources
+                  retired: rotation rows disabled, `muffin-promote` unscheduled, each answers 410
+                  naming its lane (checked as anon), `tracked_fund_latest` reads 74.
+            - [ ] 1c delete the dead handlers and views — after 1b has run clean for 3 days
+                  (2026-09-29).
+            - [ ] 1d `security_price_span`.
       - [ ] Stage 2 — share class for every equity (~125 OpenFIGI requests), `security_listing`
             derived from the directory, `market.listing` as a compatibility view, `untracked_listing`
             at share-class grain, `symbol_security` refreshed by Dagster.
             - [ ] 2a muffin-deployment#394 merged and deploying: the identifier kind,
                   `venue_listing.share_class_figi`, `market.security_listing`.
-            - [ ] 2b muffin-ingest#82 merged: both parsers keep the class, the local rung asks for
-                  it, adoption refuses a held class and never replaces a held symbol. Roll after
-                  #394 deploys, then run the backfills. Gate: a class on at least 95% of equities
-                  with an ISIN.
+            - [ ] 2b muffin-ingest#82 live (rolled implicitly by the #394 deploy at 21:40). The
+                  venue re-parse filled `venue_listing.share_class_figi` (99,438 of 99,459 lines,
+                  54,332 classes, exactly the raw files). Backfills `nfyycefw` (old grid) and
+                  `hzrneyul` (new subjects) are draining behind the nightly lanes; four runs failed
+                  to rolls and need `FROM_FAILURE` re-execution. Gate: a class on at least 95% of
+                  equities with an ISIN.
             - [ ] 2b-ii the `security_listing` asset and `listing_covers_legacy`, designed on the
                   measured coverage.
-      - [ ] **2026-09-26 — muffin-ingest#83: the adopting step is requested in fragments.**
+      - [x] **2026-09-26 — muffin-ingest#83 (rolled): the adopting step was requested in fragments.**
             `security_symbology` sat on the default automation sensor, apart from its rungs, so
             `will_be_requested()` could not see them and each tick requested a scattered subset:
             ~420 runs queued for 5,512 subjects (cancelled by hand, replaced by one 28-run

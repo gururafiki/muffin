@@ -4414,6 +4414,65 @@ them is proven by a snapshot rather than by reading the diff.
   the `instigators` table byte-identical. Recording those BEFORE the roll is what makes the second
   reading evidence rather than a shrug.
 
+### The remainder of Phase 3, first night: a lane that had never run (2026-09-26)
+
+Spec: [docs/specs/2026-09-26-finishing-the-universe-family.md](docs/specs/2026-09-26-finishing-the-universe-family.md).
+Stages 0a/0b shipped and were verified live the same evening; the rest of this section is what the
+parity gate for retiring the edge `fund-holdings` found.
+
+- **A LANE CAN BE DEPLOYED, PASS EVERY TEST, AND NEVER HAVE RUN — CHECK ITS MATERIALISATIONS BEFORE
+  RETIRING WHAT IT REPLACES.** `raw_nport_filing`, `discovered_security` and `fund_holding` had
+  **zero** materialisations in production. `new_nport_filings` only ADDS partitions, two of the
+  three assets carried no automation condition, and the 78 filings were never backfilled, so every
+  fund-holdings table had come from the edge resource all along. Retiring it first (#395, green
+  and ready) would have stopped fund ingestion with nothing reporting it. The lane now runs itself
+  (muffin-ingest#84: `on_missing()` fetch, eager resolve), and its first full run matched the
+  edge exactly for 70 funds and got AHEAD of it for 4 (EMB, ICLN, IEUR, TIP: 10,103 rows the edge
+  had never ingested).
+- **A NEVER-RUN LANE'S FIRST REAL RUN SURFACES ITS DEFECTS ONE AT A TIME, AND EVERY ONE WAS INVISIBLE
+  TO THE FAKES.** Four runs for one filing, each failing one step further:
+  - **`provider_base` named a location that proxies to ANOTHER HOST.** `primary_doc` asked http-cache's
+    `sec-data` (data.sec.gov) for an EDGAR archive (www.sec.gov): right without the cache, SEC 404
+    through it. `settings.CACHE_LOCATIONS` now maps each location to its `$up` host and refuses a
+    mismatch on every call (muffin-ingest#85), with a structural test over every call site.
+  - **A SECOND UNIQUE KEY, AGAIN.** Issuers were upserted on `issuer_id` with an id derived from the
+    LEI, while the edge had minted RANDOM ids for all 9,022; a held LEI got a second row and failed
+    `issuer_lei_key`. Held LEIs now resolve to their existing ids (#86). The docstring claimed the
+    upsert converged "on `lei`" — it never did.
+  - **psycopg returns a `uuid` column as `uuid.UUID`**, the lane mints `str`, and only a READ id
+    reached `json.dumps` (AGG's bonds were all known): `Object of type UUID is not JSON
+    serializable`. Ids are read `::text`, and the fake now returns `uuid.UUID` where Postgres would
+    (#87). A fake that returns friendlier types than the driver is a fake that hides this class.
+- **PARITY FOUND A DIFFERENCE THAT WAS NOT ONE, AND THE BACKUP IS WHAT SETTLED IT.** The debt-term
+  checksum changed after the lane rewrote AGG's 13,266 terms. The edge's values were gone from the
+  table, but the 03:00 dump holds them: streamed from object storage, only the `market.security`
+  COPY block extracted (`aws s3 cp … - | zcat | awk '/^COPY market\.security \(/{p=1} p{print}
+  p&&/^\\\.$/{exit}'`), loaded into a TEMP table in the same psql session. Zero differences in all
+  five fields; 2,120 zero-coupon rates differ only as text (`0` vs `0.0`). **Compare values with
+  `is distinct from`, not text checksums, before calling a parity failure.**
+- **A CHILD ASSET ON A DIFFERENT AUTOMATION SENSOR FROM ITS PARENTS IS REQUESTED IN FRAGMENTS.**
+  `eager()` schedules a child in its parents' tick through `will_be_requested()`, which sees only
+  the SAME sensor's requests; and `in_progress()` covers a partition only "until the run has
+  executed it" (Dagster's own docstring). `security_symbology` sat on the default sensor while its
+  rungs sat on `symbology_rungs`, so it saw their partitions finish one event at a time and each
+  30-second tick requested a scattered subset: ~420 queued runs of 1-8 partitions for 5,512
+  subjects (about a minute each on the `sql` pool), cancelled by hand and replaced by one
+  28-run backfill. Same shape on 2026-09-24 (145 runs, 107 tiny). One sensor for the ladder
+  (#83). **When assets form one lane, put them on one automation sensor.**
+- **A DEPLOY ROLLS THE INGEST IMAGE.** The stack reads `muffin-ingest:latest`; the deploy pre-pulls it
+  and `docker stack deploy` resolves the new digest. So muffin-ingest#82, merged while #394 was
+  deploying, went live at 21:40 through the deploy — without `roll-ingest`'s handling of in-flight
+  runs, and before the planned tiny-subset check. Until
+  [the deferred note](docs/deferred/2026-09-26-a-deploy-rolls-the-ingest-image.md) is resolved:
+  **merge an ingest PR only when about to roll it.**
+- **A migration touching `cron.job` must guard on `to_regclass('cron.job')`**, not with
+  `exception when others`: the migration tests run on plain Postgres with no pg_cron, where even
+  PLANNING a query that names it fails, and a swallow-everything handler would also hide a real
+  failure on the node.
+- **Cancel queued runs with `instance.run_coordinator.cancel_run(run_id)`; reprioritise with
+  `instance.add_run_tags(run_id, {"dagster/priority": …})`.** Both work on QUEUED runs from inside
+  the webserver container, and both were needed to keep the 00:00 lanes ahead of a large backfill.
+
 ## Running an OpenSandbox server locally
 
 - **`docker run -d -p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock opensandbox/server:latest`.**
