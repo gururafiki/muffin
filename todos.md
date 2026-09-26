@@ -2285,9 +2285,19 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
             retire the ten universe resources and delete the twenty Phase 2/3 handlers, the ten
             `pending_*` views and their guards; `security_price_span` replaces the retired history
             columns.
-            - [ ] 1a muffin-ingest#81 merged 2026-09-26; roll, then check one AGG partition's debt
-                  terms live.
-            - [ ] 1b muffin-deployment#395 open; merges after 1a is verified.
+            - [ ] 1a muffin-ingest#81 merged and live since 21:40 (the #394 deploy rolled it; see the
+                  deferred note below). **The live check found the lane had NEVER RUN:**
+                  `raw_nport_filing`, `discovered_security` and `fund_holding` had zero
+                  materialisations — the sensor only made filings visible, and the 78 were never
+                  backfilled — so every fund-holdings table came from the edge resource. Its first
+                  real fetch then 404'd: `primary_doc` asked the cache's `sec-data` location
+                  (data.sec.gov) for an EDGAR archive (www.sec.gov). Fixes: muffin-ingest#85 (the
+                  origin, and a guard that a location serves its call's host) and #84 (the lane
+                  runs itself: `on_missing()` fetch, eager resolve). Then AGG alone against the
+                  edge snapshot taken 2026-09-26 (13,267 holdings, weight 101.881320, 13,266 with
+                  debt terms, checksums in the session scratchpad), then the other 77 filings.
+            - [ ] 1b muffin-deployment#395 green and HELD until the lane has run and matched the
+                  edge — retiring `fund-holdings` before would stop fund ingestion outright.
       - [ ] Stage 2 — share class for every equity (~125 OpenFIGI requests), `security_listing`
             derived from the directory, `market.listing` as a compatibility view, `untracked_listing`
             at share-class grain, `symbol_security` refreshed by Dagster.
