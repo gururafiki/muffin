@@ -1603,7 +1603,10 @@ cut over one at a time.
   read the next night's `throttled` before doing the rest. Prerequisite shipped: muffin-ingest#79,
   so a Yahoo answer is recorded as `provider = 'yahoo'` rather than as OpenFIGI's.
   Sample LAUNCHED 2026-09-26 20:20 UTC (backfill `jcgpqnrj`, 50 subjects picked by md5 order from the
-  692, tag `muffin/reason=yahoo-sample-2026-09-26`). The user then said to go ahead with the rest, so:
+  692, tag `muffin/reason=yahoo-sample-2026-09-26`): **10 of 50 hit (20%), all 10 adopted** —
+  Alibaba 9988.HK, NetEase 9999.HK, NIO 9866.HK, Flow Traders FLOW.AS and six more, the offshore
+  and country-less securities OpenFIGI's local rung cannot place. That clears the ~10% bar.
+  The user then said to go ahead with the rest, so:
   - at 01:55 UTC on 09-27, 300 more subjects, if the sample's hit rate is at least ~10% and the
     09-27 night shows `throttled 0` and `unasked 0`;
   - the remaining ~340 on 09-28, under the same conditions;
@@ -2267,18 +2270,35 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
       key dropped); capped weekly promotion waves (a full price pass within 7 nights, ~5,000 more
       today); classification and the symbol map move to Dagster; a rebuilt database must work; no
       backup at deploy time. Measured the same day, and not just cleanup:
-      - [ ] **Stage 0a — muffin-deployment#392.** Dagster adopts symbols without clearing symbol-keyed
-            caches, so 409 of 826 adopted securities sat out of other families' backlogs. A trigger
-            on `security_provider_symbol` now calls `clear_symbol_caches`; a one-shot repairs the 409.
-      - [ ] **Stage 0b — muffin-deployment#393.** The P/E/P/S/P/B charts have been frozen since 09-11:
-            `security_ratio_series` and four other readers still read the retired `security_price`.
+      - [x] **Stage 0a — muffin-deployment#392, deployed and VERIFIED 2026-09-26.** Dagster adopted
+            symbols without clearing symbol-keyed caches, so 409 of 826 adopted securities sat out of
+            other families' backlogs. A trigger on `security_provider_symbol` now calls
+            `clear_symbol_caches`; the one-shot ran at 21:09 UTC and the 409 re-count is **0**. No
+            backup ran at deploy time.
+      - [x] **Stage 0b — muffin-deployment#393, deployed and VERIFIED 2026-09-26.** The P/E/P/S/P/B
+            charts had been frozen since 09-11 on the retired `security_price`. AAPL's newest P/E
+            point is now 09-18, its newest `price_bar`. All 20 anon probes pass, P/E 832-906 ms.
+            SAP.DE's P/E is empty for a reason that predates this: only annual metrics.
+            **Still to do: look at a stock page's valuation chart in the browser** (needs the user's
+            Cloudflare Access sign-in).
       - [ ] Stage 1 — parity gates (debt terms, lookup codes, the "funds ingested" readers), then
             retire the ten universe resources and delete the twenty Phase 2/3 handlers, the ten
             `pending_*` views and their guards; `security_price_span` replaces the retired history
             columns.
+            - [ ] 1a muffin-ingest#81 merged 2026-09-26; roll, then check one AGG partition's debt
+                  terms live.
+            - [ ] 1b muffin-deployment#395 open; merges after 1a is verified.
       - [ ] Stage 2 — share class for every equity (~125 OpenFIGI requests), `security_listing`
             derived from the directory, `market.listing` as a compatibility view, `untracked_listing`
             at share-class grain, `symbol_security` refreshed by Dagster.
+            - [ ] 2a muffin-deployment#394 merged and deploying: the identifier kind,
+                  `venue_listing.share_class_figi`, `market.security_listing`.
+            - [ ] 2b muffin-ingest#82 merged: both parsers keep the class, the local rung asks for
+                  it, adoption refuses a held class and never replaces a held symbol. Roll after
+                  #394 deploys, then run the backfills. Gate: a class on at least 95% of equities
+                  with an ISIN.
+            - [ ] 2b-ii the `security_listing` asset and `listing_covers_legacy`, designed on the
+                  measured coverage.
       - [ ] Stage 3 — the price lane's dead verdict becomes an `identifier_probe` miss, the symbology
             lane repairs it, the ledger and the stopped day lane go, `run_monitoring` catches dead
             runs.

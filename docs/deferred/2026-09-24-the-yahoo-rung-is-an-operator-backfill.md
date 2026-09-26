@@ -57,6 +57,25 @@ straight off `identifier_probe where provider = 'yahoo'`.
 **Scheduled:** the 50-subject sample runs after the 2026-09-26 sweep finishes (~02:00 UTC). That is
 ~22 hours before the next sweep, and it keeps the first night of the new rotation clean to verify.
 
+## The sample, 2026-09-26
+
+Backfill `jcgpqnrj`, launched 20:20 UTC, 3.7 hours clear of the 00:00 sweep. Fifty subjects were
+drawn from the 692 still missing a yfinance symbol, by md5 order of the security id, so the draw is
+stable and not weighted toward any country. The picks are not contiguous in the grid, so the
+backfill ran one run per subject; all 50 succeeded in about 20 minutes, queued behind the pools.
+
+- **10 hits, 40 misses: a 20% hit rate.** Every hit was adopted as the security's yfinance symbol.
+- **The hits are the securities OpenFIGI's local rung cannot place.** Six are incorporated
+  offshore: Alibaba `9988.HK`, NetEase `9999.HK`, NIO `9866.HK`, ANTA `2020.HK` (Cayman), Flow
+  Traders `FLOW.AS` and Stolt-Nielsen `SNI.OL` (Bermuda). Four have no country at all and resolved
+  to Singapore lines (`C52.SI`, `F83.SI`, `MZH.SI`, `P40U.SI`). That is the fallback this rung was
+  built for.
+- **The misses are mostly securities with no home listing Yahoo indexes**: CN 6, US 6, KY 4, CA 4,
+  GB 3, and a tail of single countries.
+
+20% clears the ~10% bar set on 2026-09-25. So the 09-27 slice of 300 goes ahead if that night's
+`raw_price_history` shows `throttled 0` and `unasked 0`.
+
 ## What to do
 
 1. Backfill `raw_yahoo_symbol` + `security_symbology` for a sample of ~50 partitions from the
