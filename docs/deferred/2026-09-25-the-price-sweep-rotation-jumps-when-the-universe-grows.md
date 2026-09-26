@@ -96,6 +96,13 @@ Proven before shipping:
   N / 2,500 ≈ 4.9 nights. This is the cost of equal-sized nights over a grid that is not a
   multiple of the slice, not a jump.
 
+## The first night on it (2026-09-26)
+
+The 00:00 UTC tick started at grid position **4800**, which is what the deployed dry run had
+predicted, and covered 4800-7299. That is disjoint from the 09-25 night's slice. The runs'
+outcome counters summed exactly to their subjects. One night proves the anchor; the week
+below is what proves the rotation.
+
 ## Done when
 
 - Consecutive ticks with a growing grid are proven disjoint by a test in which the grid grows

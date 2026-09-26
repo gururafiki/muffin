@@ -1,8 +1,9 @@
 # One long run holds the shared `sql` pool and queues every other lane behind it
 
-Created 2026-09-16 · **Check 2026-09-26** · Status: the heartbeat fix is **verified 2026-09-19**
-(waits 111 s -> 3-7 s). The lanes' wait is fixed by `dagster/priority` (muffin-ingest#78, rolled
-2026-09-25 20:34 UTC), to be verified on the 2026-09-26 night. Pool granularity stays open.
+Created 2026-09-16 · Status: **CLOSED 2026-09-26.** The heartbeat fix was verified 2026-09-19
+(waits 111 s -> 3-7 s). The lanes' fix, `dagster/priority: 1` (muffin-ingest#78), was verified on
+the 2026-09-26 night: FX waited **29 s** and indices **70 s** behind the price runs, against
+6,185 s and 6,069 s on 09-23 and 09-24. The pool stays at run granularity, as decided 2026-09-25.
 
 ## Verified (2026-09-19)
 

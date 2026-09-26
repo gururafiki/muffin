@@ -1602,7 +1602,8 @@ cut over one at a time.
   symbol after the OpenFIGI rungs (692 on 09-25). APPROVED 2026-09-25: a 50-subject sample, then
   read the next night's `throttled` before doing the rest. Prerequisite shipped: muffin-ingest#79,
   so a Yahoo answer is recorded as `provider = 'yahoo'` rather than as OpenFIGI's.
-  Sample scheduled after the 09-26 sweep. The user then said to go ahead with the rest, so:
+  Sample LAUNCHED 2026-09-26 20:20 UTC (backfill `jcgpqnrj`, 50 subjects picked by md5 order from the
+  692, tag `muffin/reason=yahoo-sample-2026-09-26`). The user then said to go ahead with the rest, so:
   - at 01:55 UTC on 09-27, 300 more subjects, if the sample's hit rate is at least ~10% and the
     09-27 night shows `throttled 0` and `unasked 0`;
   - the remaining ~340 on 09-28, under the same conditions;
@@ -1613,8 +1614,9 @@ cut over one at a time.
 - [x] 2026-09-19 — FX spot writes the day's own rates with no hand-run: 41 rates for every weekday
   through 09-18 across two scheduled nights (was 0 rows). Note CLOSED —
   docs/deferred/2026-09-16-http-cache-serves-stale-to-daily-lanes.md
-- [ ] **check 2026-09-26 — the short lanes jump the queue: `dagster/priority: 1` on `daily_fx` and
-  `daily_indices`, shipped in muffin-ingest#78 (rolled 2026-09-25 20:34 UTC).** They had waited
+- [x] **2026-09-26 — VERIFIED: the short lanes jump the queue.** On the 09-26 night FX waited 29 s
+  and indices 70 s behind the price runs. Note CLOSED. Original: `dagster/priority: 1` on `daily_fx` and
+  `daily_indices`, shipped in muffin-ingest#78 (rolled 2026-09-25 20:34 UTC). They had waited
   behind all 100 price runs: `daily_indices` 6,185 s on 09-23, `daily_fx` 6,069 s on 09-24. The
   09-26 night must show both runs tagged and each waiting under two minutes. The heartbeat half was
   verified 09-19. Pool granularity: the user DECIDED 2026-09-25 to keep run granularity plus these
@@ -2249,20 +2251,42 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
       - It also fixed `data_defect`, which reads the view whole: **53 s -> 0.68 s**. The 09-12 guess
         that `performance` made it slow was wrong.
       - The page's two queries are now in the anon latency guard, which had no probe for it.
-- [ ] check 2026-10-02 — **every deploy ends with a full pg_dump, and anon reads time out while it
-      runs.** Measured after the 22:40 deploy: 7 of 20 guarded reads returned `57014` for ~4.5 min,
-      and all passed once the dump ended. The `Seed one backup now (async)` task has no condition.
-      Recommended: seed only when the newest backup is older than ~20 h —
+- [ ] **DECIDED 2026-09-26 (the user): drop the post-deploy backup seed** — muffin-deployment#392.
+      Every deploy ended with a full pg_dump, and 7 of 20 guarded anon reads returned `57014` for
+      ~4.5 min while it ran. The 03:00 UTC nightly is the backup. Done when a deploy is followed by no
+      dump and the latency guard passes straight after it —
       docs/deferred/2026-09-25-every-deploy-runs-a-full-backup.md
 - [x] **2026-09-25 — the Markets search works end to end, checked in the browser.** "Hollywood Bowl"
       returns "Listed, not tracked yet · BOWL.L · HOLLYWOOD BOWL GROUP PLC · LN" from
       `untracked_listing` (84,201 rows), with the Frankfurt duplicate `2H4.DE` folded away by the
       view's name dedupe. The regression the discovery lane was built to close is closed in the app,
       not just in the table.
-- [ ] **Step 6's second half and step 7 wait on data**: the `security_identifier` surrogate key,
-      `listing`, the `symbol_resolution` matview and anon-latency re-measurement; then retiring the
-      universe/symbology handlers, the family's `pending_*` views, the twelve `%_missing_at`/cursor
-      columns and the ledger calls in `prices.py`.
+- [ ] **The remainder of Phase 3 — planned 2026-09-26.**
+      Spec: [docs/specs/2026-09-26-finishing-the-universe-family.md](docs/specs/2026-09-26-finishing-the-universe-family.md).
+      The user's decisions: identity is the OpenFIGI share class (`(kind, value)` kept, surrogate
+      key dropped); capped weekly promotion waves (a full price pass within 7 nights, ~5,000 more
+      today); classification and the symbol map move to Dagster; a rebuilt database must work; no
+      backup at deploy time. Measured the same day, and not just cleanup:
+      - [ ] **Stage 0a — muffin-deployment#392.** Dagster adopts symbols without clearing symbol-keyed
+            caches, so 409 of 826 adopted securities sat out of other families' backlogs. A trigger
+            on `security_provider_symbol` now calls `clear_symbol_caches`; a one-shot repairs the 409.
+      - [ ] **Stage 0b — muffin-deployment#393.** The P/E/P/S/P/B charts have been frozen since 09-11:
+            `security_ratio_series` and four other readers still read the retired `security_price`.
+      - [ ] Stage 1 — parity gates (debt terms, lookup codes, the "funds ingested" readers), then
+            retire the ten universe resources and delete the twenty Phase 2/3 handlers, the ten
+            `pending_*` views and their guards; `security_price_span` replaces the retired history
+            columns.
+      - [ ] Stage 2 — share class for every equity (~125 OpenFIGI requests), `security_listing`
+            derived from the directory, `market.listing` as a compatibility view, `untracked_listing`
+            at share-class grain, `symbol_security` refreshed by Dagster.
+      - [ ] Stage 3 — the price lane's dead verdict becomes an `identifier_probe` miss, the symbology
+            lane repairs it, the ledger and the stopped day lane go, `run_monitoring` catches dead
+            runs.
+      - [ ] Stage 4 — `promotion_wave`, paused until venues are opted in.
+      - [ ] Stage 5 — `security_classification` as an eager asset.
+      - [ ] Stage 6 — roles, table grants, reference data and cron jobs re-applied every deploy, and a
+            `fresh-database` CI job.
+      - [ ] Stage 7 — Grafana universe panels, docs and skills.
 
 ### Phases 4-8 — the remaining family cutovers — not started
 

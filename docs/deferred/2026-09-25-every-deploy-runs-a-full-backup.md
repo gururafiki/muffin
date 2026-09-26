@@ -1,7 +1,8 @@
 # Every deploy ends with a full database dump, and the app's reads time out while it runs
 
-Created 2026-09-25 · **Check 2026-10-02** · Status: open, a small decision for the user. Nothing
-is lost and the backup itself is fine, but each deploy costs about 4.5 minutes of failing reads.
+Created 2026-09-25 · **Check 2026-10-02** · Status: **DECIDED 2026-09-26 (the user): option 2, drop
+the seed.** Shipped in muffin-deployment#392. Open until the first deploy after it is followed by no
+dump and the anon latency guard passes straight after it.
 
 ## What was seen
 
