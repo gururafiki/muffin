@@ -2299,6 +2299,14 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
                   with an ISIN.
             - [ ] 2b-ii the `security_listing` asset and `listing_covers_legacy`, designed on the
                   measured coverage.
+      - [ ] **2026-09-26 — muffin-ingest#83: the adopting step is requested in fragments.**
+            `security_symbology` sat on the default automation sensor, apart from its rungs, so
+            `will_be_requested()` could not see them and each tick requested a scattered subset:
+            ~420 runs queued for 5,512 subjects (cancelled by hand, replaced by one 28-run
+            backfill). #83 evaluates it with its rungs. Roll outside the 00:00 lanes.
+      - [ ] **2026-09-26 — a deploy rolls the ingest image implicitly** —
+            [docs/deferred/2026-09-26-a-deploy-rolls-the-ingest-image.md](docs/deferred/2026-09-26-a-deploy-rolls-the-ingest-image.md).
+            Check 2026-10-03. Until fixed: merge an ingest PR only when about to roll it.
       - [ ] Stage 3 — the price lane's dead verdict becomes an `identifier_probe` miss, the symbology
             lane repairs it, the ledger and the stopped day lane go, `run_monitoring` catches dead
             runs.
