@@ -1,8 +1,8 @@
 # The Yahoo rung of the symbol ladder has never been run, on purpose
 
-Created 2026-09-24 · **Check 2026-10-08** · Status: the last slice is running (2026-10-03). The
-user approved the sample on 2026-09-25, then said to go ahead with the rest on the same conditions.
-A failed condition stops them and goes back to the user.
+Created 2026-09-24 · Status: **closed 2026-10-03**. Every subject in the NEEDS_SYMBOL population
+has been asked once: 704 asked, 120 hits (17.0%), 114 adopted, no refusal. The user approved the
+sample on 2026-09-25, then the rest on the same conditions, and every condition held.
 
 ## Why it is deferred
 
@@ -117,7 +117,34 @@ ordinary search results (24 with quotes, 9 empty, none refused), so the conditio
 
 Backfill `fvteerkp`, launched 09:56 UTC, tag `muffin/reason=yahoo-slice-3b-2026-10-03`: the **321**
 partitions of the 354 with no `raw_yahoo_symbol`, read from Dagster's partition status rather than
-re-derived.
+re-derived. It finished at 12:46 UTC: COMPLETED_SUCCESS, 304 runs, all succeeded.
+
+- **58 hits, 296 misses: 16.4%.** 54 hits were adopted; the other 4 name a listing another
+  security already holds (`symbols_held_elsewhere`).
+- **No refusal.** All 354 stored answers are ordinary search results (260 with quotes, 94 empty, no
+  error body), read from the raw files.
+- **Where the hits are.** 32 have no country, 15 Cayman, 3 Bermuda, 3 Luxembourg, 2 US. That is the
+  same shape as the sample and slice 2: holding companies incorporated offshore, and securities
+  N-PORT never gave a country.
+
+## The verdict
+
+| Slice | Asked | Hits | Hit rate | Adopted |
+|---|---|---|---|---|
+| Sample, 2026-09-26 | 50 | 10 | 20.0% | 10 |
+| Slice 2, 2026-09-30 | 300 | 52 | 17.3% | 50 |
+| Slice 3, 2026-10-03 | 354 | 58 | 16.4% | 54 |
+| **Total** | **704** | **120** | **17.0%** | **114** |
+
+Measured afterwards: 590 equities with an ISIN still have no yfinance symbol, and **every one has
+been asked by Yahoo** (584 misses, plus 6 hits whose listing another security holds). No night
+around the three slices was throttled.
+
+**What stays open is new subjects, not this population.** A security that enters NEEDS_SYMBOL later
+is not asked by Yahoo, because the rung still carries no condition. Today almost nothing enters:
+the universe grows through N-PORT holdings, whose new equities mostly resolve on the OpenFIGI rungs.
+That changes with Stage 4's promotion waves, so the question of a continuous Yahoo rung (step 4
+below) is carried on Stage 4's line in `todos.md` rather than by this note.
 
 ## What to do
 
@@ -142,4 +169,4 @@ re-derived.
 ## Done when
 
 The NEEDS_SYMBOL population has been asked once, or the measured hit rate has been recorded here
-as the reason not to.
+as the reason not to. **Done 2026-10-03**: asked once, 17.0% hit rate, 114 adopted.

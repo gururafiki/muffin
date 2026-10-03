@@ -1597,7 +1597,7 @@ cut over one at a time.
   (`raw_price_bars`, day `price_bar`, `daily_prices_schedule` STOPPED, the old check). Retire it
   once the sweep has proven itself, porting the 28 offline-replay tests rather than deleting them —
   docs/deferred/2026-09-20-the-day-partitioned-price-lane-is-kept-as-the-rollback.md
-- [ ] **DECIDE by 2026-10-08 — the Yahoo rung of the symbol ladder has never run, on purpose.**
+- [x] **DONE 2026-10-03 — the Yahoo rung of the symbol ladder had never run, on purpose.**
   One request per subject on the price sweep's allowance; ~690 equities still lack a yfinance
   symbol after the OpenFIGI rungs (692 on 09-25). APPROVED 2026-09-25: a 50-subject sample, then
   read the next night's `throttled` before doing the rest. Prerequisite shipped: muffin-ingest#79,
@@ -1626,7 +1626,11 @@ cut over one at a time.
   09:41** (33 succeeded, 1 killed, 303 cancelled; see the deploy-rolls-ingest note). The 33 stored
   answers are ordinary search results, none refused. **Remainder relaunched 09:56 UTC**: backfill
   `fvteerkp`, the 321 partitions with no `raw_yahoo_symbol`, tag
-  `muffin/reason=yahoo-slice-3b-2026-10-03`, priority −1.
+  `muffin/reason=yahoo-slice-3b-2026-10-03`, priority −1. **Done 12:46 UTC: 58 of 354 hit
+  (16.4%), 54 adopted, no refusal.** Over all three slices: 704 asked, 120 hits (17.0%), 114
+  adopted, and every one of the 590 equities still lacking a yfinance symbol has been asked. Note
+  closed. New subjects are not asked automatically; that question moves to Stage 4, which is what
+  adds them.
 - [ ] due 2026-10-12 (after Stage 1d) — drop the columns and tables the retired price and universe
   families left behind: ten negative caches and markers on `security`, `currency.history_missing_at`,
   `security_price` (5.3 GB), `market.prices`, the `exchange_*` sweep tables —
@@ -2327,12 +2331,17 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
                   stops clearing the four retired price caches. The columns and tables left behind are
                   dropped at the contract step, on or after 2026-10-12 —
                   docs/deferred/2026-09-30-the-retired-families-leave-columns-behind.md.
-            - [ ] 1d `security_price_span`. **Built 2026-10-03:** muffin-deployment#399 (the table and
+            - [x] 1d `security_price_span`. **Built 2026-10-03:** muffin-deployment#399 (the table and
                   `derive_security_price_span(uuid[])`, mutation-proven 10 of 11) and muffin-ingest#90
-                  (the asset, a cursor over `price_bar_history` materialisations, 7 of 7). The facets
-                  are re-pointed in a follow-up once the bootstrap has filled the table. **#399
-                  deployed 2026-10-03 09:56** (the table exists, empty; `ingest_rw` may execute the
-                  function, `anon` may not). #90 rolls with muffin-ingest#91 once Yahoo slice 3 ends.
+                  (the asset, a cursor over `price_bar_history` materialisations, 7 of 7). **#399
+                  deployed 09:56; #90 rolled 14:19** (d163b35, digest `97114488`). **Bootstrap 14:33,
+                  run `15e14e4c`, about a minute:** 12,323 securities asked (every materialised
+                  history partition), 12,323 written, 258 with no bars, newest bar 10-02. Among
+                  equities the span covers 12,065, against the retired markers' 11,751 (price) and
+                  2,885 (daily). **muffin-deployment#407 merged:** both facets read it
+                  (mutation-proven 4 of 4). **Deployed and VERIFIED 15:04:** the coverage sample
+                  for equities reads price history 12,065 and daily history 12,065, against
+                  11,751 and 2,885 at 14:30.
       - [ ] Stage 2 — share class for every equity (~125 OpenFIGI requests), `security_listing`
             derived from the directory, `market.listing` as a compatibility view, `untracked_listing`
             at share-class grain, `symbol_security` refreshed by Dagster.
@@ -2377,8 +2386,11 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
       - [ ] Stage 3 — the price lane's dead verdict becomes an `identifier_probe` miss, the symbology
             lane repairs it, the ledger and the stopped day lane go, `run_monitoring` catches dead
             runs.
-      - [ ] Stage 4 — `promotion_wave`, paused until venues are opted in.
-      - [ ] Stage 5 — `security_classification` as an eager asset. **Now also a live fix:**
+      - [ ] Stage 4 — `promotion_wave`, paused until venues are opted in. **Decide with it:** whether
+            the Yahoo rung gets a condition for new NEEDS_SYMBOL subjects (17.0% hit rate over 704;
+            one request each, on the price sweep's allowance). A wave is what adds such subjects;
+            today almost none arrive.
+      - [x] Stage 5 — `security_classification` as an eager asset. **Now also a live fix:**
             `derive-classifications` has failed every daily run since 2026-09-27 (last success 09-26),
             `derive_segment_classification failed: canceling statement due to statement timeout`. It
             is called through PostgREST, whose role stops a statement at 8 s; from Dagster it runs
@@ -2388,19 +2400,52 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
             102 ms after the 09-05 fix, so the segment derivation has regressed ~200x; the asset
             records each duration), `derive_sic_classification` 52 ms.
             - [x] muffin-deployment#403 (expand): EXECUTE on the three for `ingest_rw`. Merged.
-            - [ ] muffin-ingest#91: the asset (eager on `fund_holding`, or daily at 05:44), 6 of 6
-                  mutations caught. Rolls with #90 after Yahoo slice 3; hand-run once after the roll.
-            - [ ] muffin-deployment#404 (draft, contract): 410 for `derive-classifications`,
-                  unschedule `muffin-classify`. Merge after the asset has run live.
-      - [ ] **2026-10-03 — the stalled-resource alert could see none of this** (muffin-deployment#400,
+            - [x] muffin-ingest#91: the asset (eager on `fund_holding`, or daily at 05:44), 6 of 6
+                  mutations caught. Rolled 14:19. **First run 14:32 (`c9b2e63d`): classified 515
+                  (4,986 ms), weighted 174 (15,044 ms), sic 2 (79 ms)**, exactly the rolled-back
+                  measurement. The segment step that the 8 s ceiling cancelled every day since
+                  09-27 took 15 s, inside `ingest_rw`'s 120 s.
+            - [x] muffin-deployment#404 (contract): 410 for `derive-classifications`, unschedule
+                  `muffin-classify`. **Deployed and VERIFIED 15:0x:** 410 as anon naming the asset
+                  (a live resource answers the same call with the admin 403), `muffin-classify` and
+                  the rotation row gone, and the stalled-resource rule reads 0.
+            - [ ] The segment derivation is still 15-20 s, and it grows: 15.5 of 18.0 s is one
+                  nested loop probing `security_segment`'s primary key 16,136 times, cold. Not
+                  failing inside Dagster's 120 s; one materialised pass should make it a few
+                  seconds with identical output —
+                  docs/deferred/2026-10-03-segment-classification-probes-the-primary-key-per-member.md
+      - [x] **2026-10-03 — the stalled-resource alert could see none of this** (muffin-deployment#400,
             merged): `resource_health.scheduled` ignored resources on their own pg_cron job, and
             `metrics_ro` could not read `resource_health` or 14 relations the Business lines dashboard
             reads, so the alert errored on every evaluation. New CI guard
-            `check_grafana_reads_are_granted.py`. Verify after the deploy: the alert's own query as
-            `metrics_ro` names `derive-classifications`.
-      - [ ] **2026-10-03 — a code-location restart failed a running backfill** (303 runs cancelled).
+            `check_grafana_reads_are_granted.py`. **Verified 14:3x:** the rule's own query as
+            `metrics_ro` evaluates and names exactly `derive-classifications` (last worked 09-26).
+      - [x] **2026-10-03 — a code-location restart failed a running backfill** (303 runs cancelled).
             muffin-deployment#401 sets `DAGSTER_BACKFILL_RETRY_DEFINITION_CHANGED_ERROR` on the daemon.
-            Its deploy restarts the daemon only; it goes out after the backfill, beside the roll.
+            **Deployed 14:29** (run 37129401396), after the roll; the daemon carries the variable.
+      - [x] **2026-10-03 — the universe sample had failed every hour since 09-26 22:04** (17.6 s
+            against the 8 s RPC ceiling, recorded `ok: true`; the scheduler alert read 9999 for a
+            week). muffin-deployment#405 deployed 14:29: pg_cron job `muffin-universe` at :05 as
+            `postgres`. **VERIFIED:** the 15:05 run succeeded in 16.3 s and wrote 372 metrics, and
+            the scheduler rule reads 0 as `metrics_ro` (9999 for a week before).
+      - [x] **2026-10-03 — the data-correctness alert fired on correct data** (FFAI's 5y return,
+            a real −99.99999%). muffin-deployment#406 deployed 14:29: `returns_at_minus_100` is a
+            gauge in both lists, and CI holds the lists equal. The rule reads 0 as `metrics_ro`.
+      - [ ] **2026-10-03 — the coverage sample failed whenever the cache was cold** (8.6 s cold
+            against the 8 s ceiling; all 24 retries on 09-28 lost), and `sample_quality` sat at
+            4.4 s. muffin-deployment#408 merged: pg_cron jobs `muffin-quality` (:06) and
+            `muffin-coverage` (05:23, 17:23), plus the rule "An observability sample has stopped
+            arriving" (reads 0 now, 2 when forced). **Deployed 15:0x**, both jobs scheduled.
+            Verify their first runs (quality 16:06, coverage 17:23) in `cron.job_run_details`.
+      - [x] **2026-10-03 — the India history walker had walked nothing since 09-25 16:58**, and the
+            FLAT alert on `pending_in_history` (381) was a true positive the whole time. Our proxy
+            answered 502: NSE's 4,226 bytes of response headers overflow nginx's default 4 KB
+            `proxy_buffer_size` ("upstream sent too big header", 1,143 times in 48 h).
+            muffin-deployment#409: `proxy_buffer_size 16k` on `/nse/`, validated with
+            `openresty -t` on the rendered config; `in-filings`' duplicate rotation row disabled.
+            **Deployed and VERIFIED:** the 15:13 run walked 6 with 0 failed, mapped 4, wrote 122
+            filings, and the backlog went 381 -> 377. No oversized header logged since the
+            15:03 restart.
       - [x] **2026-10-03 — `security-statements` had failed almost every run since 09-24**
             (`pending_statements read failed: … statement timeout`; 0 successes on 09-30). The view
             counted every statement row of every equity (192,951 rows, 354 MB) to learn two

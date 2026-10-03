@@ -4534,6 +4534,59 @@ and a deploy that cancelled a 303-run backfill.
   `instance.get_materialized_partitions(AssetKey(...))` in the webserver container and launch the
   difference (321 of 354 for slice 3). Re-deriving the population would re-ask the 33 that had
   already answered.
+- **A SUB-CALL THAT TIMES OUT INSIDE A RESOURCE THAT CATCHES IT RECORDS `ok: true` FOR A WEEK.**
+  - `observability-sample` called `market.sample_universe()` as one PostgREST RPC. From 2026-09-26
+    22:04, every hourly call was cancelled at the 8 s ceiling: it measured **17.6 s** for 371
+    metrics on 10-03. Its `max(trade_date)` over `price_bar` alone takes 2.3 s. The 09-26
+    price-reader fix added that read, and the failures began the next hour.
+  - The handler caught the error into `universeError` and still recorded `ok: true`, because `ok`
+    counted backlog samples. Twelve families stopped, and most of the Universe dashboard froze on
+    09-26. `scheduler.minutes_since_tick` stopped with them, so "The scheduler has stopped firing"
+    read 9999 for a week while the scheduler ticked normally.
+  - It now runs from its own pg_cron job, `muffin-universe` at :05, as `postgres`:
+    `set statement_timeout = '60s'; select market.sample_universe()`. The leading `SET` bounds the
+    next statement in the same command; measured, `set statement_timeout = '1s'; select
+    pg_sleep(3)` is cancelled (muffin-deployment#405).
+  - This is its second timeout. On 2026-08-27 it died counting tables exactly (see "A WARM CACHE IS
+    NOT A MEASUREMENT"). **A sample that grows with the data does not belong under a fixed RPC
+    ceiling.**
+- **A −100% RETURN CAN BE REAL.** The data-correctness alert fired on correct data. Its only offender
+  was FFAI's 5-year return:
+  - a split-adjusted close of 13,593,600.00 on 2021-09-30 against 1.21 on 2026-09-30;
+  - that is a genuine −99.99999%, which `security_return` stores to four decimals as −100.
+
+  `returns_at_minus_100` was written to catch "a zero close became a total loss", and
+  `price_bar_close_positive` now makes that impossible. It is a gauge in both lists that name
+  gauges, and `check_defect_gauges_agree.py` fails CI when they differ (muffin-deployment#406). They
+  have drifted before: `contradicted_negative_cache` on 2026-09-05.
+- **AND I SHIPPED THE UNIVERSE FIX WITHOUT MEASURING ITS SIBLINGS, IN A COMMENT THAT SAID I HAD.**
+  #405 left the handler saying the coverage and quality samples "each fit the ceiling". Measured
+  afterwards, rolled back: `sample_coverage` **8.6 s cold**, 3.3 s warm. It straddled the ceiling,
+  so the twice-daily RPC failed whenever the cache was cold: every hourly retry on 09-28 (24 of
+  them), every one on 10-03 from 01:04 to 09:04. The samples that did land came from deploys, which
+  run it as `postgres`. `sample_quality` was 4.4 s, the next one. Both moved to pg_cron
+  (muffin-deployment#408). A pg_cron job writes no `refresh_run` row, so nothing would see one
+  stop, and "a data-correctness invariant is broken" reads the newest `defect.*` group, so a
+  stopped sample would freeze it on stale data. The rule "An observability sample has stopped
+  arriving" watches the samples' own age. **This file already says: when you fix one of these, grep
+  for the other call sites before shipping.** A comment asserting a measurement is a claim, and
+  this one was untested.
+- **AN ALERT FILED AS "KNOWN" WITHOUT READING ITS CAUSE WAS A TRUE POSITIVE FOR EIGHT DAYS.** "A
+  non-empty backlog has been FLAT for a week" fired on `pending_in_history` (381) from 2026-09-25,
+  and the Phase 3 plan deferred it to the regulators family. The run's own report named the fault:
+  `failed: 6, walked: 0` with `nse results 502` on the same six symbols every run. **The 502 was
+  ours.** `http-cache` logged `upstream sent too big header while reading response header from
+  upstream` 1,143 times in 48 hours. Measured from the node directly, NSE answered 200 with the
+  data and **4,226 bytes of response headers** (one Akamai `Set-Cookie` line is 2,050), over
+  nginx's default 4 KB `proxy_buffer_size`. Fixed with `proxy_buffer_size 16k` plus
+  `proxy_buffers 8 16k`, since nginx refuses to start when `proxy_busy_buffers_size` is not below
+  all the buffers but one (muffin-deployment#409). Two rules:
+  - **A 502 through `http-cache` is a question about the proxy first.** Its log names the cause in
+    one line, and a direct request from the node separates the proxy from the provider.
+  - **`stack/proxy/nginx.conf` is a Jinja template**, so `openresty -t` on the repo file fails
+    (`proxy_cache_path` not terminated, line 40). Validate the RENDERED file
+    (`/home/ubuntu/proxy/nginx.conf`) in the image `http-cache` runs, unchanged as the control and
+    edited as the test.
 
 ## Running an OpenSandbox server locally
 
