@@ -1,8 +1,8 @@
 # The Yahoo rung of the symbol ladder has never been run, on purpose
 
-Created 2026-09-24 · **Check 2026-10-08** · Status: approved and scheduled. The user approved the
-sample on 2026-09-25, then said to go ahead with the rest on the same conditions. The steps below
-run from scheduled check-ins; a failed condition stops them and goes back to the user.
+Created 2026-09-24 · **Check 2026-10-08** · Status: the last slice is running (2026-10-03). The
+user approved the sample on 2026-09-25, then said to go ahead with the rest on the same conditions.
+A failed condition stops them and goes back to the user.
 
 ## Why it is deferred
 
@@ -75,6 +75,49 @@ backfill ran one run per subject; all 50 succeeded in about 20 minutes, queued b
 
 20% clears the ~10% bar set on 2026-09-25. So the 09-27 slice of 300 goes ahead if that night's
 `raw_price_history` shows `throttled 0` and `unasked 0`.
+
+## Slice 2, 2026-09-30
+
+The 09-27 check ran three days late, on 2026-09-30, so it read five nights instead of one. Every
+night from 09-26 to 09-30 showed `throttled 0` and `unasked 0`, and the rotation was continuous. The
+sample's 50 stored answers were all ordinary search results, none an error body. Both conditions
+held, so slice 2 went ahead.
+
+Backfill `tklpqzfi`, launched 20:21 UTC, priority −1, tag `muffin/reason=yahoo-slice-2-2026-09-30`:
+the next 300 of the 654 then eligible, in md5 order of the security id. 282 runs, all succeeded,
+finished 22:47 UTC.
+
+- **52 hits, 248 misses: 17.3%.** 50 hits were adopted as the security's yfinance symbol; two
+  named a listing another security already holds (`symbols_held_elsewhere`), which adoption
+  leaves alone by design.
+- **No refusal.** All 300 stored answers are ordinary search results (`quotes` present, no error
+  body), read from the raw files.
+- **Where the hits are.** 32 have no country, 10 are Cayman, 3 Luxembourg, 2 Bermuda. That is the
+  same pattern as the sample. The misses are mostly China (33), the US (31), Cayman (26), Bermuda
+  (16) and Ireland (15).
+- **The nights after it were clean.** 10-01, 10-02 and 10-03 each show `throttled 0` and
+  `unasked 0` over 2,500 keys, and the rotation continued 5013→7512, 7513→10012, then wrapped
+  10013→189.
+
+## Slice 3, 2026-10-03
+
+The 10-01 check was not run: the session that scheduled it was idle from 09-30 to 10-03. Read on
+10-03 instead, all three conditions held: slice 2 clean, hit rate 17.3%, three clean nights. So the
+rest went ahead.
+
+Backfill `cnmwfbxq`, launched 09:23 UTC, priority −1, tag `muffin/reason=yahoo-slice-3-2026-10-03`:
+**354 subjects**. That is every NEEDS_SYMBOL subject still in the grid with no Yahoo probe (644
+needing, 350 already asked), in md5 order, none from slice 2.
+
+**Our own deploy failed it at 09:41, not the provider.** The #398 deploy restarted the Dagster
+services; the daemon iterated the backfill while the code location was down, could not find
+`raw_yahoo_symbol`, and failed the backfill. 33 runs had succeeded, 1 was killed in flight and 303
+were cancelled (see `2026-09-26-a-deploy-rolls-the-ingest-image.md`). The 33 stored answers are
+ordinary search results (24 with quotes, 9 empty, none refused), so the conditions still held.
+
+Backfill `fvteerkp`, launched 09:56 UTC, tag `muffin/reason=yahoo-slice-3b-2026-10-03`: the **321**
+partitions of the 354 with no `raw_yahoo_symbol`, read from Dagster's partition status rather than
+re-derived.
 
 ## What to do
 

@@ -4473,6 +4473,68 @@ parity gate for retiring the edge `fund-holdings` found.
   `instance.add_run_tags(run_id, {"dagster/priority": …})`.** Both work on QUEUED runs from inside
   the webserver container, and both were needed to keep the 00:00 lanes ahead of a large backfill.
 
+### Three statements past the 8-second ceiling, and an alert that could see none of them (2026-10-03)
+
+The session that scheduled the 10-01 check sat idle until 10-03. Reading production then found three
+edge statements failing at the PostgREST role's 8 s timeout, a week-old outage no alert had reported,
+and a deploy that cancelled a 303-run backfill.
+
+- **A TABLE THAT GROWS PAST A CEILING FAILS A STATEMENT THAT DID NOT CHANGE, AND THREE DID AT ONCE.**
+  - `pending_statements` failed almost every `security-statements` run from 09-24. It counted all
+    192,951 statement rows (354 MB) to learn two booleans per security, one aggregate run 12,055
+    times. EXISTS plus a partial index returns the same 55 rows in 122 ms (muffin-deployment#398).
+    **Ask a backlog question with EXISTS, never with a per-row aggregate over a growing table.**
+  - `derive_segment_classification` has failed every daily `derive-classifications` run since
+    09-27. That fix is Stage 5: from Dagster it runs as `ingest_rw`, with a 120 s timeout.
+  - `derive_ttm` fails only at night (7 of 8 runs between 00:24 and 04:24 UTC), while the price
+    sweep loads the database.
+- **THE STALLED-RESOURCE ALERT COULD NOT SEE A RESOURCE ON ITS OWN pg_cron JOB, AND COULD NOT READ
+  ITS OWN INPUT.**
+  - `resource_health.scheduled` counted only enabled `cron_resource` rows. Every resource moved onto
+    its own job keeps a disabled rotation row, so nine read as unscheduled, and the alert skips
+    anything unscheduled. `cron_scheduled_resources()` now reads `cron.job`. It is SECURITY
+    DEFINER because `metrics_ro` and `anon` both get `permission denied for schema cron`, and it
+    returns nothing where pg_cron is absent.
+  - `metrics_ro`, Grafana's role, had never been granted `resource_health` or 14 relations the
+    Business lines dashboard reads. The alert errored on every evaluation, and with
+    `execErrState: Alerting` an alert in error is indistinguishable from one firing.
+  - The migration tests run as a superuser, so nothing in CI could see a missing grant.
+    `check_grafana_reads_are_granted.py` now parses every provisioned query and asks
+    `has_table_privilege('metrics_ro', …)` against CI's database, which carries production's grant
+    history. Run against production's grants, it named exactly those 15. The CI step also revokes a
+    grant and requires the guard to fail, so every run proves it can (muffin-deployment#400).
+- **A NEWLY DEPLOYED `eager()` ASSET DOES NOT FIRE BY ITSELF.** Its first evaluation counts as
+  handled, so `newly_missing` cancels (`security_listing`, evaluations 86963 and 86965 in Dagster
+  1.13.22). Materialise it once by hand after the roll.
+- **A LAUNCH WITH `assetCheckSelection: []` RUNS NO CHECKS.** An empty selection means none, not
+  all. `security_listing` materialised and `listing_covers_legacy` never ran until it was named.
+  `dagster_gql.py materialize --checks asset:check,…`.
+- **THE FIRST DEPLOY AFTER A ROLL RESTARTS DAGSTER, AND A CODE-LOCATION RESTART FAILS A RUNNING
+  BACKFILL, NOT JUST ITS IN-FLIGHT RUN.**
+  - The roll leaves the bare `muffin-ingest:latest` in the task spec. `docker stack deploy` pins
+    the digest, and that one-field difference replaces the tasks even with an unchanged image.
+    The 09:40 deploy after the 09:14 roll did it; the 09:56 deploy after that replaced nothing.
+  - During the restart the daemon iterated Yahoo slice 3's backfill and could not find
+    `raw_yahoo_symbol`. It raised `DagsterAssetBackfillDataLoadError`, a framework error and so
+    not retried, and the backfill was failed: 33 succeeded, 1 killed, **303 cancelled**.
+  - `DAGSTER_BACKFILL_RETRY_DEFINITION_CHANGED_ERROR` on the daemon pauses a backfill while its
+    location is unloadable (muffin-deployment#401). Land queued deploys before a roll, not after
+    ([the note](docs/deferred/2026-09-26-a-deploy-rolls-the-ingest-image.md)).
+- **READ A RESTART OFF THE TASKS. THREE OTHER READINGS SAID THE 09:56 DEPLOY HAD RESTARTED DAGSTER,
+  AND NONE WAS EVIDENCE.**
+  - A service's `UpdatedAt` moves on every stack deploy.
+  - A service's `PreviousSpec`-against-`Spec` diff shows `UpdateConfig`, `RollbackConfig`,
+    `StopGracePeriod` and `DNSConfig` changing on every service, supabase-db included. The daemon
+    fills defaults into `Spec` only.
+  - `gh run watch` prints the job's whole step list, future steps included, so its tail is not
+    progress.
+  - `docker service ps` plus `docker inspect <task> --format '{{json .Spec}}'`, and the container's
+    `State.StartedAt`, are the evidence.
+- **RELAUNCH A FAILED BACKFILL FROM DAGSTER'S OWN PARTITION STATUS.** Read
+  `instance.get_materialized_partitions(AssetKey(...))` in the webserver container and launch the
+  difference (321 of 354 for slice 3). Re-deriving the population would re-ask the 33 that had
+  already answered.
+
 ## Running an OpenSandbox server locally
 
 - **`docker run -d -p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock opensandbox/server:latest`.**

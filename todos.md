@@ -1612,6 +1612,25 @@ cut over one at a time.
   - the remaining ~340 on 09-28, under the same conditions;
   - otherwise stop and ask —
   docs/deferred/2026-09-24-the-yahoo-rung-is-an-operator-backfill.md
+  **The 09-27 check was delivered on 2026-09-30, so it read five nights instead of one.** Every night
+  09-26..09-30 shows `throttled 0` and `unasked 0`, and the rotation is continuous
+  (4800→7299, 7300→9799, 9800→wrap→12, 13→2512, 2513→5012). The sample's 50 stored answers are all
+  ordinary search results, none an error body. **Slice 2 LAUNCHED 2026-09-30 20:21 UTC**: backfill
+  `tklpqzfi`, the next 300 of the 654 still eligible in md5 order, tag
+  `muffin/reason=yahoo-slice-2-2026-09-30`, priority −1. **Done 22:47 UTC: 52 of 300 hit (17.3%),
+  50 adopted**, two named a listing another security holds; all 300 stored answers are ordinary
+  search results. The 10-01 check never ran (the session sat idle 09-30 → 10-03); read on 10-03,
+  the nights of 10-01, 10-02 and 10-03 were all `throttled 0`, `unasked 0`, rotation continuous.
+  **Slice 3 LAUNCHED 2026-10-03 09:23 UTC**: backfill `cnmwfbxq`, the last 354 subjects with no Yahoo
+  probe, tag `muffin/reason=yahoo-slice-3-2026-10-03`, priority −1. **The #398 deploy failed it at
+  09:41** (33 succeeded, 1 killed, 303 cancelled; see the deploy-rolls-ingest note). The 33 stored
+  answers are ordinary search results, none refused. **Remainder relaunched 09:56 UTC**: backfill
+  `fvteerkp`, the 321 partitions with no `raw_yahoo_symbol`, tag
+  `muffin/reason=yahoo-slice-3b-2026-10-03`, priority −1.
+- [ ] due 2026-10-12 (after Stage 1d) — drop the columns and tables the retired price and universe
+  families left behind: ten negative caches and markers on `security`, `currency.history_missing_at`,
+  `security_price` (5.3 GB), `market.prices`, the `exchange_*` sweep tables —
+  docs/deferred/2026-09-30-the-retired-families-leave-columns-behind.md
 - [ ] due 2026-10-16 (or before the first keyed provider's raw asset) — redact API keys from raw
   document URLs — docs/deferred/2026-09-16-raw-request-credentials.md
 - [x] 2026-09-19 — FX spot writes the day's own rates with no hand-run: 41 rates for every weekday
@@ -2297,22 +2316,51 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
             - [x] **1b — muffin-deployment#395, deployed and VERIFIED 2026-09-26.** Ten resources
                   retired: rotation rows disabled, `muffin-promote` unscheduled, each answers 410
                   naming its lane (checked as anon), `tracked_fund_latest` reads 74.
-            - [ ] 1c delete the dead handlers and views — after 1b has run clean for 3 days
-                  (2026-09-29).
-            - [ ] 1d `security_price_span`.
+            - [x] 1c delete the dead handlers and views — after 1b has run clean for 3 days
+                  (2026-09-29). **Clean, checked 2026-09-30**: no `refresh_run` row for any of the ten
+                  since the 410 probes at 09-26 23:15, `muffin-promote` unscheduled, rows disabled.
+                  **muffin-deployment#397 merged and deployed 2026-09-30**: the twenty retired
+                  handlers, their modules (`ingest`, `edgar`, `figi`, `yahoo`, `exchanges`,
+                  `symbol-repair`, the FX half of `fx.ts`) and the `RESOURCES` registry are gone
+                  (`index.ts` 7,936 → 5,718 lines); a request naming no resource is a 400; the ten
+                  family `pending_*` views dropped (nothing depended on them); `clear_symbol_caches`
+                  stops clearing the four retired price caches. The columns and tables left behind are
+                  dropped at the contract step, on or after 2026-10-12 —
+                  docs/deferred/2026-09-30-the-retired-families-leave-columns-behind.md.
+            - [ ] 1d `security_price_span`. **Built 2026-10-03:** muffin-deployment#399 (the table and
+                  `derive_security_price_span(uuid[])`, mutation-proven 10 of 11) and muffin-ingest#90
+                  (the asset, a cursor over `price_bar_history` materialisations, 7 of 7). The facets
+                  are re-pointed in a follow-up once the bootstrap has filled the table. **#399
+                  deployed 2026-10-03 09:56** (the table exists, empty; `ingest_rw` may execute the
+                  function, `anon` may not). #90 rolls with muffin-ingest#91 once Yahoo slice 3 ends.
       - [ ] Stage 2 — share class for every equity (~125 OpenFIGI requests), `security_listing`
             derived from the directory, `market.listing` as a compatibility view, `untracked_listing`
             at share-class grain, `symbol_security` refreshed by Dagster.
-            - [ ] 2a muffin-deployment#394 merged and deploying: the identifier kind,
+            - [x] 2a muffin-deployment#394, deployed 2026-09-26: the identifier kind,
                   `venue_listing.share_class_figi`, `market.security_listing`.
-            - [ ] 2b muffin-ingest#82 live (rolled implicitly by the #394 deploy at 21:40). The
-                  venue re-parse filled `venue_listing.share_class_figi` (99,438 of 99,459 lines,
-                  54,332 classes, exactly the raw files). Backfills `nfyycefw` (old grid) and
-                  `hzrneyul` (new subjects) are draining behind the nightly lanes; four runs failed
-                  to rolls and need `FROM_FAILURE` re-execution. Gate: a class on at least 95% of
-                  equities with an ISIN.
-            - [ ] 2b-ii the `security_listing` asset and `listing_covers_legacy`, designed on the
-                  measured coverage.
+            - [x] **2b VERIFIED 2026-09-30.** muffin-ingest#82 live. The venue re-parse filled
+                  `venue_listing.share_class_figi` (99,438 of 99,459 lines, 54,332 classes). Backfills
+                  `nfyycefw` and `hzrneyul` ended with six runs killed by the 09-26 roll, all
+                  re-executed `FROM_FAILURE` and succeeded. **Gate met: 12,325 of 12,515 equities with
+                  an ISIN hold a class (98.5%)**; 166 misses; 3 classes held by another security.
+            - [x] 2b-ii **muffin-deployment#396 deployed 2026-09-30**: `market.derive_security_listing()`
+                  and `symbol_match_key`, mutation-proven 16 of 16 on a throwaway Postgres built like
+                  CI's. On production, rolled back: 33,859 lines for 11,476 securities in 2.7 s;
+                  primaries by symbol 10,227, legacy venue 972, home venue 16, none 261.
+                  **muffin-ingest#88 and #89 merged and rolled 2026-10-03 09:15 UTC** (`bb11cae3`):
+                  the `security_listing` asset (eager without the missing-deps gate, plus a 05:43 UTC
+                  daily floor), `listing_covers_legacy`, the sweep check reporting a CAPPED venue,
+                  and the price sweep's `not_askable` counter. First live run, by hand: 33,995 lines
+                  for 11,529 securities, primaries by symbol 10,292, legacy venue 958, home venue 19,
+                  none 260; a re-run wrote nothing. **`listing_covers_legacy` WARNs as predicted:
+                  179 lost, 174 of them US** — the directory's cap, which blocks 2c.
+                  `eager()` did NOT fire on the new asset by itself: `since_last_handled` counts a
+                  new asset's initial evaluation as handled, so `newly_missing` cancelled against it.
+      - [ ] **2026-09-27 — the US directory stops at OpenFIGI's 15,000-result cap.** 15,000 of 20,096
+            US listings, FIGI-ordered, so every US line newer than `BBG013JYT8V4` is missing (BRBR,
+            LOAR, PSKY, SBET); 443 of 2,812 tracked US equities have no US line, 177 of the 182
+            securities `listing_covers_legacy` would fail on. **Decide before 2c and Stage 4** —
+            [docs/deferred/2026-09-27-the-us-directory-stops-at-15000.md](docs/deferred/2026-09-27-the-us-directory-stops-at-15000.md).
       - [x] **2026-09-26 — muffin-ingest#83 (rolled): the adopting step was requested in fragments.**
             `security_symbology` sat on the default automation sensor, apart from its rungs, so
             `will_be_requested()` could not see them and each tick requested a scattered subset:
@@ -2320,12 +2368,51 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
             backfill). #83 evaluates it with its rungs. Roll outside the 00:00 lanes.
       - [ ] **2026-09-26 — a deploy rolls the ingest image implicitly** —
             [docs/deferred/2026-09-26-a-deploy-rolls-the-ingest-image.md](docs/deferred/2026-09-26-a-deploy-rolls-the-ingest-image.md).
-            Check 2026-10-03. Until fixed: merge an ingest PR only when about to roll it.
+            Check 2026-10-10. Until fixed: merge an ingest PR only when about to roll it.
+            **Wider than written (2026-10-03):** the first deploy after ANY roll restarts all three
+            Dagster services, even with an unchanged image, because the roll leaves a spec the deploy
+            does not reproduce. The #398 deploy did this at 09:40 and failed Yahoo slice 3's backfill
+            (303 runs cancelled). muffin-deployment#401 makes a backfill survive a code-location
+            restart. Rule: land queued deploys before a roll, not after.
       - [ ] Stage 3 — the price lane's dead verdict becomes an `identifier_probe` miss, the symbology
             lane repairs it, the ledger and the stopped day lane go, `run_monitoring` catches dead
             runs.
       - [ ] Stage 4 — `promotion_wave`, paused until venues are opted in.
-      - [ ] Stage 5 — `security_classification` as an eager asset.
+      - [ ] Stage 5 — `security_classification` as an eager asset. **Now also a live fix:**
+            `derive-classifications` has failed every daily run since 2026-09-27 (last success 09-26),
+            `derive_segment_classification failed: canceling statement due to statement timeout`. It
+            is called through PostgREST, whose role stops a statement at 8 s; from Dagster it runs
+            as `ingest_rw` with a 120 s timeout, which is what this stage already does.
+            **Taken ahead of Stages 2c-4 on 2026-10-03 because of the outage.** Measured rolled
+            back: `derive_classifications` 5.2 s, `derive_segment_classification` **20.1 s** (it was
+            102 ms after the 09-05 fix, so the segment derivation has regressed ~200x; the asset
+            records each duration), `derive_sic_classification` 52 ms.
+            - [x] muffin-deployment#403 (expand): EXECUTE on the three for `ingest_rw`. Merged.
+            - [ ] muffin-ingest#91: the asset (eager on `fund_holding`, or daily at 05:44), 6 of 6
+                  mutations caught. Rolls with #90 after Yahoo slice 3; hand-run once after the roll.
+            - [ ] muffin-deployment#404 (draft, contract): 410 for `derive-classifications`,
+                  unschedule `muffin-classify`. Merge after the asset has run live.
+      - [ ] **2026-10-03 — the stalled-resource alert could see none of this** (muffin-deployment#400,
+            merged): `resource_health.scheduled` ignored resources on their own pg_cron job, and
+            `metrics_ro` could not read `resource_health` or 14 relations the Business lines dashboard
+            reads, so the alert errored on every evaluation. New CI guard
+            `check_grafana_reads_are_granted.py`. Verify after the deploy: the alert's own query as
+            `metrics_ro` names `derive-classifications`.
+      - [ ] **2026-10-03 — a code-location restart failed a running backfill** (303 runs cancelled).
+            muffin-deployment#401 sets `DAGSTER_BACKFILL_RETRY_DEFINITION_CHANGED_ERROR` on the daemon.
+            Its deploy restarts the daemon only; it goes out after the backfill, beside the roll.
+      - [x] **2026-10-03 — `security-statements` had failed almost every run since 09-24**
+            (`pending_statements read failed: … statement timeout`; 0 successes on 09-30). The view
+            counted every statement row of every equity (192,951 rows, 354 MB) to learn two
+            booleans, and crossed PostgREST's 8 s ceiling as the table grew: 8.6 s, 8.26 s of it one
+            aggregate run 12,055 times. muffin-deployment#398 asks the two booleans with EXISTS (one on
+            a new partial index): the same 55 rows in 122 ms. **Deployed 2026-10-03 09:42**: the
+            09:50 run succeeded (4 written, 15 remaining) and the view reads in 308 ms.
+      - [ ] **2026-10-03 — `derive_ttm` times out at night only.** `security-metrics` fails at the 8 s
+            ceiling between 00:24 and 04:24 UTC (7 of 8 runs on 10-03), while the nightly price sweep
+            loads the database, and succeeds through the day (84 ok in 48 h). TTM still advances.
+            Belongs to the metrics family's move to Dagster (Phase 4); until then, a cron window that
+            skips the sweep hours would stop the failures.
       - [ ] Stage 6 — roles, table grants, reference data and cron jobs re-applied every deploy, and a
             `fresh-database` CI job.
       - [ ] Stage 7 — Grafana universe panels, docs and skills.
