@@ -1,7 +1,9 @@
 # The US directory stops at 15,000 listings, and the check says it finished
 
-Created 2026-09-27 · **Decide before Stage 2c** (the listing swap) and before Stage 4 (promotion) ·
-Status: open, needs a decision.
+Created 2026-09-27 · Decided 2026-10-04: **NYSE Arca for new US listings, and REIT, depositary
+receipt and partnership walks on every venue** (see "Decision" at the end) · Status: built —
+muffin-deployment#412 deployed 2026-10-03 23:49 UTC, muffin-ingest#92 to roll after the 00:00 lanes.
+Closing criteria: "Done when" below, measured after the first full walk.
 
 ## What happened
 
@@ -85,8 +87,57 @@ Each local line carries `compositeFIGI`, the composite `US` line's FIGI.
 
 ## Done when
 
-- `venue_sweep_reached_its_last_page` fails, naming the venue, when the stored rows fall short of the
-  provider's `total` by more than drift (a few rows). "No cursor left" is not "finished" when the
-  provider stopped issuing cursors at its cap.
-- BRBR, LOAR, PSKY and SBET each have a `US` line in `market.venue_listing`, and the 443 falls to
-  ~0.
+- A capped walk is named, and reads as covered only when an alias covering it has finished its own
+  walk. Since 2026-10-04 that verdict is its own check, `directory_query_within_the_cap`, so
+  `venue_sweep_reached_its_last_page` names only walks a resume can help. "No cursor left" is not
+  "finished" when the provider stopped issuing cursors at its cap.
+- BRBR, LOAR, PSKY and SBET each have a `US` line in `market.venue_listing` (via `US.arca`), and so
+  do PLD (`US.reit`), the TSM ADR (`US.dr`) and ET (`US.partnership`); the 443 falls to ~0.
+
+## Re-checked 2026-10-03, at the user's request
+
+The question was whether OpenFIGI can page past 15,000, or filter by date. **It cannot:**
+
+- **Pages.** The documentation states 15,000 results per query, 150 pages of 100. The cursor is
+  signed and counts pages.
+- **Dates.** The only date ranges, `expiration` and `maturity`, are for options, futures and bonds.
+  Results are listed "alphabetically by FIGI", so the cap drops the newest.
+
+What does work is asking smaller questions. Measured 2026-10-03:
+
+| Split | Result |
+|---|---|
+| `stateCode` (the issuer's home state; 142 values incl. Canadian, Japanese, Chinese) | 127 codes hold 14,261 of 20,098 US lines, the largest CA 1,511. **But new listings carry none:** BellRing is not among MO's 59 lines, nor Sharplink among MN's 107. Rejected. |
+| `micCode` | Cannot be combined with `exchCode` ("Cannot have both exchCode and micCode"); alone it is no partition (XNYS 37,888, XNAS 0). Rejected. |
+| `includeUnlistedEquities: true` | 110,986. Wider, not narrower. |
+| `UP` (NYSE Arca), Common Stock | 5,541 lines, 56 pages; 1,466 US composite lines the directory lacks. BellRing's Arca line `BBG0154FBJJ5` names `BBG013QNJHP8`, the composite, as its `compositeFIGI`. |
+
+**The cap was the smaller half.** The 533 tracked equities with a legacy US primary and no derived US
+line (505 with a share class) break down, by mapping each share class to all its lines:
+
+| Cause | Securities |
+|---|---|
+| Exchange-listed, composite past the cap (recovered by Arca) | 201 |
+| On NYSE Arca, composite **inside** the cap but absent: REITs (Tanger, Brixmor, SL Green, PECO) | 152 |
+| Depositary receipts (ABEV, BBD, BSAC, CIB, PDD, EDN…) | 86 |
+| OTC only, composite past the cap (mostly Singapore REIT/foreign-ordinary lines) | 26 |
+| OTC only, composite absent (Singapore REITs: ACIRF, FRLOF, KPLIF…) | 23 |
+| No US line visible (XOM, EA, AVB: the probe's mapping truncated their lines; not a finding) | 11 |
+| Composite-only lines (money-market funds GVMXX, BISXX) | 6 |
+
+`securityType2` is a vocabulary of its own, and the sweep asks only for `Common Stock`, on every
+venue. `REIT` is separate (US 435 lines, London 154, Singapore 39, Toronto 42), and so are
+`Depositary Receipt` (US 2,719, London 139) and `Partnership Shares` (US 52: AB, BIP, IEP). The
+directory held 99,459 rows, all `Common Stock`; PLD, AMT, O, SPG, ET, EPD, MPLX, BIP, TSM, BABA and
+NVO were all absent, and AAPL present.
+
+## Decision (user, 2026-10-04)
+
+**NYSE Arca for new US listings, and REIT, depositary receipt and partnership walks on every venue.**
+About 270 more requests a week (~15 minutes keyed). Expected to recover ~460 of the 505.
+
+Still missed: the 26 foreign OTC lines past the cap (no filter reaches them; their companies are
+reachable on their home exchange), and the composite-only money-market lines.
+
+Not taken: `Unit`. Toronto has 39 income-trust units, but the type also holds SPAC units elsewhere,
+so it would need a per-venue rule.

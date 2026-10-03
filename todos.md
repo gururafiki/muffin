@@ -2370,6 +2370,25 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
             LOAR, PSKY, SBET); 443 of 2,812 tracked US equities have no US line, 177 of the 182
             securities `listing_covers_legacy` would fail on. **Decide before 2c and Stage 4** —
             [docs/deferred/2026-09-27-the-us-directory-stops-at-15000.md](docs/deferred/2026-09-27-the-us-directory-stops-at-15000.md).
+            **Decided 2026-10-04** (one partition per question, control tables, monthly refresh,
+            delistings next): [spec](docs/specs/2026-10-04-the-venue-directory-asks-by-query.md).
+            **Built:** muffin-deployment#412 (tables, view, bundle, the worker cannot edit them) and
+            muffin-ingest#92 (the lane), both green. Building it found three more defects:
+            - a monthly re-walk would have replayed http-cache's 90-day pages;
+            - four queries a run let a refusal claim the unasked ones;
+            - a partition-scoped check reported whichever query ran last.
+            - [ ] Deploy #412 after the 00:00 lanes, then merge and roll #92. Let the daemon
+                  evaluate the new condition once before the 237 keys are added, then walk them
+                  (~1,300 keyed requests, ~65 min). Read every counter.
+            - [ ] Verify US lines for BRBR, LOAR, PSKY, SBET, PLD, the TSM ADR and ET; re-run
+                  `listing_covers_legacy` (expect ~460 of the 505 recovered); anon latency on
+                  `untracked_listing`, best of 3; the universe dashboard.
+            - [ ] Delete the 59 per-venue `exchange_sweep` keys before the 1 November tick, which
+                  would otherwise fail on each (their raw files stay).
+            - [ ] D4, delistings, as its own PR before Stage 4.
+            - [ ] **Docker Desktop's API stopped answering on this Mac on 2026-10-04** (backend up,
+                  every call timed out for 10+ minutes), so the local Postgres harness could not
+                  run. Restarting it is the user's call.
       - [x] **2026-09-26 — muffin-ingest#83 (rolled): the adopting step was requested in fragments.**
             `security_symbology` sat on the default automation sensor, apart from its rungs, so
             `will_be_requested()` could not see them and each tick requested a scattered subset:
@@ -2431,12 +2450,16 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
       - [x] **2026-10-03 — the data-correctness alert fired on correct data** (FFAI's 5y return,
             a real −99.99999%). muffin-deployment#406 deployed 14:29: `returns_at_minus_100` is a
             gauge in both lists, and CI holds the lists equal. The rule reads 0 as `metrics_ro`.
-      - [ ] **2026-10-03 — the coverage sample failed whenever the cache was cold** (8.6 s cold
+      - [x] **2026-10-03 — the coverage sample failed whenever the cache was cold** (8.6 s cold
             against the 8 s ceiling; all 24 retries on 09-28 lost), and `sample_quality` sat at
-            4.4 s. muffin-deployment#408 merged: pg_cron jobs `muffin-quality` (:06) and
+            4.4 s. muffin-deployment#408: pg_cron jobs `muffin-quality` (:06) and
             `muffin-coverage` (05:23, 17:23), plus the rule "An observability sample has stopped
-            arriving" (reads 0 now, 2 when forced). **Deployed 15:0x**, both jobs scheduled.
-            Verify their first runs (quality 16:06, coverage 17:23) in `cron.job_run_details`.
+            arriving" (reads 0 now, 2 when forced). **VERIFIED in `cron.job_run_details`:**
+            `muffin-quality` succeeded every hour from 15:06 to 21:06 in 4.3-5.3 s, and
+            `muffin-coverage` at 17:23 in 24.5 s (120 s bound).
+      - [ ] **2026-10-04 — read `muffin-universe`'s 00:05 run.** It took 12.4-30.0 s between 15:05
+            and 21:05 against its 60 s bound, without the price sweep running. If the 00:05 run,
+            which overlaps the sweep, passes 40 s, raise the bound to 120 s, as coverage has.
       - [x] **2026-10-03 — the India history walker had walked nothing since 09-25 16:58**, and the
             FLAT alert on `pending_in_history` (381) was a true positive the whole time. Our proxy
             answered 502: NSE's 4,226 bytes of response headers overflow nginx's default 4 KB
@@ -2446,6 +2469,22 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
             **Deployed and VERIFIED:** the 15:13 run walked 6 with 0 failed, mapped 4, wrote 122
             filings, and the backlog went 381 -> 377. No oversized header logged since the
             15:03 restart.
+      - [ ] **2026-10-03 — the segment spine had been frozen since 09-23**: 148 consecutive
+            timeouts of its 8 s RPC (last success 7,992 ms; 11.7 s cold now), and `market-verify`
+            failed on it every night from 09-30 with nothing alerting on a failing gate. Refreshed
+            by hand at 15:20, and `security_classification` re-run on it (`fad45b4b`: 515 / 174).
+            muffin-deployment#410: pg_cron job `muffin-segment-spine` (:16), the refresh records
+            itself in `universe_sample`, the check, panel and staleness alert read that, and
+            `facets-refresh`'s TTL 60 -> 50 (it alternated refresh/skip). Verify after the
+            deploy: a job run in `cron.job_run_details`, and the spine check passing live.
+      - [ ] **2026-10-03 — the Dagster webserver's idle database connections go dead.** Two
+            launches failed with `server closed the connection unexpectedly` after ~50 minutes
+            idle; the third worked. A failed launch left a `NOT_STARTED` orphan that could have
+            blocked eager automation (reported failed by hand). Likely swarm's 900 s IPVS idle
+            cut, unconfirmed — docs/deferred/2026-10-03-swarm-drops-idle-database-connections.md
+      - [ ] **2026-10-03 — `openbb-api` is OOM-killed about weekly** (exit 137 at its 1 GB limit:
+            ~09-19, ~09-26, 10-03 13:10). Swarm restarts it; the cause is not known. Find which
+            request precedes each kill before raising the limit.
       - [x] **2026-10-03 — `security-statements` had failed almost every run since 09-24**
             (`pending_statements read failed: … statement timeout`; 0 successes on 09-30). The view
             counted every statement row of every equity (192,951 rows, 354 MB) to learn two

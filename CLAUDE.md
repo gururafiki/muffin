@@ -4587,6 +4587,71 @@ and a deploy that cancelled a 303-run backfill.
     (`proxy_cache_path` not terminated, line 40). Validate the RENDERED file
     (`/home/ubuntu/proxy/nginx.conf`) in the image `http-cache` runs, unchanged as the control and
     edited as the test.
+- **A CHART OF A WALK TOWARD A HARD CEILING IS NOT A WARNING. NOBODY READ IT, AND THE SPINE FROZE
+  FOR TEN DAYS.** `refresh_segment_spine` was kept as its own RPC so "the walk toward that ceiling
+  is a chart rather than a surprise" (2026-09-08, above). The chart showed it: 7,748 ms, then
+  7,992 ms on 09-23. Then 148 consecutive timeouts, while `facets-refresh` recorded ok as designed.
+  `market-verify` failed on it every night from 09-30, and Grafana alerts on a `market-verify` that
+  does not RUN, not on one that FAILS. So `derive_segment_classification` (Stage 5's first Dagster
+  run included), the coverage segment facets and the Business lines dashboard all read a 09-23
+  snapshot. Measured 2026-10-03: 11.7 s cold, 7.6 s warm. It now runs from pg_cron with a 300 s
+  bound, and records itself in `universe_sample`, where the staleness alert reads it
+  (muffin-deployment#410). Fifth statement at the ceiling in one day. Two rules:
+  - **A number trending toward a hard limit gets an alert, or the limit goes.** A chart is read only
+    when someone is already looking.
+  - **Any whole-table refresh or sample on an RPC is a timeout waiting for the data to grow.**
+    `refresh_facets()` measured 5.2 s cold the same day, the next candidate.
+
+### The venue directory, one question per partition (2026-10-04)
+
+Decided and built 2026-10-04:
+[docs/specs/2026-10-04-the-venue-directory-asks-by-query.md](docs/specs/2026-10-04-the-venue-directory-asks-by-query.md),
+muffin-deployment#412, muffin-ingest#92.
+
+- **OPENFIGI'S `start` PAGES WITHIN A CEILING, NOT PAST IT.** `/v3/filter` documents "Max Results:
+  15,000 · Max Results Per Page: 100 · Max Amount of Pages: 150", keyed or not, ordered by FIGI.
+  The stored US walk used `start` exactly as documented and stopped at page 149, full, with no
+  `next`, holding 15,000 of 20,096. Only a narrower QUESTION reaches the rest. Measured 2026-10-03:
+  - `stateCode` splits the US (127 codes, largest 1,511), but new listings carry no state.
+  - `micCode` cannot be combined with `exchCode`.
+  - NYSE Arca (`exchCode: UP`) lists every exchange-listed US stock in 5,541 lines, each naming its
+    US line in `compositeFIGI`.
+
+  The 2026-09-27 note claimed no documented filter narrows it, without testing either filter.
+- **`securityType2` IS A FILTER, SO IT HIDES WHAT IT DOES NOT NAME.** OpenFIGI types REITs,
+  depositary receipts and partnerships apart from common stock, and the sweep asked for common stock
+  only. None was in the directory on any of 59 venues: Prologis, American Tower, the TSMC ADR,
+  Energy Transfer. The provider module's own docstring said so, and nothing acted on it. A
+  question's type is now a row in `market.directory_type`.
+- **A REFRESH ASKED THROUGH http-cache IS A REPLAY.** The `/openfigi/` location keeps a 200 for 90
+  days keyed on the request body, and a directory re-walk sends last month's bodies: page one has no
+  cursor, and each later cursor follows from it. The monthly refresh would have replayed old pages
+  for three months while reporting fresh walks. Every `/v3/filter` page now sends
+  `X-Muffin-Cache-Bypass`. **Before scheduling a refresh, check what the cache does with the
+  question.**
+- **A CHECK ON A PARTITIONED ASSET IS ONE RESULT (Dagster 1.13).** It is unpartitioned unless
+  declared with a preview `partitions_def`, and even then it records a partition only for a
+  single-partition step. So:
+  - a check that answered for `context.partition_key` reported whichever query ran last;
+  - `any_checks_match(check_failed())` cannot retry one partition, since its status is the whole
+    grid's.
+
+  The directory's checks answer for the grid on every evaluation. The resume is a sensor.
+  `build_asset_check_context` takes no partition key, so test this inside a real partitioned
+  `dg.materialize`.
+- **A SUCCESSFUL RUN CLAIMS EVERY PARTITION IT COVERS.** With four provider questions a run, a
+  refusal in one left the rest unasked and materialized: a new query read as walked, a refresh as
+  done. One question per run (`multi_run(1)`), and a run that fetched nothing FAILS.
+- **`market` STILL GRANTS `ingest_rw` DML ON EVERY NEW TABLE.** Legacy 206 set the default privilege
+  for both schemas, and 207 revoked it for `ingest` only ("the worker may not rewrite its own
+  instructions"). A new control table the worker reads needs an explicit revoke, which
+  `the-directory-asks-each-question-once.sql` asserts.
+- **WHEN DOCKER DESKTOP IS WEDGED, TWO SUBSTITUTES WORK.** On 2026-10-04 its backend ran and its API
+  answered nothing, so the local harness could not start Postgres. Instead:
+  - drive the lane in-process against the real provider with the database reads faked;
+  - prove SQL guards on the node with a throwaway `postgres:17-alpine`, removed afterwards.
+
+  Restarting Docker Desktop is the user's call.
 
 ## Running an OpenSandbox server locally
 
