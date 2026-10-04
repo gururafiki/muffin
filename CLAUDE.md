@@ -4653,6 +4653,37 @@ muffin-deployment#412, muffin-ingest#92.
 
   Restarting Docker Desktop is the user's call.
 
+**D4, the same day: a line the directory stops returning is marked** (muffin-deployment#413,
+muffin-ingest#93; spec "As built — D4"). What building and rolling it found:
+
+- **A MARK MAY BE CLEARED ONLY BY A NEWER SIGHTING.** Stage 2 stamps `last_seen_at` from each page's
+  fetch time. If it also cleared `absent_since`, re-filing an older walk (a range re-run, a parser
+  fix, an alias walked before the venue's own) would offer a delisted line again until the next
+  mark. The trigger keeps the newest sighting and clears the mark only when the sighting moves
+  forward. Stage 2 never writes the mark.
+- **JUDGE ONLY WHAT STAGE 2 HAS FILED.** For the hour after a monthly refresh, every walk is finished
+  in raw and unfiled, so its lines still carry last month's sighting. `venue_listing_absence` passes
+  such a walk as unfinished. "Filed" is read from the event log: the stage-2 materialization's
+  storage id must exceed the raw one's, which needs no clock.
+- **THE WRITER'S LAST-WINS DEDUPE CHOSE BETWEEN TWO SIGHTINGS.** `US.common` and `US.arca` both
+  return a US line. When the older copy sorted last, the capped walk looked as if it had not seen a
+  line it returned. Stage 2 keeps the newer copy. The test runs both fetch orders, because one of
+  them always passes a last-row rule.
+- **A SENSOR WHOSE INTERVAL SHORTENS FIRES THE MOMENT IT ROLLS.** `new_exchange_sweeps` last ticked
+  09-28 on a 7-day interval. On the new 1-day interval it fired at 09:47:09, 15 s before the daemon's
+  first evaluation of the new `on_missing()` condition. All 237 keys counted as handled, and the
+  first pass went out as a backfill. When a rollout depends on evaluation order, check the sensor's
+  last tick against its new interval first.
+- **A STACKED PR IS CLOSED, NOT RETARGETED, WHEN ITS PARENT MERGES WITH `--delete-branch`.** #92's
+  merge closed #93. Reopening needed the base branch restored and the head it closed with: after a
+  force-push while closed, `gh pr reopen` answers "Could not open the pull request". Retarget the
+  child to `main` first (now in the `muffin-deploy` skill).
+- **The first two runs of a fresh backfill overlapped on a one-slot pool** (17 s, `openfigi_filter`).
+  Every later run waited, and the daemon logged them as blocked by the pool. The cause is unconfirmed:
+  the pool already existed with limit 1, and the slot buffer is 0. It was harmless here, since the
+  provider's ~20-request bucket absorbs it. Do not rely on a pool to stop the first runs of a
+  backfill against a provider with no burst headroom.
+
 ## Running an OpenSandbox server locally
 
 - **`docker run -d -p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock opensandbox/server:latest`.**

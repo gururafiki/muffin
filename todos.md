@@ -2377,15 +2377,28 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
             - a monthly re-walk would have replayed http-cache's 90-day pages;
             - four queries a run let a refusal claim the unasked ones;
             - a partition-scoped check reported whichever query ran last.
-            - [ ] Deploy #412 after the 00:00 lanes, then merge and roll #92. Let the daemon
+            - [x] Deploy #412 after the 00:00 lanes, then merge and roll #92. Let the daemon
                   evaluate the new condition once before the 237 keys are added, then walk them
                   (~1,300 keyed requests, ~65 min). Read every counter.
+                  **Done 2026-10-04:** #412 deployed 23:56 on 10-03; #92 and #93 rolled together at
+                  09:47 (`cf620495`). The sensor added the keys 15 s before the condition's first
+                  evaluation, so they counted as handled, as the spec warned. The first pass is
+                  backfill `eaapxywk`, launched 09:48:43.
+                  - [ ] Read every counter when it ends.
+                  - [ ] **No deploy until it ends**: the first deploy after a roll restarts Dagster.
             - [ ] Verify US lines for BRBR, LOAR, PSKY, SBET, PLD, the TSM ADR and ET; re-run
                   `listing_covers_legacy` (expect ~460 of the 505 recovered); anon latency on
                   `untracked_listing`, best of 3; the universe dashboard.
             - [ ] Delete the 59 per-venue `exchange_sweep` keys before the 1 November tick, which
                   would otherwise fail on each (their raw files stay).
-            - [ ] D4, delistings, as its own PR before Stage 4.
+            - [x] D4, delistings, as its own PR before Stage 4. **muffin-deployment#413 deployed
+                  2026-10-04 09:39; muffin-ingest#93 rolled 09:47.** `absent_since` is set by
+                  `mark_venue_absence` from the daily `venue_listing_absence` (05:41 UTC). A walk
+                  vouches only for what it could see. Only a newer sighting clears a mark. A walk
+                  stage 2 has not filed is not judged. Proven by 13 SQL variants and 9 asset
+                  mutations.
+                  - [ ] After the first pass: run the mark by hand and read `marked`, `refused` and
+                        `not_yet_filed`. Expect roughly the ~1,464 lines the 09-21 load found gone.
             - [ ] **Docker Desktop's API stopped answering on this Mac on 2026-10-04** (backend up,
                   every call timed out for 10+ minutes), so the local Postgres harness could not
                   run. Restarting it is the user's call.
@@ -2497,6 +2510,12 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
             loads the database, and succeeds through the day (84 ok in 48 h). TTM still advances.
             Belongs to the metrics family's move to Dagster (Phase 4); until then, a cron window that
             skips the sweep hours would stop the failures.
+      - [ ] **2026-10-04 — the price history lane rewrites every bar it holds, every night.** To add
+            ~28k bars, `price_bar_history` re-published 13,797,563 rows on 10-04. The upsert has no
+            `where`, so every row became a new tuple: 178.6M updates on `price_bar` since July,
+            nightly autovacuum over every partition, and 27.7 min of the `sql` pool. Options and a
+            recommendation (skip unchanged rows in the writer, then publish only the run's own
+            rows): docs/deferred/2026-10-04-the-price-history-lane-rewrites-every-bar-nightly.md
       - [ ] Stage 6 — roles, table grants, reference data and cron jobs re-applied every deploy, and a
             `fresh-database` CI job.
       - [ ] Stage 7 — Grafana universe panels, docs and skills.

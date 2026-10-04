@@ -1,6 +1,8 @@
 # The venue directory, one partition per question — design
 
 Status: APPROVED 2026-10-04 (D1 P1, D2 control tables, D3 automatic, D4 follow-up PR before Stage 4).
+BUILT 2026-10-04: D1–D3 in muffin-deployment#412 and muffin-ingest#92; D4 in muffin-deployment#413
+and muffin-ingest#93. Rolled together at 09:47 UTC; the first pass is backfill `eaapxywk`.
 Built the same day: muffin-deployment#412 (control tables, view, bundle) and muffin-ingest#92 (the
 lane). See "As built" for where the build departs from the design and why. Extends
 [2026-09-26-finishing-the-universe-family.md](2026-09-26-finishing-the-universe-family.md) (Stage 2:
@@ -132,7 +134,7 @@ promote them. A complete walk is a completeness claim, so it can say what is gon
 - `market.directory_query`, a view over both: `query_key, exch_code_asked, files_under,
   security_type2, maps_to_composite`.
 - Grants: select to `ingest_rw` and `metrics_ro`; `anon`, as every non-`pending_` view requires.
-- `venue_listing` is unchanged in this part. D4 adds `delisted_at`.
+- `venue_listing` is unchanged in this part. D4 adds `absent_since` (named in "As built — D4").
 
 ## Architecture
 
@@ -157,6 +159,12 @@ so a new row is walked within a day.
    sensor (or a hand `add_dynamic_partitions`) seeds them and `on_missing()` walks them (~1,300 keyed
    requests, ~65 minutes, all past the cache). Read every counter: pages per key, rows per type,
    Arca lines mapped and dropped.
+   **As rolled:** the sensor's last tick was 09-28 under the old 7-day interval, so under the new
+   1-day interval it fired at 09:47:09, 15 s before the daemon's first evaluation of the new
+   condition (09:47:24, which requested nothing). The 237 keys therefore counted as handled, and the
+   first pass was launched as backfill `eaapxywk` at 09:48:43. The monthly tick and every later key
+   are unaffected. One measurement from it: the first two walk runs overlapped for 17 s despite the
+   pool's single slot; every later run waited, and the daemon logged the pool blocking them.
 4. Delete the 59 old keys. Verify BellRing, Loar, Paramount Skydance, Sharplink, Prologis, TSMC's ADR
    and Energy Transfer each have a `US` line, and re-run `listing_covers_legacy` (expect ~460 of the
    505 recovered).
@@ -185,6 +193,22 @@ Verified before rollout:
   stored page, a finished walk, not a never-walked one.
 - Locally against the real OpenFIGI: `US.partnership` 52 lines; `US.arca` 2 pages, 200 lines, all
   mapped to their US line; the resume merged a third page.
+
+## As built — D4 (2026-10-04)
+
+| Design said | Built | Why |
+|---|---|---|
+| `delisted_at` | `absent_since` | Past the US cap only NYSE Arca's walk can see a line, so a stock moved from an exchange to OTC goes absent while it still trades. The name says what is measured |
+| Mark lines not seen since "the oldest latest complete walk among the queries covering" the scope | `market.mark_venue_absence(p_walks jsonb)`. The venue's own walk vouches for its scope, or only up to its last FIGI when it is capped. Past that window, only the aliases vouch, and only once all have finished. A window where fewer than half the lines were seen since the walk began is refused and named, not marked | A capped walk saw nothing past its window, so a single threshold across the queries would have marked every US line only Arca returns. The refusal is the 1,369-security lesson: when nothing answers, blame the provider, not the universe |
+| Stage 2 stamps `last_seen_at`, and a walk that returns a line clears its mark | A trigger keeps the newest sighting, and clears a mark only when the sighting moves forward. Stage 2 never writes `absent_since` | Re-filing an older walk (a range re-run, a parser fix, an alias walked before the venue's own) would otherwise un-mark a line a newer walk did not return, until the next day's mark |
+| (not considered) | Stage 2 keeps the newer of two sightings of one line in a run | `US.common` and `US.arca` both name a US line. The writer keeps the last of two rows, which was the older sighting whenever the alias sorted last |
+| An unpartitioned asset marks | `venue_listing_absence`, daily at 05:41 UTC, passing every query's walk. A finished walk stage 2 has not filed yet is passed as unfinished and named. "Filed" means a `venue_listing` materialization after the partition's latest raw one, by event-log storage id | For the hour after a monthly refresh every walk is finished and unfiled. Judged then, each would mark every line it returned |
+| `untracked_listing` and `derive_security_listing` exclude marked lines | Those two, and `promote_listing` refuses a marked line, saying since when. `security_listing` depends on the mark, so a line marked in the morning leaves the listings the same morning | The Track button would otherwise mint a delisted company by hand |
+
+The facts live with the files and the rules live in the database, where CI tests them on real
+Postgres: 13 variants of the migration each fail its two tests (`a-line-the-directory-stops-returning
+-is-not-offered`, `a-walk-marks-only-what-it-could-see`). The asset's 9 mutations each fail its
+tests in muffin-ingest.
 
 ## Risks and rollback
 
