@@ -2365,6 +2365,18 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
                   179 lost, 174 of them US** — the directory's cap, which blocks 2c.
                   `eager()` did NOT fire on the new asset by itself: `since_last_handled` counts a
                   new asset's initial evaluation as handled, so `newly_missing` cancelled against it.
+            - [ ] 2c — the swap. **Re-measured 2026-10-04 after the directory's first pass:**
+                  `listing_covers_legacy` lost 179 -> 36, legacy-only 295, so the gate (lost == 0)
+                  will not pass on its own. Two decisions are the user's before it is built: what a
+                  security with derived lines but no derived primary keeps (the 36; mostly a home line
+                  that delisted), and how the edge's `writeCurrencyFor` keeps updating a listing's
+                  currency once `market.listing` is a view (it updates by
+                  `(security_id, provider_symbol)`, and a union view rejects that).
+            - [x] 2d — `symbol_security` refreshed by Dagster. **muffin-deployment#415 deployed
+                  2026-10-04 17:21 and muffin-ingest#94 rolled 17:41**: `refresh_symbol_map()`
+                  (EXECUTE to `ingest_rw` only), Track refreshes the map, `refresh_facets` no longer
+                  does. First run by hand: 12,402 rows, 314 ms. Eager on its writers, plus a 05:47
+                  UTC floor.
       - [ ] **2026-09-27 — the US directory stops at OpenFIGI's 15,000-result cap.** 15,000 of 20,096
             US listings, FIGI-ordered, so every US line newer than `BBG013JYT8V4` is missing (BRBR,
             LOAR, PSKY, SBET); 443 of 2,812 tracked US equities have no US line, 177 of the 182
@@ -2384,21 +2396,38 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
                   09:47 (`cf620495`). The sensor added the keys 15 s before the condition's first
                   evaluation, so they counted as handled, as the spec warned. The first pass is
                   backfill `eaapxywk`, launched 09:48:43.
-                  - [ ] Read every counter when it ends.
-                  - [ ] **No deploy until it ends**: the first deploy after a roll restarts Dagster.
-            - [ ] Verify US lines for BRBR, LOAR, PSKY, SBET, PLD, the TSM ADR and ET; re-run
-                  `listing_covers_legacy` (expect ~460 of the 505 recovered); anon latency on
-                  `untracked_listing`, best of 3; the universe dashboard.
-            - [ ] Delete the 59 per-venue `exchange_sweep` keys before the 1 November tick, which
-                  would otherwise fail on each (their raw files stay).
+                  - [x] Read every counter when it ends. **Ended ~15:00 UTC: 237 walks and 208
+                        filing runs, all SUCCESS, no failure.**
+                  - [x] **No deploy until it ends**: the first deploy after a roll restarts Dagster.
+            - [x] Verify US lines for BRBR, LOAR, PSKY, SBET, PLD, the TSM ADR and ET; re-run
+                  `listing_covers_legacy`; anon latency on `untracked_listing`; the universe
+                  dashboard. **Read 2026-10-04 (spec, "The first pass"):** all seven have a US line.
+                  The US gap went 505 -> 151, of which 74 are tracked ETFs no query asks for, and
+                  among equities 77 remain (41 OTC lines past the cap and odd ones, 36 blank legacy
+                  symbols). `listing_covers_legacy` lost 179 -> 36, still failing: 2c decides.
+                  Anon search 125-236 ms, never probed before, so muffin-deployment#417 adds it.
+                  - [ ] The universe dashboard: lines by type, unfinished and capped queries.
+            - [x] Delete the 59 per-venue `exchange_sweep` keys before the 1 November tick, which
+                  would otherwise fail on each (their raw files stay). **Deleted 2026-10-04 ~15:40;
+                  237 keys left, 296 raw files on disk.**
             - [x] D4, delistings, as its own PR before Stage 4. **muffin-deployment#413 deployed
                   2026-10-04 09:39; muffin-ingest#93 rolled 09:47.** `absent_since` is set by
                   `mark_venue_absence` from the daily `venue_listing_absence` (05:41 UTC). A walk
                   vouches only for what it could see. Only a newer sighting clears a mark. A walk
                   stage 2 has not filed is not judged. Proven by 13 SQL variants and 9 asset
                   mutations.
-                  - [ ] After the first pass: run the mark by hand and read `marked`, `refused` and
+                  - [x] After the first pass: run the mark by hand and read `marked`, `refused` and
                         `not_yet_filed`. Expect roughly the ~1,464 lines the 09-21 load found gone.
+                        **Run 15:02: 292 marked, 0 refused/unfinished/unfiled.** The ~1,464 compared
+                        the OLD table with the 09-21 walk and were never in `venue_listing`. 262 marks
+                        agree with OpenFIGI's own listing status (checked with
+                        `includeUnlistedEquities`). 30 are US lines that only stale Arca lines named,
+                        marked only because `US.arca` walked first.
+                  - [ ] **2026-10-04 — a stale NYSE Arca line keeps a US line listed.** 0.7% of Arca's
+                        in-window composites are gone from `US.common`. In-window marks depend on walk
+                        order, and ~10 past the cap are never marked.
+                        [Note](docs/deferred/2026-10-04-a-stale-arca-line-keeps-a-us-line-listed.md).
+                        Decide before the 1 November refresh.
             - [ ] **Docker Desktop's API stopped answering on this Mac on 2026-10-04** (backend up,
                   every call timed out for 10+ minutes), so the local Postgres harness could not
                   run. Restarting it is the user's call.
@@ -2418,6 +2447,24 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
       - [ ] Stage 3 — the price lane's dead verdict becomes an `identifier_probe` miss, the symbology
             lane repairs it, the ledger and the stopped day lane go, `run_monitoring` catches dead
             runs.
+            - [x] 3a — the ledger leaves. **muffin-deployment#416 deployed 2026-10-04 18:01** (the
+                  ledger's 274 live absences carried into `identifier_probe`, each expiring when the
+                  ledger said; nine mutations caught). **muffin-ingest#95 rolled 18:11**: dead/live
+                  verdicts as `yfinance` probes, askable skips a miss only while its symbol stands,
+                  `security_return` retracts what it withholds, the day lane and the ledger deleted,
+                  `heartbeat` replaces `ledger_heartbeat` (first run 203 ms). Building it found the
+                  staleness check had no test and lost its constants with every test green.
+                  - [ ] Read the first night (2026-10-05): runs, counters, `yfinance` probes, no
+                        `ingest.*` activity, `security_return`'s `withheld`/`retracted`.
+                  - [ ] Drop the `ingest` schema on or after 2026-10-18:
+                        [note](docs/deferred/2026-10-04-drop-the-ingest-schema.md).
+            - [ ] 3b — symbology repairs a dead symbol (`NEEDS_SYMBOL` takes a dead current
+                  symbol; adoption may replace a dead one, never a live one).
+            - [ ] 3c — run monitoring. muffin-deployment#418 (`run_monitoring`, six-hour default)
+                  and muffin-ingest#98 (per-job `dagster/max_runtime`: 300 s short jobs, 1,800 s a
+                  price run), both open. Deploy #418 with nothing in flight, then roll #98; gate: a
+                  short `max_runtime` terminates a test run. The 26.8-hour hang of venue walk
+                  `d89bb306` on 2026-09-21 is the case for it.
       - [ ] Stage 4 — `promotion_wave`, paused until venues are opted in. **Decide with it:** whether
             the Yahoo rung gets a condition for new NEEDS_SYMBOL subjects (17.0% hit rate over 704;
             one request each, on the price sweep's allowance). A wave is what adds such subjects;

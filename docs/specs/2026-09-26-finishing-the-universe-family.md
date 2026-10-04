@@ -170,6 +170,33 @@ None to the code:
 | 14 | deployment | 6 | `fresh-database` green |
 | 15 | umbrella | docs, skills, notes | — |
 
+## As built (2026-10-04): 2d and 3a
+
+**2d** (muffin-deployment#415, muffin-ingest#94). `market.refresh_symbol_map()` refreshes
+`symbol_security` concurrently and reports `rows` and `duration_ms`. Its EXECUTE goes to `ingest_rw`
+only. The Track RPC calls it, `refresh_facets` stopped calling it, and the Dagster asset
+`symbol_security` runs eager on its three writers plus a 05:47 UTC floor. First run, by hand
+because a new eager asset counts its first evaluation as handled: 12,402 rows in 314 ms.
+
+**3a** (muffin-deployment#416, muffin-ingest#95):
+
+| Design said | Built | Why |
+|---|---|---|
+| The price lane writes `identifier_probe` | A `hit` for a symbol that answered, a `miss` only for one asked alone with a control answering, nothing for a throttled batch. `prices.symbol_probes` holds the rule | A throttle is never a statement about a symbol |
+| `askable_subjects` drops the ledger join | It skips a `yfinance` miss younger than 30 days only while `asked_with` is still the security's symbol | A corrected symbol is asked again with nothing to remember |
+| (not considered) | `security_return` deletes the returns of every security it evaluated and withheld | The ledger's `retract_sql` did this when it marked a symbol dead. Without it, a dead security's returns stood for 30 days |
+| The ledger's state is abandoned | A one-shot migration carried its 274 live absences into `identifier_probe`, with `observed_at = next_due_at − 30 days` | Otherwise the first night re-asks all 274. With that date, each mark expires exactly when the ledger said |
+| `ledger_health` becomes a heartbeat | `heartbeat`: one timed `select now()`, no pool, the same hourly :07 schedule | Its first run took 203 ms |
+
+What building it found:
+- `no_security_is_far_behind_the_sweep` had no test, and deleting the day lane's check removed its
+  constants while every test passed. It has a mutation-proven test now.
+- The carry's test needed a second facet in its fixture. Without one, "only the price lane's
+  marks" was a rule nothing could break.
+
+The `ingest` schema stays as the backup until 2026-10-18
+([note](../deferred/2026-10-04-drop-the-ingest-schema.md)).
+
 ## Risks and rollback
 
 - **The listing swap:** rollback recreates the view over `listing_legacy`.

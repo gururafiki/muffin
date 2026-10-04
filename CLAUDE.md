@@ -4678,11 +4678,40 @@ muffin-ingest#93; spec "As built — D4"). What building and rolling it found:
   merge closed #93. Reopening needed the base branch restored and the head it closed with: after a
   force-push while closed, `gh pr reopen` answers "Could not open the pull request". Retarget the
   child to `main` first (now in the `muffin-deploy` skill).
+- **CHECK A MARK AGAINST THE PROVIDER, NOT AGAINST YOUR EXPECTATION.** The first pass marked 292
+  lines where ~1,464 were expected. The expectation was wrong: it compared the OLD table with the
+  09-21 walk, so those lines were never in `venue_listing`. The marks were right. ARC Resources'
+  Toronto line and Schroders' London line, both marked, come back from `/v3/filter` only with
+  `includeUnlistedEquities: true`, so the provider itself calls them unlisted. That flag is the
+  one-request check of any absence mark.
+- **AN ALIAS CAN BE STALE, AND THEN WALK ORDER DECIDES THE ANSWER.** NYSE Arca still carries lines
+  for companies gone since 2022 (Kirkland Lake, Whiting, Tufin): 30 of the 4,114 composites inside
+  `US.common`'s window. They were marked only because `US.arca` walked first. In the other order,
+  their sighting is newer than `US.common`'s start, so nothing is marked and existing marks clear.
+  Past the cap, about 10 stay listed for ever.
+  [Deferred note](docs/deferred/2026-10-04-a-stale-arca-line-keeps-a-us-line-listed.md).
 - **The first two runs of a fresh backfill overlapped on a one-slot pool** (17 s, `openfigi_filter`).
   Every later run waited, and the daemon logged them as blocked by the pool. The cause is unconfirmed:
   the pool already existed with limit 1, and the slot buffer is 0. It was harmless here, since the
   provider's ~20-request bucket absorbs it. Do not rely on a pool to stop the first runs of a
   backfill against a provider with no burst headroom.
+
+**The ledger leaves (Stage 3a, 2026-10-04)** (muffin-deployment#416, muffin-ingest#95):
+
+- **A CHECK NO TEST RUNS CAN LOSE ITS CONSTANTS WITH EVERY TEST GREEN.** Deleting the day lane's
+  check took `STALE_AFTER_DAYS`, `STALE_FRACTION` and two queries with it. The surviving staleness
+  check used all four, so its first production evaluation would have been a `NameError`. mypy and
+  ruff caught it here, and only because the module was type-checked. A check gets a test that calls
+  it.
+- **A SCHEDULE CONTEXT LEFT OPEN OVER A CLOSED INSTANCE BREAKS ANOTHER TEST FILE.**
+  `build_schedule_context(instance=…)` inside `with instance_for_test()`, not itself used as a
+  context manager, left a global definitions-state storage bound to the closed instance. The next
+  file's fresh `Definitions` load failed with "Attempted to resolve undefined DagsterInstance
+  weakref", in a test that did nothing wrong. Use `with dg.build_schedule_context() as context:`.
+- **A RETIRED MECHANISM'S SIDE EFFECTS ARE PART OF WHAT IT DID.** The ledger's `retract_sql`
+  deleted a dead symbol's returns, and `security_return` only rewrote securities it produced rows
+  for. Without the ledger, stale returns would have stood for 30 days. List what a retired
+  mechanism wrote, not only what it read.
 
 ## Running an OpenSandbox server locally
 

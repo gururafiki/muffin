@@ -210,6 +210,41 @@ Postgres: 13 variants of the migration each fail its two tests (`a-line-the-dire
 -is-not-offered`, `a-walk-marks-only-what-it-could-see`). The asset's 9 mutations each fail its
 tests in muffin-ingest.
 
+### The first pass, read 2026-10-04
+
+- **Backfill `eaapxywk`**: 237 walks and 208 filing runs, all SUCCESS, ended about 15:00 UTC.
+- **`venue_listing_absence`**, run by hand at 15:02:
+  - 237 windows judged and 292 lines marked;
+  - none refused, unfinished or unfiled;
+  - `US.common` capped at `BBG013Q1HJ92`.
+- **262 of the marks** are lines last seen on 09-21/22 that no query returned on 10-04. They were
+  checked against the provider rather than assumed. OpenFIGI returns ARC Resources' Toronto line and
+  Schroders' London line only with `includeUnlistedEquities: true`, so the provider itself calls them
+  unlisted and the walks missed nothing.
+- **30 of the marks** are US lines inside the cap window that only stale NYSE Arca lines still
+  named: Kirkland Lake, Whiting, Tufin, Paycor, Redfin, CureVac and others. They were marked
+  correctly, but only because `US.arca` happened to walk before `US.common`. See
+  [the deferred note](../deferred/2026-10-04-a-stale-arca-line-keeps-a-us-line-listed.md).
+- **The ~1,464 this spec expected were never in `venue_listing`.** That count compared the old table
+  with the 09-21 walk, so those lines were never filed and there was nothing to mark.
+- **The seven named lines are present**:
+  - BRBR, LOAR, PSKY and SBET, common stock past the cap;
+  - PLD as a REIT, ET as partnership shares, and TSM as a depositary receipt.
+- **The US gap went from 505 to 151.** The gap counts tracked securities with a legacy US primary and
+  no derived US line. The 151 include the 74 tracked ETFs, which no query asks for, since there is no
+  `etp` type. The 505's cause list had no ETF bucket, so it was presumably counted over equities;
+  over equities the gap is now 77, against ~45 expected:
+  - 41 with a symbol: OTC foreign-ordinary lines past the cap, money-market funds typed as equities,
+    AVB and FFWM;
+  - 36 whose legacy primary has a blank symbol.
+- **`listing_covers_legacy`** went from 179 lost to 30 after the pass, and to 36 after the marks: a
+  delisted home line leaves its foreign lines with no primary. It still fails, so 2c has to decide
+  what a security with no derived primary keeps.
+- **`security_listing`** re-ran on the marks at 15:03 and retracted 41 lines.
+- **The 59 per-venue keys** were deleted at about 15:40. Their 59 raw files stay on disk.
+- **`untracked_listing` as anon**, best of 3: 236 ms for "hollywood" and 125 ms for "ba"; the tracked
+  half takes 223 ms. Neither search read had a latency probe, so muffin-deployment#417 adds them.
+
 ## Risks and rollback
 
 - A monthly pass that throttles part-way resumes on its own; a run that errors outright waits for the
