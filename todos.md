@@ -2458,8 +2458,29 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
                         `ingest.*` activity, `security_return`'s `withheld`/`retracted`.
                   - [ ] Drop the `ingest` schema on or after 2026-10-18:
                         [note](docs/deferred/2026-10-04-drop-the-ingest-schema.md).
+            - [ ] **A symbol change restarts the price history** (muffin-ingest#99, 3b's
+                  prerequisite). Found 2026-10-04: 69 history partitions held two asked symbols
+                  (`GELYF` then `0175.HK`, `SPASF` then `S58.SI`), because the extension read only
+                  the newest date, and 95 securities held 5,097 bars on dates their raw history
+                  lacks (HK home lines carrying OTC dollar bars on HK holidays). Stage 1 reloads a
+                  history asked with another symbol; stage 2 retracts bars inside the raw range
+                  that raw lacks. Proven on a throwaway Postgres (5 SQL mutations caught); worst
+                  case on production 0.93 s warm / 4.85 s cold. Roll after the 10-05 lanes, then a
+                  live tiny subset of the 69.
+                  - [ ] The 37,123 bars BEFORE their raw history's first date are kept: some are
+                        real history the provider stopped returning (AREN), some may be another
+                        listing's. Re-measure after the reload —
+                        [note](docs/deferred/2026-10-04-bars-before-a-raw-history-are-kept-unjudged.md).
             - [ ] 3b — symbology repairs a dead symbol (`NEEDS_SYMBOL` takes a dead current
-                  symbol; adoption may replace a dead one, never a live one).
+                  symbol; adoption may replace a dead one, never a live one). **muffin-ingest#100**,
+                  merge after #99. 262 equities hold a dead symbol (249 set by the retired edge
+                  resources); 8 code and 13 SQL mutations caught; the first 03:00 tick re-asks all
+                  262 in ~3 keyed OpenFIGI requests. Expect few repairs from it alone, because:
+                  - [ ] **Decide:** 100 of the 101 dead `.TW` symbols are TPEx lines, which Yahoo
+                        spells `.TWO`; OpenFIGI files both markets under `TT`, but its answer's
+                        label (`TT (Taipei Stock Exchange)`) is already in raw and stage 2 strips
+                        it. Options in
+                        [note](docs/deferred/2026-10-04-taiwan-s-tpex-lines-are-filed-under-tt.md).
             - [x] 3c — run monitoring. muffin-deployment#418 (`run_monitoring`, six-hour default)
                   and muffin-ingest#98 (per-job `dagster/max_runtime`: 300 s short jobs, 1,800 s a
                   price run), **live 2026-10-04 18:51** in one deploy (it pulled #98's image).

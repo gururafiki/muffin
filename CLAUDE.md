@@ -4738,6 +4738,44 @@ six-hour default, and `dagster/max_runtime` on every scheduled job (300 s short,
 A limit is checked at the monitoring daemon's next poll, so the gate run with a 30 s limit was
 cancelled after 104 s. A terminated run reads FAILURE with "Exceeded maximum runtime of N seconds".
 
+**One history held two listings, and one exchange code held two markets** (2026-10-04,
+muffin-ingest#99 and #100):
+
+- **AN EXTENSION THAT READS ONLY THE NEWEST DATE APPENDS WHATEVER IT IS NOW ASKED FOR.** The price
+  lane asks with `coalesce(provider symbol, ticker)`, so a security moves from its OTC ticker line
+  to its home line the moment symbology adopts one. 69 history partitions held years of `GELYF` in
+  dollars followed by days of `0175.HK`. A watermark is meaningful only for the question that set
+  it: a partition holding a row asked with another symbol now reloads (#99).
+- **AND STAGE 2 ONLY UPSERTED, SO A REPLACED RAW FILE'S OLD ROWS LIVED ON IN THE TABLE.** 95
+  securities held 5,097 bars on dates their raw history lacks: Hong Kong home lines carrying OTC
+  dollar bars on HK holidays, and Lancashire falling 99% every Easter Monday. Within its range, raw
+  is now the answer and the table mirrors it. The 37,123 bars before a raw history's first date stay
+  (AREN's run continuously into its raw history), pending
+  [a note](docs/deferred/2026-10-04-bars-before-a-raw-history-are-kept-unjudged.md).
+- **A PROBE IN THE CODE-LOCATION CONTAINER SHARES ITS MEMORY LIMIT WITH EVERY RUN.** Loading ~50M
+  dates there to measure the above was OOM-killed at 2.3 GB of anon-rss. The kernel picked the
+  probe; it could as well have picked a run. Batch, watch RSS, or use a throwaway container.
+- **WHEN LOCAL DOCKER IS WEDGED, THE PRODUCTION IMAGE CAN BE THE CLIENT.** A throwaway Postgres on
+  the node, plus `docker run --network container:<pg>` of the muffin-ingest image, executes the
+  branch's module source through production's psycopg. That exercises the real array binding no
+  fake reaches (13 SQL mutations of #100 caught this way). The recipe is in
+  `dagster-pipeline-local-test`.
+- **A DEAD SYMBOL IS USUALLY A VENUE OR A SPELLING, NOT A COMPANY.** 262 equities held a symbol the
+  price lane rejected alone; 249 had been set by the retired edge resources. Venues outside keyless
+  yfinance account for 82 (`.PS` 42, `.AE` 35, `.VN` 5), and those deaths are honest. 101 were
+  `.TW`.
+- **OPENFIGI FILES TWO TAIWANESE MARKETS UNDER ONE CODE, AND ITS ANSWER SAYS WHICH IN A LABEL WE
+  STRIP.** TPEx (Yahoo `.TWO`) and TWSE (`.TW`) are both `TT`. The mapping answer's `exchCode` reads
+  `TT (Taipei Stock Exchange)` for TPEx, and `pick_local_symbol` drops the label by design. Read off
+  the stored raw answers: **100 of the 101 dead `.TW` symbols are TPEx**, and so are 3 not yet
+  judged. Eighth instance of "the answer is already in a response you fetch". Re-deriving costs no
+  request once the model knows the label; the model change is a decision
+  ([note](docs/deferred/2026-10-04-taiwan-s-tpex-lines-are-filed-under-tt.md)).
+- **COUNT WHERE A BROKEN VALUE CAME FROM BEFORE DESIGNING ITS REPAIR.** The planned 3b would have
+  re-asked OpenFIGI about all 262, and OpenFIGI would have handed back the same 101 `.TW` symbols:
+  mechanism with no yield. Splitting the dead set by origin and suffix found that first. The
+  mechanism still shipped, as the prerequisite every repair needs.
+
 ## Running an OpenSandbox server locally
 
 - **`docker run -d -p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock opensandbox/server:latest`.**
