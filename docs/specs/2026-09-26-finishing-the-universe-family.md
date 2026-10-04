@@ -197,6 +197,29 @@ What building it found:
 The `ingest` schema stays as the backup until 2026-10-18
 ([note](../deferred/2026-10-04-drop-the-ingest-schema.md)).
 
+### 3c: run monitoring (live 2026-10-04)
+
+muffin-deployment#418 and muffin-ingest#98, deployed together at 18:51 UTC. The deploy pulled #98's
+image, so Dagster restarted once rather than twice.
+
+| Setting | Value | Why |
+|---|---|---|
+| `run_monitoring.enabled` | true | The venue walk `d89bb306` hung for 26.8 hours on 2026-09-21 |
+| `start_timeout_seconds` | 300 | A run stuck starting is failed |
+| `max_runtime_seconds` (default) | 21,600 | Hand-launched runs and backfills; the longest legitimate run measured 43 min |
+| `dagster/max_runtime`, short jobs | 300 | FX, indices, the heartbeat, the weekly registries and the fund directory; p99 ≤ 41 s over 14 days |
+| `dagster/max_runtime`, `nightly_prices_job` | 1,800 | p99 79 s, max 579 s; a full-history night needs room |
+
+Verified live:
+- the `MONITORING` daemon heartbeats;
+- the hourly heartbeats since the restart carry `dagster/max_runtime=300` and succeed;
+- the gate: `security_return` launched with a 30-second limit (run `87ea62af`) was cancelled 104 s
+  after it started, the 30 s plus the wait for the daemon's next poll. Dagster recorded "Exceeded
+  maximum runtime of 30 seconds", and nothing was materialised.
+
+A limit is detected at the daemon's next poll, so a run can overshoot its limit by up to the poll
+interval. No limit here is tight enough for that to matter.
+
 ## Risks and rollback
 
 - **The listing swap:** rollback recreates the view over `listing_legacy`.

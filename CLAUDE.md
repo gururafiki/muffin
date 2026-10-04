@@ -4713,6 +4713,31 @@ muffin-ingest#93; spec "As built — D4"). What building and rolling it found:
   for. Without the ledger, stale returns would have stood for 30 days. List what a retired
   mechanism wrote, not only what it read.
 
+**market-verify was red on its own guards, not the data** (muffin-deployment#420, 2026-10-04). It
+had failed every run since at least 09-30, and each fix exposed the next cause:
+
+- **A WHOLE-VIEW SORT IN A GUARD'S SAMPLING STEP CROSSED THE 8 s CEILING.**
+  `check_segments_reconcile.py` ordered `security_segment_latest` by `as_of` to find recent
+  securities. That view dense-ranks all 1.44M rows before it can sort: 6.4 s a page, over several
+  pages, HTTP 500 before any split was checked. The raw table answers the same question in 0.22 s,
+  and on the node both gave the same 80 securities.
+- **A COUNT TRIPWIRE OVER A ROTATING SAMPLE MEASURES THE SAMPLE.** The served tripwire (35) fired
+  at 36 on a sample of 5,245 splits checked, the largest yet; earlier samples ran 880 to 3,895. The
+  served rate was 0.69%, inside its 0.27–0.91% range, and the parser had not changed since 09-06.
+  Both tripwires are now rates over the splits checked.
+- **A WARM RE-RUN IS NOT A MEASUREMENT OF WHAT FAILED; `pg_stat_statements` IS.** The one-period
+  check's query ran in 0.6 s from psql, yet failed through PostgREST. `pg_stat_statements` held
+  PostgREST's own statement at **6,372 ms**: a cold cache, probing ~49,000 rows to return 1,000. It
+  does not record cancelled statements, so its max is a floor. Now a rotating sixteenth of
+  securities, 1.25 s cold.
+- **PRINT POSTGREST'S ERROR BODY.** Both checks raised a bare `HTTP Error 500` for days. The body
+  names the SQLSTATE in one line (`57014`), and a traceback drops it.
+
+**Run monitoring (Stage 3c, live 2026-10-04 18:51):** `run_monitoring` in `dagster.yaml`, a
+six-hour default, and `dagster/max_runtime` on every scheduled job (300 s short, 1,800 s prices).
+A limit is checked at the monitoring daemon's next poll, so the gate run with a 30 s limit was
+cancelled after 104 s. A terminated run reads FAILURE with "Exceeded maximum runtime of N seconds".
+
 ## Running an OpenSandbox server locally
 
 - **`docker run -d -p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock opensandbox/server:latest`.**

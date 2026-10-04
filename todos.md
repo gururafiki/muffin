@@ -2460,11 +2460,12 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
                         [note](docs/deferred/2026-10-04-drop-the-ingest-schema.md).
             - [ ] 3b — symbology repairs a dead symbol (`NEEDS_SYMBOL` takes a dead current
                   symbol; adoption may replace a dead one, never a live one).
-            - [ ] 3c — run monitoring. muffin-deployment#418 (`run_monitoring`, six-hour default)
+            - [x] 3c — run monitoring. muffin-deployment#418 (`run_monitoring`, six-hour default)
                   and muffin-ingest#98 (per-job `dagster/max_runtime`: 300 s short jobs, 1,800 s a
-                  price run), both open. Deploy #418 with nothing in flight, then roll #98; gate: a
-                  short `max_runtime` terminates a test run. The 26.8-hour hang of venue walk
-                  `d89bb306` on 2026-09-21 is the case for it.
+                  price run), **live 2026-10-04 18:51** in one deploy (it pulled #98's image).
+                  **Gate passed:** `security_return` with a 30 s limit was cancelled after 104 s,
+                  "Exceeded maximum runtime of 30 seconds", nothing materialised. The case for it is
+                  venue walk `d89bb306`, which hung for 26.8 hours on 2026-09-21.
       - [ ] Stage 4 — `promotion_wave`, paused until venues are opted in. **Decide with it:** whether
             the Yahoo rung gets a condition for new NEEDS_SYMBOL subjects (17.0% hit rate over 704;
             one request each, on the price sweep's allowance). A wave is what adds such subjects;
@@ -2537,6 +2538,23 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
             itself in `universe_sample`, the check, panel and staleness alert read that, and
             `facets-refresh`'s TTL 60 -> 50 (it alternated refresh/skip). Verify after the
             deploy: a job run in `cron.job_run_details`, and the spine check passing live.
+            **VERIFIED 2026-10-04:** market-verify's spine check passes live ("refreshed 1.0h ago
+            in 12,536 ms").
+      - [ ] **2026-10-04 — market-verify was red on its own guards, not on the data**, every run
+            since at least 09-30. Each fix exposed the next. muffin-deployment#420, green on the
+            branch against production (run 37225231290):
+            - the segment check sampled `security_segment_latest`, 6.4 s a page against the 8 s
+              ceiling, HTTP 500 before any split was checked. It now samples the table, 0.22 s a
+              page; on the node the two samples are the same 80 securities;
+            - its served and historical tripwires were counts over a denominator that moved from
+              880 to 5,245 splits. They are now rates: served 1.25%, historical 25%;
+            - the one-period check resolved every symbol to return 1,000 rows: 6.4 s cold,
+              cancelled twice on 10-04. It now reads a rotating sixteenth, 1.25 s cold.
+            **Merged 2026-10-04** (1b873ac); muffin-deployment#417 (the search probes) too. Read
+            the next scheduled run.
+            - [ ] The historical rate rose from 4.1% to 20.7% in a month on unchanged parser code,
+                  and some served revenue splits are accepted against 0 or a negative target:
+                  [note](docs/deferred/2026-10-04-the-historical-segment-backlog-is-rising.md).
       - [ ] **2026-10-03 — the Dagster webserver's idle database connections go dead.** Two
             launches failed with `server closed the connection unexpectedly` after ~50 minutes
             idle; the third worked. A failed launch left a `NOT_STARTED` orphan that could have
