@@ -4775,6 +4775,24 @@ muffin-ingest#99 and #100):
   re-asked OpenFIGI about all 262, and OpenFIGI would have handed back the same 101 `.TW` symbols:
   mechanism with no yield. Splitting the dead set by origin and suffix found that first. The
   mechanism still shipped, as the prerequisite every repair needs.
+- **NOTHING READS THE CURRENCY OF THE LINE WE PRICE, SO THE RATIO VIEW SERVES 1,000× P/Es.** Found
+  2026-10-05 while verifying #99. `security_ratio_series` takes `quote_currency` from
+  `security.currency_code`, which holds either the currency of the line a US fund holds (N-PORT) or
+  the metrics response's REPORTING currency. Neither is the currency of the line priced. Measured
+  against Yahoo's `meta.currency`:
+  - ALG.KW serves a P/E of 12,305: fils read as dinars.
+  - Azrieli serves 2,547: agorot read as shekels.
+  - Lenovo serves 222.6: HKD read as USD, 7.85× too high.
+  - Constellation serves 82.17: CAD read as USD, 1.42× too high.
+
+  `price_bar.currency_code` is the same guess, in a column nothing reads (checked in `pg_depend` and
+  every function body). #99 makes it worse before it gets better: 58 of the 95 histories it will
+  reload move from a USD OTC line to a local one, under an unchanged USD label. A decision:
+  [note](docs/deferred/2026-10-05-a-price-bar-s-currency-is-not-its-quote-currency.md).
+- **YAHOO SEPARATES PENCE FROM POUNDS BY THE CASE OF ONE LETTER.** Pence is `GBp` and cents `ZAc`.
+  Uppercasing gives `ZAC`, this schema's code for cents, so that comes out right. It also gives
+  `GBP`, the pound, so a London series is read 100× too high. A comparison script written with
+  `.upper()` reports that error as a match. Map Yahoo's codes explicitly, never by case-folding.
 
 ## Running an OpenSandbox server locally
 

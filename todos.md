@@ -2454,11 +2454,14 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
                   `security_return` retracts what it withholds, the day lane and the ledger deleted,
                   `heartbeat` replaces `ledger_heartbeat` (first run 203 ms). Building it found the
                   staleness check had no test and lost its constants with every test green.
-                  - [ ] Read the first night (2026-10-05): runs, counters, `yfinance` probes, no
-                        `ingest.*` activity, `security_return`'s `withheld`/`retracted`.
+                  - [x] Read the first night (2026-10-05): runs, counters, `yfinance` probes, no
+                        `ingest.*` activity, `security_return`'s `withheld`/`retracted`. **All
+                        passed** (spec, "The first night without the ledger"): 100/100 runs, 2,500 =
+                        2,459 answered + 41 not askable, 2,459 hits and no new miss, `ingest.*`
+                        untouched, `security_return` withheld 48 and retracted 59.
                   - [ ] Drop the `ingest` schema on or after 2026-10-18:
                         [note](docs/deferred/2026-10-04-drop-the-ingest-schema.md).
-            - [ ] **A symbol change restarts the price history** (muffin-ingest#99, 3b's
+            - [x] **A symbol change restarts the price history** (muffin-ingest#99, 3b's
                   prerequisite). Found 2026-10-04: 69 history partitions held two asked symbols
                   (`GELYF` then `0175.HK`, `SPASF` then `S58.SI`), because the extension read only
                   the newest date, and 95 securities held 5,097 bars on dates their raw history
@@ -2467,6 +2470,21 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
                   that raw lacks. Proven on a throwaway Postgres (5 SQL mutations caught); worst
                   case on production 0.93 s warm / 4.85 s cold. Roll after the 10-05 lanes, then a
                   live tiny subset of the 69.
+                  - [x] **Rolled 2026-10-05 04:56 UTC** (maintenance run 37265633728). Live
+                        subset, Geely and SATS (backfill `swuoaedl`, runs 136953da and c4befb4e,
+                        07:13): each restarted (`restarting_history` 1, full load, file replaced).
+                        Raw now holds one listing (`0175.HK` from 2005-09-29, `S58.SI` from
+                        2000-01-03), and `price_bar` starts on the same days: 0 bars inside the raw
+                        range missing from raw, 0 before it, `retracted` 223 and 113. The one raw row
+                        not published is today's unfinished bar.
+                  - [ ] **Decide:** nothing reads the currency of the line we price, and the ratio
+                        view serves `security.currency_code` (an N-PORT holding or reporting
+                        currency) as the quote currency. Served P/Es measured 2026-10-05: Kuwait
+                        1,000× (fils as dinars), Tel Aviv 100× (agorot as shekels), Lenovo 7.85×,
+                        Toronto 1.42×; ~83 of 3,689 P/E-capable securities. 58 of the 95 histories
+                        #99 will reload get local prices under a USD label (Tencent among them).
+                        Yahoo states it in `meta.currency`, which the openbb adapter drops —
+                        [note](docs/deferred/2026-10-05-a-price-bar-s-currency-is-not-its-quote-currency.md).
                   - [ ] The 37,123 bars BEFORE their raw history's first date are kept: some are
                         real history the provider stopped returning (AREN), some may be another
                         listing's. Re-measure after the reload —

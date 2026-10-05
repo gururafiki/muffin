@@ -197,6 +197,19 @@ What building it found:
 The `ingest` schema stays as the backup until 2026-10-18
 ([note](../deferred/2026-10-04-drop-the-ingest-schema.md)).
 
+**The first night without the ledger (2026-10-05, read 02:10 UTC).** All five checks passed.
+
+| Check | Read |
+|---|---|
+| `nightly_prices` | 100 of 100 runs SUCCESS, 00:00 to ~01:36. `requested` 2,500 = answered 2,459 + not_askable 41, with dead, empty, throttled, transport and unasked all 0. All 2,459 extended from a watermark. `no_security_is_far_behind_the_sweep` passed on every run |
+| `identifier_probe` | 2,459 `yfinance` hits written tonight, exactly the answered count. No new miss: the 274 misses are the ledger's carry, newest 10-04 01:12 |
+| `ingest.*` | Every `pg_stat_user_tables` counter equals the 18:11:40 baseline; 0 attempts since the roll; statistics not reset since 09-10 |
+| `security_return` | Rebuilt at 01:37 after the sweep: 12,006 securities with returns, `withheld` 48, `retracted` 59 |
+| `heartbeat` | Every hour from 19:07 to 02:07, all SUCCESS |
+
+Also measured: `daily_fx` and `daily_indices` waited 8 s and 49 s at 00:00, so the priority tag
+holds. The last price run waited 5,612 s in the queue behind the other 99.
+
 ### 3c: run monitoring (live 2026-10-04)
 
 muffin-deployment#418 and muffin-ingest#98, deployed together at 18:51 UTC. The deploy pulled #98's
@@ -219,6 +232,28 @@ Verified live:
 
 A limit is detected at the daemon's next poll, so a run can overshoot its limit by up to the poll
 interval. No limit here is tight enough for that to matter.
+
+### 3b's prerequisite: a symbol change restarts the history (live 2026-10-05)
+
+muffin-ingest#99 was rolled at 04:56 UTC (maintenance run 37265633728).
+- **Stage 1** reloads a history holding a row asked with any symbol other than the current one.
+- **Stage 2** deletes the bars inside the raw range that raw no longer holds.
+
+Live subset, backfill `swuoaedl` (runs 136953da, c4befb4e):
+
+| Security | Result |
+|---|---|
+| Geely | `restarting_history` 1, file replaced, raw now `0175.HK` only from 2005-09-29, `retracted` 223 |
+| SATS | `restarting_history` 1, file replaced, raw now `S58.SI` only from 2000-01-03, `retracted` 113 |
+
+For both, `price_bar` starts on raw's first day. No bar sits inside the raw range without a raw row,
+and none sits before it. The one raw row not published is today's unfinished bar.
+
+Raw read on 2026-10-05 shows **95 histories still to reload** on the sweep's next visit. Tencent is
+one: its whole history is TCTZF, the USD OTC line. That raised a separate defect. 58 of the 95 will
+hold local prices under a USD currency label, and the ratio view already serves P/Es up to 1,000×
+off for the same reason
+([note](../deferred/2026-10-05-a-price-bar-s-currency-is-not-its-quote-currency.md)).
 
 ## Risks and rollback
 
