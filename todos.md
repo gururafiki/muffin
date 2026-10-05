@@ -2593,7 +2593,7 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
             deploy: a job run in `cron.job_run_details`, and the spine check passing live.
             **VERIFIED 2026-10-04:** market-verify's spine check passes live ("refreshed 1.0h ago
             in 12,536 ms").
-      - [ ] **2026-10-04 — market-verify was red on its own guards, not on the data**, every run
+      - [x] **2026-10-04 — market-verify was red on its own guards, not on the data**, every run
             since at least 09-30. Each fix exposed the next. muffin-deployment#420, green on the
             branch against production (run 37225231290):
             - the segment check sampled `security_segment_latest`, 6.4 s a page against the 8 s
@@ -2603,8 +2603,9 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
               880 to 5,245 splits. They are now rates: served 1.25%, historical 25%;
             - the one-period check resolved every symbol to return 1,000 rows: 6.4 s cold,
               cancelled twice on 10-04. It now reads a rotating sixteenth, 1.25 s cold.
-            **Merged 2026-10-04** (1b873ac); muffin-deployment#417 (the search probes) too. Read
-            the next scheduled run.
+            **Merged 2026-10-04** (1b873ac); muffin-deployment#417 (the search probes) too.
+            **The next scheduled run passed** (37298417341, 2026-10-05 10:43 UTC), the first
+            scheduled pass since at least 09-30.
             - [ ] The historical rate rose from 4.1% to 20.7% in a month on unchanged parser code,
                   and some served revenue splits are accepted against 0 or a negative target:
                   [note](docs/deferred/2026-10-04-the-historical-segment-backlog-is-rising.md).
