@@ -4793,6 +4793,15 @@ muffin-ingest#99 and #100):
   Uppercasing gives `ZAC`, this schema's code for cents, so that comes out right. It also gives
   `GBP`, the pound, so a London series is read 100× too high. A comparison script written with
   `.upper()` reports that error as a match. Map Yahoo's codes explicitly, never by case-folding.
+- **3b'S FIRST LIVE RUN REPAIRED ONE SYMBOL, AND IT WAS THE SAME DEAD LINE RE-SPELT.** The
+  ladder compares a dead symbol literally, and OpenFIGI's ticker is Bloomberg's spelling, so
+  `BDMS-F.BK` (an edge spelling) became `BDMS/F.BK`. That is the same Thai foreign-board line, and
+  Yahoo returns 404 for both. A stage-2 replay over the stored answers for the other 261 predicted no
+  real repair. **A repair mechanism is proven by its yield, not by its tests.** The yield is in the
+  answers: TPEx, Yahoo's own spellings (`ANDINA-B.SN`, `EU.V`, `DRUG.CN` answer), primary markets
+  abroad (Garmin, Coca-Cola HBC). Replaying stage 2 is free, because raw keeps the answers; do it
+  before predicting what a change will repair
+  ([note](docs/deferred/2026-10-05-what-the-dead-symbol-repair-cannot-reach.md)).
 
 ## Running an OpenSandbox server locally
 

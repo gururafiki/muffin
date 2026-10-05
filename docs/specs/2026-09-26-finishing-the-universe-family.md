@@ -255,6 +255,30 @@ hold local prices under a USD currency label, and the ratio view already serves 
 off for the same reason
 ([note](../deferred/2026-10-05-a-price-bar-s-currency-is-not-its-quote-currency.md)).
 
+### 3b: the provider repairs a dead symbol (live 2026-10-05)
+
+muffin-ingest#100 was rolled at 10:31 UTC (maintenance run 37296994095; image `640d7433` became
+`3873bed9`).
+
+Live subset, backfill `yokgirsk`: 7 dead subjects through both rungs and stage 2, 7 runs SUCCESS.
+
+| Rung | Result |
+|---|---|
+| Yahoo, by ISIN | missed all 7 |
+| OpenFIGI | repeated each dead spelling, so nothing was proposed, except BDMS |
+| Stage 2 | `symbols_repairable` 1, `symbols_repaired` 1, both BDMS: `BDMS-F.BK` became `BDMS/F.BK` |
+
+BDMS's new spelling is the same Thai foreign-board line in Bloomberg notation, 404 on Yahoo like the
+old one. The dead symbol is compared literally, so a re-spelling passes as a new candidate. The
+churn is bounded: the next sweep records the new death, OpenFIGI repeats it, and it is excluded.
+
+A replay of stage 2 over the stored answers for the other 261, with no provider call: 259 no
+proposal, and 2 more of the same churn. **So 3b repairs nothing real today.** The mechanism is
+right, and the answers it is offered are the problem: TPEx, spellings Yahoo writes differently,
+primary markets abroad, and Thai foreign boards
+([note](../deferred/2026-10-05-what-the-dead-symbol-repair-cannot-reach.md)). Tonight's 03:00 re-ask
+covers 255 subjects (counted with #100's own query).
+
 ## Risks and rollback
 
 - **The listing swap:** rollback recreates the view over `listing_legacy`.

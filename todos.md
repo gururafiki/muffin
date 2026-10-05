@@ -2489,11 +2489,25 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
                         real history the provider stopped returning (AREN), some may be another
                         listing's. Re-measure after the reload —
                         [note](docs/deferred/2026-10-04-bars-before-a-raw-history-are-kept-unjudged.md).
-            - [ ] 3b — symbology repairs a dead symbol (`NEEDS_SYMBOL` takes a dead current
-                  symbol; adoption may replace a dead one, never a live one). **muffin-ingest#100**,
-                  merge after #99. 262 equities hold a dead symbol (249 set by the retired edge
-                  resources); 8 code and 13 SQL mutations caught; the first 03:00 tick re-asks all
-                  262 in ~3 keyed OpenFIGI requests. Expect few repairs from it alone, because:
+            - [x] 3b — symbology repairs a dead symbol (`NEEDS_SYMBOL` takes a dead current
+                  symbol; adoption may replace a dead one, never a live one). **muffin-ingest#100**
+                  merged and **rolled 2026-10-05 10:31 UTC** (maintenance run 37296994095, image
+                  `640d7433` -> `3873bed9`). 262 equities held a dead symbol (249 set by the retired
+                  edge resources); 8 code and 13 SQL mutations caught. **Live subset** `yokgirsk`
+                  (7 dead subjects, both rungs and stage 2): 7 runs SUCCESS (~22 s each); Yahoo
+                  missed all 7 by ISIN; OpenFIGI repeated each dead spelling, so nothing was
+                  proposed, except BDMS, where `BDMS-F.BK` became `BDMS/F.BK`. That is the same
+                  Thai foreign-board line in Bloomberg notation, 404 on Yahoo in both spellings.
+                  **Replay of stage 2 over the stored answers for the other 261:** 259 no proposal,
+                  2 more notation churns (`3BBIF`, `BLA`). It repairs nothing real today, by
+                  cause — [note](docs/deferred/2026-10-05-what-the-dead-symbol-repair-cannot-reach.md):
+                  - [ ] Read the first 03:00 re-ask (2026-10-06): ~255 subjects in ~3 keyed
+                        requests, expect `symbols_repaired` 2 (the notation churns) and no
+                        error.
+                  - [ ] **Decide:** provider-verified spelling candidates (`ANDINA-B.SN`, `EU.V`,
+                        `DRUG.CN` answer), primary market abroad (Garmin `GRMN`, Coca-Cola HBC
+                        `CCH.L`), Thai foreign boards (15) —
+                        [note](docs/deferred/2026-10-05-what-the-dead-symbol-repair-cannot-reach.md).
                   - [ ] **Decide:** 100 of the 101 dead `.TW` symbols are TPEx lines, which Yahoo
                         spells `.TWO`; OpenFIGI files both markets under `TT`, but its answer's
                         label (`TT (Taipei Stock Exchange)`) is already in raw and stage 2 strips
