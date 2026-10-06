@@ -2485,6 +2485,11 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
                         #99 will reload get local prices under a USD label (Tencent among them).
                         Yahoo states it in `meta.currency`, which the openbb adapter drops —
                         [note](docs/deferred/2026-10-05-a-price-bar-s-currency-is-not-its-quote-currency.md).
+                        - [ ] **Spec written 2026-10-06, five decisions open**:
+                              [spec](docs/specs/2026-10-06-the-price-lane-reads-the-quote-currency.md).
+                              Measured: chart closes equal the stored ones to the cent, and owning
+                              the fetch costs no requests. Yahoo's own label is wrong before a unit
+                              change (`AMRM.TA` 96.6× on 05-18), and 32 subunit-sized breaks exist.
                   - [ ] The 37,123 bars BEFORE their raw history's first date are kept: some are
                         real history the provider stopped returning (AREN), some may be another
                         listing's. Re-measure after the reload —
