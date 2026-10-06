@@ -4827,6 +4827,49 @@ muffin-ingest#99 and #100):
   `where (stored_row.…) is distinct from (excluded.…)`, and the I/O manager reports `changed`
   beside `rows`.
 
+### A database rebuilt from the repo (Stage 6, 2026-10-06)
+
+muffin-deployment#422. Until then a node rebuild would have come back with a schema and nothing
+else. Spec: [docs/specs/2026-09-26-finishing-the-universe-family.md](docs/specs/2026-09-26-finishing-the-universe-family.md).
+
+- **A DUMP OF THREE SCHEMAS LOSES EVERYTHING THAT LIVES OUTSIDE THEM, AND SIX THINGS DID.** The
+  2026-09-10 baseline was `pg_dump --schema-only --no-privileges --schema=market --schema=api
+  --schema=ingest`. A database built from it lacked:
+  - the two roles the legacy set created (cluster-wide), with their statement timeouts and
+    `metrics_ro`'s `pg_monitor` membership (settings and memberships are on the role, not in any
+    schema);
+  - `pg_cron` (an extension), so every migration that schedules a job, guarded on `cron.job`,
+    skipped without an error;
+  - the 12 pg_cron jobs the legacy set scheduled (rows in the `cron` schema);
+  - all 2,557 seeded control rows (`--schema-only`);
+  - every privilege (`--no-privileges`), so anon read nothing and every function was executable by
+    PUBLIC;
+  - `index_scope`'s 73 rows, which a post-baseline migration had derived from the old
+    `market.performance` table, empty on any new database. Its comment said "the assets re-assert
+    them"; nothing does.
+
+  **CI compared the baseline against the legacy reference with `--no-privileges` on the schema
+  only, so every one of these passed for a month.** Each comparison saw only what it dumped.
+- **AN "IS IT RECORDED?" GUARD IS ALSO TRUE OF AN EMPTY DATABASE.** Ansible marked the baseline
+  applied whenever its history row was absent, which on a new node would have skipped the schema
+  entirely. It now marks only when `market.security` exists.
+- **CI's Postgres IS NOT PRODUCTION'S.** In `postgres:17-alpine` the `postgres` role is a superuser
+  and there is no pg_cron, so CI cannot see a non-superuser failure or a skipped schedule. The
+  faithful rebuild runs on the node in a throwaway `supabase/postgres:17.6.1.136` started with
+  `-c config_file=/etc/postgresql/postgresql.conf`. The pinned CLI runs in a `debian:12-slim`
+  container with `--network container:<db>`, as `run-cli.sh` does, against `127.0.0.1`, which the
+  image's `pg_hba` trusts. Its `.temp/` is root-owned afterwards, so clean up with `sudo`.
+- **UNDER `pipefail`, A `grep` THAT MATCHES NOTHING ENDS THE STEP SILENTLY.** The privilege check's
+  first run stopped with exit 1 before its diff could report, because the old baseline had no GRANT
+  at all. A side with nothing in it is a difference to report: `{ grep … || true; }`.
+- **Two builds of the same migrations differ in exactly eleven columns.** They hold the clock
+  (`now()`, `current_date`) or a random id. This was measured by diffing the dumps of two CI builds
+  eight days apart, and `compare_databases.py` excludes exactly those. The legacy set is frozen, so
+  the list cannot grow.
+- **`supabase db push` CONFIRMS ITS OWN PROMPT WITHOUT A TTY**, which is what the deploy relies on.
+  The CLI also re-asserts nothing about an applied file's contents, so regenerating the applied
+  baseline changes nothing on production.
+
 ## Running an OpenSandbox server locally
 
 - **`docker run -d -p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock opensandbox/server:latest`.**

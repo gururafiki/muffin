@@ -1680,7 +1680,7 @@ cut over one at a time.
   the 2,320 already held — (a) union per subject, or (b) one file per run in a partition directory.
   Re-measure the allowance before sizing either —
   docs/deferred/2026-09-17-a-throttled-day-partition-still-materialises.md
-- [ ] **due 2026-09-26 — nothing that runs today creates `ingest_rw` or `metrics_ro`.** Both are
+- [x] **Resolved 2026-10-06 by muffin-deployment#422 (Stage 6).** **due 2026-09-26 — nothing that runs today creates `ingest_rw` or `metrics_ro`.** Both are
   created only in `migrations-legacy/` (206 and 127), which `supabase db push` no longer applies, so
   a database rebuilt from what is committed aborts at `alter role ingest_rw bypassrls` and leaves
   the pipeline's writer and Grafana's reader missing. Production is unaffected (the roles predate
@@ -1689,7 +1689,7 @@ cut over one at a time.
   that `alter role`. **REPRODUCED under Docker 2026-09-19**: the baseline fails on a container with
   only the Supabase roles, and all 11 migrations apply once the two are created —
   docs/deferred/2026-09-19-a-rebuilt-database-has-no-ingest-or-metrics-role.md
-- [ ] **due 2026-09-26 — a rebuilt database is schema-correct and REFERENCE-EMPTY.** The baseline
+- [x] **Resolved 2026-10-06 by muffin-deployment#422 (Stage 6).** **due 2026-09-26 — a rebuilt database is schema-correct and REFERENCE-EMPTY.** The baseline
   has zero INSERT/COPY statements, so `market.data_source` is 0 against production's 24 and
   `index_scope` 0 against 73 — while `return_period`, `ingest.facet` and `provider_budget` ARE
   seeded by committed migrations, which is why nobody has noticed. The first write of every lane
@@ -2654,7 +2654,14 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
             nightly autovacuum over every partition, and 27.7 min of the `sql` pool. Options and a
             recommendation (skip unchanged rows in the writer, then publish only the run's own
             rows): docs/deferred/2026-10-04-the-price-history-lane-rewrites-every-bar-nightly.md
-      - [ ] Stage 6 — a database rebuilt from the repo works. **Measured 2026-10-05:** with the two
+      - [x] Stage 6 — a database rebuilt from the repo works. **Merged 2026-10-06 in
+            muffin-deployment#422; its deploy is blocked by the Cloudflare token (below).** `before-migrations.sql` creates the two roles
+            and `pg_cron` (a third gap, found while building it). The baseline now carries 2,557
+            seeded rows and 671 privilege statements. Two migrations declare the 12 legacy cron
+            jobs and derive the 73 index scopes (a fourth gap: seeded once from the retired
+            `performance` table). CI rebuilds a second cluster with the pinned CLI and compares
+            it with the reference. The whole sequence was also proven on production's own image
+            on the node. **Measured 2026-10-05:** with the two
             roles created, all 32 migrations apply to an empty database. But every one of the 39
             seeded control tables (~2,500 rows) comes up empty, the baseline carries 2 GRANTs, and
             12 of production's 16 pg_cron jobs exist only because legacy migrations created them
@@ -2666,6 +2673,16 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
             applied only where the schema exists. A CI step compares a database rebuilt from the
             repo with the reference. The Supabase CLI matches versions only (its
             `FindPendingMigrations`), so production is unaffected.
+      - [ ] **2026-10-06 — every deploy fails: the Cloudflare token answers 401.** Terraform's
+            refresh gets `401 / code 10000 Authentication error` on all 10 Cloudflare resources,
+            twice, so nothing was applied. The last good deploy was 2026-10-04 18:44. Needs a new
+            `CLOUDFLARE_API_TOKEN` on muffin-deployment (the user's step). Then deploy #422 and
+            verify it on production —
+            [note](docs/deferred/2026-10-06-the-cloudflare-token-answers-401.md).
+      - [ ] **2026-10-06 — an index scope is only ever seeded.** A country or group gaining an ETF
+            gets no scope and no returns, because the indices lane only reads `index_scope`.
+            Recommended: the lane derives its scopes —
+            [note](docs/deferred/2026-10-06-an-index-scope-is-only-ever-seeded.md).
       - [ ] Stage 7 — Grafana universe panels, docs and skills.
 
 ### Phases 4-8 — the remaining family cutovers — not started
