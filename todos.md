@@ -2501,9 +2501,15 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
                   **Replay of stage 2 over the stored answers for the other 261:** 259 no proposal,
                   2 more notation churns (`3BBIF`, `BLA`). It repairs nothing real today, by
                   cause — [note](docs/deferred/2026-10-05-what-the-dead-symbol-repair-cannot-reach.md):
-                  - [ ] Read the first 03:00 re-ask (2026-10-06): ~255 subjects in ~3 keyed
-                        requests, expect `symbols_repaired` 2 (the notation churns) and no
-                        error.
+                  - [x] Read the first 03:00 re-ask (2026-10-06). `symbols_repaired` 2, exactly
+                        the predicted notation churns (`3BBIF/F.BK`, `BLA/F.BK`), and no error. But
+                        it was **254 runs of one subject each, not ~3**: the dead subjects are
+                        scattered, and Dagster batches only contiguous keys. That held the `sql` pool
+                        03:02-05:14.
+                  - [ ] **Decide before 2026-10-25:** the 30-day stale-miss re-ask brings **5,320
+                        subjects on 2026-10-26**, ~46 h of one-subject runs on the `sql` pool.
+                        Recommended: spread the due set by subject over a 30-day cycle —
+                        [note](docs/deferred/2026-10-06-a-scattered-re-ask-is-one-run-per-subject.md).
                   - [ ] **Decide:** provider-verified spelling candidates (`ANDINA-B.SN`, `EU.V`,
                         `DRUG.CN` answer), primary market abroad (Garmin `GRMN`, Coca-Cola HBC
                         `CCH.L`), Thai foreign boards (15) —

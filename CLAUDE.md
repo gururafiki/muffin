@@ -4802,6 +4802,16 @@ muffin-ingest#99 and #100):
   abroad (Garmin, Coca-Cola HBC). Replaying stage 2 is free, because raw keeps the answers; do it
   before predicting what a change will repair
   ([note](docs/deferred/2026-10-05-what-the-dead-symbol-repair-cannot-reach.md)).
+- **DAGSTER BATCHES ONLY CONTIGUOUS PARTITION KEYS, SO A SCATTERED RE-ASK IS ONE RUN PER
+  SUBJECT.** #100's first 03:00 tick re-asked 255 dead symbols as **254 runs**, not the ~3 predicted
+  from `multi_run(200)`. Each held the `sql` pool ~23 s, from 03:02 to 05:14. Both backfill policies
+  split a requested set into contiguous key ranges and give each range at least one run
+  (`get_partition_key_ranges` in `_build_run_requests_with_backfill_policy`; `single_run` too), and
+  dynamic keys sit in insertion order. So a batch size says nothing about a scattered set. The 30-day
+  stale-miss re-ask makes this a problem: the first drain recorded its misses on one day, so **5,320
+  come due on 2026-10-26**, about 46 hours of runs
+  ([note](docs/deferred/2026-10-06-a-scattered-re-ask-is-one-run-per-subject.md)). **A bulk event
+  creates a synchronised wave one TTL later.** Spread a re-ask by subject, not by age alone.
 
 ## Running an OpenSandbox server locally
 
