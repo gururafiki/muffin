@@ -4812,6 +4812,13 @@ muffin-ingest#99 and #100):
   come due on 2026-10-26**, about 46 hours of runs
   ([note](docs/deferred/2026-10-06-a-scattered-re-ask-is-one-run-per-subject.md)). **A bulk event
   creates a synchronised wave one TTL later.** Spread a re-ask by subject, not by age alone.
+- **AN UPSERT WITHOUT A `where … is distinct from` REWRITES EVERY ROW IT IS GIVEN.** Stage 2 of the
+  price lane publishes each partition from its whole raw file, which is right, and `writers.upsert`
+  updates unconditionally, which made that a rewrite. The 10-06 night upserted **11.6 M bars for ~170
+  k changes** (1,558 s of a 5,060 s night). `price_bar` had taken **202.6 M updates, 8.0 M HOT,
+  against 59.5 M inserts** in 26 days: each row rewritten ~3.4 times to the same values, with the
+  dead tuples and WAL that follow. No count reported it, because `written` counts rows sent, not
+  rows changed ([note](docs/deferred/2026-10-06-every-night-rewrites-millions-of-unchanged-bars.md)).
 
 ## Running an OpenSandbox server locally
 

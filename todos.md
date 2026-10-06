@@ -2615,6 +2615,12 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
             - [ ] The historical rate rose from 4.1% to 20.7% in a month on unchanged parser code,
                   and some served revenue splits are accepted against 0 or a negative target:
                   [note](docs/deferred/2026-10-04-the-historical-segment-backlog-is-rising.md).
+      - [ ] **2026-10-06 — every night rewrites ~12 M unchanged price bars. Decide:** `writers.upsert`
+            updates unconditionally, so the 10-06 stage 2 upserted 11.6 M rows (1,558 s, a third of
+            the night) for ~170 k changes. `price_bar` has taken 202.6 M updates, only 8.0 M HOT,
+            against 59.5 M inserts since 09-10. Recommended: skip unchanged rows with
+            `where … is distinct from excluded …` in the shared writer —
+            [note](docs/deferred/2026-10-06-every-night-rewrites-millions-of-unchanged-bars.md).
       - [ ] **2026-10-03 — the Dagster webserver's idle database connections go dead.** Two
             launches failed with `server closed the connection unexpectedly` after ~50 minutes
             idle; the third worked. A failed launch left a `NOT_STARTED` orphan that could have
