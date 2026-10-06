@@ -41,6 +41,30 @@ Always-Free node that work competes with the app's reads every night.
 
 **Option 1: skip unchanged rows in `writers.upsert`**, with a `changed` count beside `written`.
 
+## As built (2026-10-06)
+
+muffin-ingest#101, rolled 2026-10-06 21:12 UTC.
+
+- `upsert` writes `insert into … as stored_row … on conflict … do update set … where
+  (stored_row.a, …) is distinct from (excluded.a, …)`.
+- `WriteResult.changed` is the statement's rowcount, i.e. inserted plus updated, summed over chunks.
+  It is `None` when the driver cannot count. The Postgres I/O manager puts it in metadata as
+  `changed` beside `rows`, with -1 for unknown.
+- Proven on a throwaway Postgres on the node:
+  - an identical second write of 30,000 rows changed **0** row versions, where the old writer
+    changed all 30,000;
+  - twelve real changes reported `changed` 12;
+  - null to value and value to null each count as a change;
+  - a single updatable column works (`(stored_row.c) is distinct from (excluded.c)`).
+- Five mutations caught.
+
+Baseline for the first night on the new writer, `market.price_bar` summed over its partitions at
+2026-10-06 21:13 UTC:
+
+| `n_tup_ins` | `n_tup_upd` | `n_tup_hot_upd` | `n_dead_tup` | `n_live_tup` |
+|---|---|---|---|---|
+| 59,531,165 | 202,647,006 | 8,038,818 | 3,128,189 | 58,769,434 |
+
 ## Options (as presented)
 
 1. **Skip unchanged rows in `writers.upsert`** (recommended). `insert into … as t … on conflict … do

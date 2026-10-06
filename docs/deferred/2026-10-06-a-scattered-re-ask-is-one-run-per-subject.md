@@ -48,6 +48,36 @@ Every bulk event re-creates the wave 30 days later: a drain, a parser re-run, a 
 
 **Option 1: spread the re-ask by subject over a 30-day cycle**, so no wave can form.
 
+## As built (2026-10-06)
+
+muffin-ingest#102, rolled 2026-10-06 21:12 UTC together with #101.
+
+- `facets.symbology.reask_day` gives each subject a day of the cycle from SHA-256 of its id. Python's
+  `hash()` is salted per process, so every roll would have moved every subject to a new day.
+- `due_on` keys the day on the date's ordinal, never the day of the month.
+- `ReAskAfter` applies it to the stale arm, on the tick's `evaluation_time`.
+  `REASK_SPREAD_DAYS = 30`, so a subject waits at most 59 days from its miss.
+- **The dead-symbol arm is not spread.** Deaths already arrive at the price sweep's pace, and a dead
+  symbol costs a price bar every day its repair waits.
+- Seven mutations caught, among them the salted `hash()`, the day of the month, and the dead arm
+  spread too. The condition's node unique ids are unchanged, so the cron gate's state survived the
+  roll.
+
+**Correction: the wave lands at the 2026-10-27 03:00 tick, not 10-26.** The misses were recorded at
+~22:00 UTC on 09-26, so at 10-26 03:00 they are a few hours short of 30 days. Re-measured on
+production's 6,104 open misses (oldest open miss per subject):
+
+| | Largest day | Days with re-asks |
+|---|---|---|
+| Unspread | 5,332 on 10-27 | 11 |
+| Spread | 224 on 11-09 | 40, ending 12-05 |
+
+Spread, 10-27 itself gets ~167, and every day from 10-27 to 11-25 gets 167-224.
+
+**Also corrected:** `conditions.py` claimed a custom condition avoids one run per subject because
+`multi_run(200)` re-batches its subset. The 255-subject re-ask disproved that. Its docstring now says
+so.
+
 ## Options (as presented)
 
 1. **Spread the re-ask by subject** (recommended). A subject is due only on its own day of a
@@ -74,5 +104,5 @@ unspread.
 
 ## Done when
 
-The 10-26 tick re-asks a bounded number of subjects, and no day's re-ask holds the `sql` pool past
-06:00 UTC.
+The 10-27 tick re-asks a bounded number of subjects (~167 predicted), and no day's re-ask holds the
+`sql` pool past 06:00 UTC.

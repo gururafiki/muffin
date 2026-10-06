@@ -2506,10 +2506,13 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
                         it was **254 runs of one subject each, not ~3**: the dead subjects are
                         scattered, and Dagster batches only contiguous keys. That held the `sql` pool
                         03:02-05:14.
-                  - [ ] **Decided 2026-10-06: spread by subject, build before 2026-10-25.** The 30-day stale-miss re-ask brings **5,320
-                        subjects on 2026-10-26**, ~46 h of one-subject runs on the `sql` pool.
-                        Recommended: spread the due set by subject over a 30-day cycle —
+                  - [x] **Decided 2026-10-06: spread by subject. Built in muffin-ingest#102, rolled
+                        2026-10-06 21:12 UTC.** The wave is **5,332 at the 10-27 03:00 tick** (not
+                        10-26). Spread over a 30-day cycle it is at most 224 a day, measured on
+                        production's 6,104 open misses. The dead-symbol arm is not spread —
                         [note](docs/deferred/2026-10-06-a-scattered-re-ask-is-one-run-per-subject.md).
+                        - [ ] **2026-10-27, after 03:00 UTC:** count that tick's runs (~167
+                              predicted) and check the pool is free before 06:00 UTC.
                   - [ ] **Decide:** provider-verified spelling candidates (`ANDINA-B.SN`, `EU.V`,
                         `DRUG.CN` answer), primary market abroad (Garmin `GRMN`, Coca-Cola HBC
                         `CCH.L`), Thai foreign boards (15) —
@@ -2615,12 +2618,16 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
             - [ ] The historical rate rose from 4.1% to 20.7% in a month on unchanged parser code,
                   and some served revenue splits are accepted against 0 or a negative target:
                   [note](docs/deferred/2026-10-04-the-historical-segment-backlog-is-rising.md).
-      - [ ] **2026-10-06 — every night rewrites ~12 M unchanged price bars. Decided 2026-10-06: guard in the upsert.** `writers.upsert`
-            updates unconditionally, so the 10-06 stage 2 upserted 11.6 M rows (1,558 s, a third of
-            the night) for ~170 k changes. `price_bar` has taken 202.6 M updates, only 8.0 M HOT,
-            against 59.5 M inserts since 09-10. Recommended: skip unchanged rows with
-            `where … is distinct from excluded …` in the shared writer —
+      - [x] **2026-10-06 — every night rewrites ~12 M unchanged price bars. Decided 2026-10-06: guard in the upsert.
+            Built in muffin-ingest#101, rolled 2026-10-06 21:12 UTC.** `writers.upsert` updated
+            unconditionally, so the 10-06 stage 2 upserted 11.6 M rows (1,558 s, a third of the
+            night) for ~170 k changes. `price_bar` had taken 202.6 M updates, only 8.0 M HOT,
+            against 59.5 M inserts since 09-10. Every `do update` now skips a row whose values are
+            unchanged, and reports `changed` —
             [note](docs/deferred/2026-10-06-every-night-rewrites-millions-of-unchanged-bars.md).
+            - [ ] **2026-10-07 morning:** read the night's `price_bar_history` `changed` against
+                  `rows`, its step time against 10-06's 1,558 s, and `n_tup_upd` on `price_bar`
+                  against today's reading.
       - [ ] **2026-10-03 — the Dagster webserver's idle database connections go dead.** Two
             launches failed with `server closed the connection unexpectedly` after ~50 minutes
             idle; the third worked. A failed launch left a `NOT_STARTED` orphan that could have

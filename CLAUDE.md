@@ -4808,10 +4808,14 @@ muffin-ingest#99 and #100):
   split a requested set into contiguous key ranges and give each range at least one run
   (`get_partition_key_ranges` in `_build_run_requests_with_backfill_policy`; `single_run` too), and
   dynamic keys sit in insertion order. So a batch size says nothing about a scattered set. The 30-day
-  stale-miss re-ask makes this a problem: the first drain recorded its misses on one day, so **5,320
-  come due on 2026-10-26**, about 46 hours of runs
-  ([note](docs/deferred/2026-10-06-a-scattered-re-ask-is-one-run-per-subject.md)). **A bulk event
-  creates a synchronised wave one TTL later.** Spread a re-ask by subject, not by age alone.
+  stale-miss re-ask makes this a problem: the first drain recorded its misses on one day, so **5,332
+  come due at the 2026-10-27 03:00 tick**, about 46 hours of runs. (The note first said 10-26; the
+  misses were recorded at ~22:00 on 09-26, so the 10-26 tick is a few hours short of 30 days.)
+  **A bulk event creates a synchronised wave one TTL later.** Since muffin-ingest#102 (rolled
+  2026-10-06 21:12 UTC) a stale miss is due only on its own day of a 30-day cycle: measured on
+  production's 6,104 open misses, at most **224 a day**. `conditions.py` had claimed the custom
+  condition avoids one-run-per-subject because `multi_run(200)` re-batches its subset. It never did.
+  ([note](docs/deferred/2026-10-06-a-scattered-re-ask-is-one-run-per-subject.md))
 - **AN UPSERT WITHOUT A `where … is distinct from` REWRITES EVERY ROW IT IS GIVEN.** Stage 2 of the
   price lane publishes each partition from its whole raw file, which is right, and `writers.upsert`
   updates unconditionally, which made that a rewrite. The 10-06 night upserted **11.6 M bars for ~170
@@ -4819,6 +4823,9 @@ muffin-ingest#99 and #100):
   against 59.5 M inserts** in 26 days: each row rewritten ~3.4 times to the same values, with the
   dead tuples and WAL that follow. No count reported it, because `written` counts rows sent, not
   rows changed ([note](docs/deferred/2026-10-06-every-night-rewrites-millions-of-unchanged-bars.md)).
+  Since muffin-ingest#101 (rolled 2026-10-06 21:12 UTC) every `do update` carries
+  `where (stored_row.…) is distinct from (excluded.…)`, and the I/O manager reports `changed`
+  beside `rows`.
 
 ## Running an OpenSandbox server locally
 
