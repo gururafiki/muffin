@@ -44,7 +44,11 @@ buried in them.
 
 Every bulk event re-creates the wave 30 days later: a drain, a parser re-run, a population change.
 
-## Options (decision for the user)
+## Decision (2026-10-06)
+
+**Option 1: spread the re-ask by subject over a 30-day cycle**, so no wave can form.
+
+## Options (as presented)
 
 1. **Spread the re-ask by subject** (recommended). A subject is due only on its own day of a
    30-day cycle, for example `hashtext(security_id) mod 30 = day_number mod 30`. Each subject is

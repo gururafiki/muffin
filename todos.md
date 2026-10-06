@@ -2477,7 +2477,7 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
                         2000-01-03), and `price_bar` starts on the same days: 0 bars inside the raw
                         range missing from raw, 0 before it, `retracted` 223 and 113. The one raw row
                         not published is today's unfinished bar.
-                  - [ ] **Decide:** nothing reads the currency of the line we price, and the ratio
+                  - [ ] **Decided 2026-10-06: own the Yahoo fetch** (spec first). Nothing reads the currency of the line we price, and the ratio
                         view serves `security.currency_code` (an N-PORT holding or reporting
                         currency) as the quote currency. Served P/Es measured 2026-10-05: Kuwait
                         1,000× (fils as dinars), Tel Aviv 100× (agorot as shekels), Lenovo 7.85×,
@@ -2506,7 +2506,7 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
                         it was **254 runs of one subject each, not ~3**: the dead subjects are
                         scattered, and Dagster batches only contiguous keys. That held the `sql` pool
                         03:02-05:14.
-                  - [ ] **Decide before 2026-10-25:** the 30-day stale-miss re-ask brings **5,320
+                  - [ ] **Decided 2026-10-06: spread by subject, build before 2026-10-25.** The 30-day stale-miss re-ask brings **5,320
                         subjects on 2026-10-26**, ~46 h of one-subject runs on the `sql` pool.
                         Recommended: spread the due set by subject over a 30-day cycle —
                         [note](docs/deferred/2026-10-06-a-scattered-re-ask-is-one-run-per-subject.md).
@@ -2615,7 +2615,7 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
             - [ ] The historical rate rose from 4.1% to 20.7% in a month on unchanged parser code,
                   and some served revenue splits are accepted against 0 or a negative target:
                   [note](docs/deferred/2026-10-04-the-historical-segment-backlog-is-rising.md).
-      - [ ] **2026-10-06 — every night rewrites ~12 M unchanged price bars. Decide:** `writers.upsert`
+      - [ ] **2026-10-06 — every night rewrites ~12 M unchanged price bars. Decided 2026-10-06: guard in the upsert.** `writers.upsert`
             updates unconditionally, so the 10-06 stage 2 upserted 11.6 M rows (1,558 s, a third of
             the night) for ~170 k changes. `price_bar` has taken 202.6 M updates, only 8.0 M HOT,
             against 59.5 M inserts since 09-10. Recommended: skip unchanged rows with
@@ -2647,8 +2647,18 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
             nightly autovacuum over every partition, and 27.7 min of the `sql` pool. Options and a
             recommendation (skip unchanged rows in the writer, then publish only the run's own
             rows): docs/deferred/2026-10-04-the-price-history-lane-rewrites-every-bar-nightly.md
-      - [ ] Stage 6 — roles, table grants, reference data and cron jobs re-applied every deploy, and a
-            `fresh-database` CI job.
+      - [ ] Stage 6 — a database rebuilt from the repo works. **Measured 2026-10-05:** with the two
+            roles created, all 32 migrations apply to an empty database. But every one of the 39
+            seeded control tables (~2,500 rows) comes up empty, the baseline carries 2 GRANTs, and
+            12 of production's 16 pg_cron jobs exist only because legacy migrations created them
+            (`muffin-rotation`, the filings and segments jobs). Ansible's "Baseline the migration
+            history" task would also record the baseline as applied on an EMPTY node without running
+            it. **Decided 2026-10-06:** the baseline carries what the legacy migrations built (schema,
+            seed rows, grants, default privileges), regenerated from CI's reference database. The 12
+            jobs go in one migration. `roles.sql` runs before `db push`. The baseline is marked
+            applied only where the schema exists. A CI step compares a database rebuilt from the
+            repo with the reference. The Supabase CLI matches versions only (its
+            `FindPendingMigrations`), so production is unaffected.
       - [ ] Stage 7 — Grafana universe panels, docs and skills.
 
 ### Phases 4-8 — the remaining family cutovers — not started

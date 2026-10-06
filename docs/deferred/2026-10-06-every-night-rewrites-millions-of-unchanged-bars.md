@@ -37,7 +37,11 @@ Always-Free node that work competes with the app's reads every night.
 - The Postgres I/O manager and the explicit callers (`discovery`, `symbology`, `prices`) all go
   through `writers.upsert`.
 
-## Options (decision for the user)
+## Decision (2026-10-06)
+
+**Option 1: skip unchanged rows in `writers.upsert`**, with a `changed` count beside `written`.
+
+## Options (as presented)
 
 1. **Skip unchanged rows in `writers.upsert`** (recommended). `insert into … as t … on conflict … do
    update set … where (t.a, t.b, …) is distinct from (excluded.a, excluded.b, …)`, plus a

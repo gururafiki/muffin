@@ -93,7 +93,11 @@ raw on 2026-10-05:
 - A unit can change mid-series. Tel Aviv moved from shekels to agorot on 2026-05-18 without
   rescaling the old bars (CLAUDE.md). So the currency belongs to each **fetch**, not to the security.
 
-## Options (decision for the user)
+## Decision (2026-10-06)
+
+**Option 1: fetch price history through `yahoo_chart`** and keep `meta.currency` per fetch. Bars are labelled from it, and `security_ratio_series` takes its quote currency from it. Planned in its own spec before building.
+
+## Options (as presented)
 
 1. **Fetch price history through `yahoo_chart`, and serve the quote currency from it**
    (recommended).
