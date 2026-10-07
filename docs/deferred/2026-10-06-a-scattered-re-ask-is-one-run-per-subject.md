@@ -78,6 +78,23 @@ Spread, 10-27 itself gets ~167, and every day from 10-27 to 11-25 gets 167-224.
 `multi_run(200)` re-batches its subset. The 255-subject re-ask disproved that. Its docstring now says
 so.
 
+## The first tick on the spread (2026-10-07 03:00 UTC)
+
+It did exactly what the deployed due set predicted:
+
+- **Backfill `cwsqazxc`: 2 runs, one subject each, both SUCCESS.** They held the `sql` pool
+  03:00:54-03:02:09, and the eager `security_listing`/`symbol_security` run behind them ended
+  03:03:05. The pool was free from 03:03.
+- **The stale arm was empty:** no miss is 30 days old yet (`stale_misses` returns 0).
+- **The dead arm held the two yfinance deaths recorded since the previous tick** (10-07 00:06 and
+  01:00): Thailand Future Fund `TFFIF/F.BK` and Bangkok Life Assurance `BLA/F.BK`. Both are Thai
+  foreign-board lines in Bloomberg spelling. `BLA/F.BK` is the 10-06 tick's notation churn, dying
+  on its first night. OpenFIGI named the same spellings again, so nothing was repaired, and
+  `dead_unasked` is now empty: each waits out its 30 days, as designed.
+- **The forecast, re-run with the deployed functions, is unchanged:** 6,104 subjects will go stale.
+  The first stale re-ask is the **10-27** tick with 167; the busiest day is 11-09 with 224; the
+  cycle ends 12-05 after 40 days. So the spread itself is first exercised on 10-27.
+
 ## Options (as presented)
 
 1. **Spread the re-ask by subject** (recommended). A subject is due only on its own day of a

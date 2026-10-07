@@ -2516,6 +2516,12 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
                         10-26). Spread over a 30-day cycle it is at most 224 a day, measured on
                         production's 6,104 open misses. The dead-symbol arm is not spread —
                         [note](docs/deferred/2026-10-06-a-scattered-re-ask-is-one-run-per-subject.md).
+                        - [x] **2026-10-07 03:00, the first tick on the spread:** 2 runs of one
+                              subject each, both SUCCESS, the pool free from 03:03. Exactly the
+                              prediction: no stale miss is due (none is 30 days old yet), and the
+                              dead arm held the night's two deaths (`TFFIF/F.BK`, `BLA/F.BK`, Thai
+                              foreign boards; OpenFIGI repeated both spellings). Re-run forecast
+                              unchanged: the stale arm first fires on 10-27.
                         - [ ] **2026-10-27, after 03:00 UTC:** count that tick's runs (~167
                               predicted) and check the pool is free before 06:00 UTC.
                   - [ ] **Decide:** provider-verified spelling candidates (`ANDINA-B.SN`, `EU.V`,
