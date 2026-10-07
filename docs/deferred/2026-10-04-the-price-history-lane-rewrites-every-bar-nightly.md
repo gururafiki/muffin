@@ -1,6 +1,8 @@
 # The price history lane rewrites every bar it holds, every night
 
-Created 2026-10-04 · Check by 2026-10-18 · Status: open, needs a decision between the options below.
+Created 2026-10-04 · Status: **closed 2026-10-07**, superseded by
+[the 2026-10-06 note](2026-10-06-every-night-rewrites-millions-of-unchanged-bars.md) (the same
+defect, found again two days later). See "Resolved" at the end.
 
 ## What happens
 
@@ -59,3 +61,20 @@ cheap whenever someone does remember it.
   re-read, not ~14M.
 - The night's price runs end well before 01:41 UTC.
 - The `raw` and stage-2 counters still sum as they do today.
+
+## Resolved (2026-10-07)
+
+Decided 2026-10-06, in the later note: **option 1 only**. muffin-ingest#101 adds the guard to
+`writers.upsert`; it was rolled 2026-10-06 21:12 UTC. Option 2, publishing only the run's own rows,
+was presented there too and was not chosen.
+
+The first night against this note's "Done when":
+
+- **`n_tup_upd` over the night: 48,599**, against 121,990 rows fetched. It used to be every row sent,
+  ~11 M. Met.
+- **The night ended at 01:32 UTC**, against 01:42 on 10-04 and 01:38 on 10-06. Not "well before
+  01:41". `price_bar_history` took 1,352 s against 1,558 s: stage 2 still reads, normalises and sends
+  11.1 M rows, which, as this note said, only option 2 removes.
+- **The counters still sum:** stage 1 `requested` 2,500 = answered 2,446 + empty 1 + dead 2 + not
+  askable 51. Stage 2's new `changed` (98,226) equals the night's inserts plus updates exactly.
+  Met.

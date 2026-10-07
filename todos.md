@@ -2630,9 +2630,17 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
             against 59.5 M inserts since 09-10. Every `do update` now skips a row whose values are
             unchanged, and reports `changed` —
             [note](docs/deferred/2026-10-06-every-night-rewrites-millions-of-unchanged-bars.md).
-            - [ ] **2026-10-07 morning:** read the night's `price_bar_history` `changed` against
+            - [x] **2026-10-07 morning:** read the night's `price_bar_history` `changed` against
                   `rows`, its step time against 10-06's 1,558 s, and `n_tup_upd` on `price_bar`
-                  against today's reading.
+                  against today's reading. **Done, note closed.** All 100 runs succeeded
+                  (00:00-01:32), with FX, indices and `security_return`. `changed` **98,226** of
+                  11,110,456 rows sent, exactly the night's inserts plus updates (49,627 + 48,599),
+                  where ~11 M rows used to be rewritten. No autovacuum on `price_bar` since. The step
+                  time fell only 13% (1,352 s), because stage 2 still reads and sends every row.
+                  `price_bar` holds 1,189 bars for 10-06, which is right: a day fills over the
+                  ~5-night rotation, and 465 of the 1,654 securities whose market traded came back
+                  from Yahoo without a 10-06 close at 00:00 UTC (28 countries). The next visit's
+                  re-read fills those.
       - [ ] **2026-10-03 — the Dagster webserver's idle database connections go dead.** Two
             launches failed with `server closed the connection unexpectedly` after ~50 minutes
             idle; the third worked. A failed launch left a `NOT_STARTED` orphan that could have
@@ -2653,12 +2661,15 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
             loads the database, and succeeds through the day (84 ok in 48 h). TTM still advances.
             Belongs to the metrics family's move to Dagster (Phase 4); until then, a cron window that
             skips the sweep hours would stop the failures.
-      - [ ] **2026-10-04 — the price history lane rewrites every bar it holds, every night.** To add
+      - [x] **2026-10-04 — the price history lane rewrites every bar it holds, every night.** To add
             ~28k bars, `price_bar_history` re-published 13,797,563 rows on 10-04. The upsert has no
             `where`, so every row became a new tuple: 178.6M updates on `price_bar` since July,
             nightly autovacuum over every partition, and 27.7 min of the `sql` pool. Options and a
             recommendation (skip unchanged rows in the writer, then publish only the run's own
             rows): docs/deferred/2026-10-04-the-price-history-lane-rewrites-every-bar-nightly.md
+            **Closed 2026-10-07:** the same defect as the 2026-10-06 item above, where option 1
+            alone was decided and shipped (#101). Publishing only the run's own rows was not
+            chosen.
       - [x] Stage 6 — a database rebuilt from the repo works. **Merged 2026-10-06 in
             muffin-deployment#422; its deploy is blocked by the Cloudflare token (below).** `before-migrations.sql` creates the two roles
             and `pg_cron` (a third gap, found while building it). The baseline now carries 2,557

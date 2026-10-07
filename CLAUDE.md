@@ -4239,6 +4239,16 @@ labelling defect fixed in #79 before the Yahoo rung's first run. Spec:
   BYTES, NOT REQUESTS.** The NaN close at 00:00 UTC was healed by re-reading the newest stored day.
   A day `null` for days afterwards was re-read only if a cohort-mate happened to be behind it.
   `REREAD = 7 days` makes it a rule. The vendor is asked once per ticker whatever the range.
+  **It is not a US quirk, and the rule works.** Measured 2026-10-07:
+  - 465 of the 1,654 securities in one night's slice whose market had traded came back without a
+    close for that day (28%). Their companies are in 28 countries, not only the US.
+  - At 07:27 UTC Yahoo had the US closes, while London, Stockholm, Mumbai and Istanbul lines still
+    held the day entirely null.
+  - The 09-22 holes (KO, CZR, EMBC, PRAA) now hold their bar.
+
+  A day's bar count therefore fills over the ~5-night rotation plus one visit, and is not a
+  completeness measure. The check-in that expected ~11.6k for the previous day was still using the
+  retired day lane's model.
 - **AN OBSERVATION MUST NAME THE PROVIDER THAT ANSWERED, AND THE KEY MADE THE WRONG LABEL
   DESTRUCTIVE.** `plan_symbols` labelled every symbol probe `openfigi`, whichever rung supplied
   the value. With `identifier_probe` keyed `(security_id, scheme, provider)`, the Yahoo rung's first
@@ -4825,7 +4835,10 @@ muffin-ingest#99 and #100):
   rows changed ([note](docs/deferred/2026-10-06-every-night-rewrites-millions-of-unchanged-bars.md)).
   Since muffin-ingest#101 (rolled 2026-10-06 21:12 UTC) every `do update` carries
   `where (stored_row.…) is distinct from (excluded.…)`, and the I/O manager reports `changed`
-  beside `rows`.
+  beside `rows`. **First night, 10-07:** `changed` 98,226 of 11.1 M rows sent, exactly the night's
+  inserts plus updates (49,627 + 48,599), and no autovacuum on `price_bar` since. **The step time
+  fell only 13%** (1,558 -> 1,352 s): the guard removes the write, not the reading, so stage 2
+  still reads, normalises and sends every row.
 
 ### A database rebuilt from the repo (Stage 6, 2026-10-06)
 
