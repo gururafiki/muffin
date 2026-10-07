@@ -329,6 +329,60 @@ capped walk looks as if it had not returned a line it did. Keep the newer copy e
 returning, count the duplicates, and test both fetch orders: one of the two always puts the older
 copy last, so a single order can pass a rule that keeps the last row.
 
+## Do not extend a history from its newest date alone
+
+A watermark says how far one question got, and it means nothing for a different question.
+`raw_price_history` asks with `coalesce(provider symbol, ticker)`, so a security moves from its OTC
+ticker line to its home line when symbology adopts one. The extension read the newest stored date,
+asked the new symbol from there, and merged. On 2026-10-04, 69 partitions held years of `GELYF` in
+dollars followed by days of `0175.HK`, and every return across the switch was wrong. Store the
+question beside the answer (`asked_symbol` is a context column for exactly this). Give no watermark
+to a partition holding a row asked differently: that makes it a full load, which replaces the file.
+
+## Do not let an upsert-only stage 2 keep what a replaced raw file dropped
+
+Stage 1 replaced the file, but stage 2 only ever upserted. So the old listing's bars on days the new
+one did not trade survived in `price_bar`: 5,097 bars across 95 securities, Hong Kong lines carrying
+OTC dollar bars on HK holidays. Within the range a raw file covers, the table must mirror it:
+retract what raw lacks. Count every raw row, because a refused NaN close still says the day exists,
+and never retract for a subject with no raw rows. Outside the range raw says nothing. A provider that
+stopped returning old years (AREN's continue straight into its raw history) is no reason to delete
+them.
+
+## Do not re-ask a scattered set in one tick
+
+Dagster batches only CONTIGUOUS partition keys. Both backfill policies split a requested set into key
+ranges and give each range at least one run (`_build_run_requests_with_backfill_policy`, via
+`get_partition_key_ranges`), and dynamic keys sit in insertion order. So a batch size says nothing
+about a scattered set. The first 03:00 re-ask of 255 dead symbols (2026-10-06) went out as 254 runs
+under `multi_run(200)`, each holding the `sql` pool ~23 s, from 03:02 to 05:14.
+
+A TTL makes it worse: a bulk event becomes a synchronised wave one TTL later. The first symbology
+drain recorded 5,332 misses on one day, and a 30-day re-ask would have asked all of them at one
+tick, about 46 hours of runs. Spread a periodic re-ask by subject: due when a stable hash of the id
+(SHA-256, never Python's salted `hash()`) mod the cycle equals the day (`date.toordinal() % cycle`,
+from the tick's evaluation time in UTC, not the day of the month). Measured on production's 6,104
+open misses, that is at most 224 a day. Leave a small, urgent arm unspread: a dead symbol is
+re-asked on the next tick.
+
+## Do not let an upsert rewrite a row that did not change
+
+`on conflict … do update set c = excluded.c` writes a new row version for every conflicting row,
+changed or not. Stage 2 publishes each partition from its whole raw file, which is right, and the two
+together rewrote ~11.6 M price bars a night for ~170 k changes. `price_bar` took 202.6 M updates
+against 59.5 M inserts in 26 days, autovacuum swept every partition every night, and `written` (rows
+sent) could not show it. `writers.upsert` now adds `where (stored_row.…) is distinct from
+(excluded.…)` and reports `changed`, the statement's rowcount. The first night, 2026-10-07: `changed`
+98,226 of 11.1 M rows sent, exactly the night's `n_tup_ins` plus `n_tup_upd`, and no autovacuum on
+`price_bar` since.
+
+- **It removes the write, not the read.** The step time fell only 13% (1,558 to 1,352 s), because
+  stage 2 still reads, normalises and sends every row, and Postgres still probes the key for each.
+- `is distinct from` counts null to value as a change, and needs every compared column to support
+  equality: no `json`, `xml` or geometric column.
+- Prove it with an identical second write that changes 0 row versions, and a mutation that drops the
+  `where`.
+
 ## Dependencies
 
 - **Two kinds of openbb extension:** a *provider* supplies data (`openbb-yfinance`), a *router* supplies
@@ -340,8 +394,10 @@ copy last, so a single order can pass a rule that keeps the last row.
 ## Shipping
 
 - A roll restarts the code location and **kills in-flight runs**: `DefaultRunLauncher` starts each
-  run as a `multiprocessing` child of the code server (`dagster/_grpc/server.py`, `StartRun`), and
-  `run_monitoring` is off. Wait for long runs, and look for runs left `STARTED` afterwards.
+  run as a `multiprocessing` child of the code server (`dagster/_grpc/server.py`, `StartRun`).
+  `run_monitoring` (on since 2026-10-04) enforces `dagster/max_runtime` but cannot see a dead worker,
+  because this launcher has no health check; the roll fails what it killed (muffin-deployment#387).
+  Wait for long runs anyway: a killed run's work is lost.
 - **Verify the first scheduled night, not only the backfill.** The 09-16 recovery backfills ran at
   noon over settled sessions at ~14 calls/min, and all passed. The first night at 00:00 UTC succeeded
   on every run and published half a price day (throttled at ~42 calls/min), 1 of 61 index scopes

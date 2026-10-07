@@ -2585,9 +2585,11 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
             arriving" (reads 0 now, 2 when forced). **VERIFIED in `cron.job_run_details`:**
             `muffin-quality` succeeded every hour from 15:06 to 21:06 in 4.3-5.3 s, and
             `muffin-coverage` at 17:23 in 24.5 s (120 s bound).
-      - [ ] **2026-10-04 — read `muffin-universe`'s 00:05 run.** It took 12.4-30.0 s between 15:05
+      - [x] **2026-10-04 — read `muffin-universe`'s 00:05 run.** It took 12.4-30.0 s between 15:05
             and 21:05 against its 60 s bound, without the price sweep running. If the 00:05 run,
             which overlaps the sweep, passes 40 s, raise the bound to 120 s, as coverage has.
+            **Read 2026-10-07: the bound stays.** Over four days, 92 runs and 0 failures: p50
+            16.6 s, max 39.6 s. The runs overlapping the sweep (00:05 and 01:05 UTC) took 15.7-37.8 s.
       - [x] **2026-10-03 — the India history walker had walked nothing since 09-25 16:58**, and the
             FLAT alert on `pending_in_history` (381) was a true positive the whole time. Our proxy
             answered 502: NSE's 4,226 bytes of response headers overflow nginx's default 4 KB
