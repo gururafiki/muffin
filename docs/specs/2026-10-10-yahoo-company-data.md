@@ -484,7 +484,7 @@ library calls it directly for the session only, and its parsing stays unused.
 |---|---|---|---|
 | 1 | umbrella | this spec; the currency spec's §10 recorded; design §8 links here; `todos.md` Phase 4 | — |
 | 2 | deployment | market-verify tripwire for the known annual pairs | market-verify green |
-| 3 | deployment → ingest | Stage 0, the quote-currency spec | one clean night; the 13 sampled labels right |
+| 3 | ingest → deployment | Stage 0, the quote-currency spec. **Ingest live 2026-10-10** (muffin-ingest#104); `GBX` is muffin-deployment#426, awaiting a deploy. As built: [§11 there](2026-10-06-the-price-lane-reads-the-quote-currency.md#11-as-built--2026-10-10) | one clean night; the 13 sampled labels right |
 | 4 | ingest | validation from the node; fixtures | *Measured* complete; transport chosen |
 | 5 | deployment | schema (above) | deploy green |
 | 6 | ingest | library, `defs/companies/`, derived metrics, corporate actions, `lib/rotation.py`, checks, tests | local tiny subset |

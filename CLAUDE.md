@@ -4883,6 +4883,54 @@ else. Spec: [docs/specs/2026-09-26-finishing-the-universe-family.md](docs/specs/
   The CLI also re-asserts nothing about an applied file's contents, so regenerating the applied
   baseline changes nothing on production.
 
+### The price lane reads the quote currency (Phase 4 Stage 0, 2026-10-10)
+
+muffin-ingest#104, rolled 2026-10-10. The nightly price lane asks Yahoo's chart endpoint directly
+(`raw_price_chart`) and labels each bar with `meta.currency`, replacing a guessed label that was
+wrong for 7 of 13 sampled listings. As built:
+[the spec's §11](docs/specs/2026-10-06-the-price-lane-reads-the-quote-currency.md#11-as-built--2026-10-10).
+
+- **`range=max` IS NOT DAILY, WHATEVER `interval` SAYS.** Measured from the node: `interval=1d`
+  with `range=max` returned AAPL at `dataGranularity: 3mo` (169 points since 1984), VOD.L at `3mo`
+  and AMRM.TA at `1wk`. `period1=0` returned AAPL's 11,549 daily bars. Yahoo downsamples silently,
+  and a quarterly close stored as a daily bar is wrong on every day but one. Ask a history by dates,
+  and refuse a body whose `dataGranularity` is not the one asked for.
+- **AN ACCIDENT CAN BE LOAD-BEARING.** The openbb histories were split-adjusted although an
+  extension re-reads only a week. Each batch shared one window, so any security with an old
+  watermark dragged its whole batch's re-read back months. Asking per security removed the
+  accident, so the rule became explicit: a split dated on or after the stored full load reloads the
+  history in the same run, and a 90-day-old load reloads at the next visit. **Before replacing a
+  mechanism, ask what it was doing besides its job.**
+- **A CHANGE OF UNIT AND A BOUNCE LOOK THE SAME FOR ONE BAR.** Of 96 steps above 5x over two years,
+  35 were near 100x. Most were undone within 1 to 6 bars: six Johannesburg lines quoted in rand for
+  one session on 2025-01-10. A few stood: Tel Aviv on 2026-05-18, DIA.MC's 1,030x. The opposite step
+  within 10 bars separates them. A rule labelling everything before ANY 100x step would have stripped
+  whole histories for one bad session.
+- **THE OPENBB LANE STORED HOLIDAY FILLER**, zero volume with the previous session's close: 6 rows
+  on ALG.KW (Eid al-Adha) and 9 on AMRM.TA (Yom Kippur, the Sukkot eves). Yahoo's chart does not
+  carry them, so the existing retraction removes them on each security's first chart visit.
+- **WHEN A NEW CODE NEEDS A ROW, MAKE BOTH HALVES TOLERATE ITS ABSENCE, AND THE ORDER STOPS
+  MATTERING.** The lane labels only codes `market.currency` holds. The FX lane derives a subunit
+  only when the table holds it. Without the second rule, adding `GBX` to `fx.SUBUNITS` a deploy
+  early would have failed every FX write on the foreign key. That mattered because the roll was
+  possible and the deploy was not (Cloudflare token).
+- **A READER SWITCH WAITS FOR ITS WRITER.** The ratio view should take the bar's label. On
+  2026-10-10, though, 527 newest bars still carried the old guess, and for Tel Aviv and
+  Johannesburg the guess was the wrong one. Switching the view first would have made about a
+  hundred P/Es a hundred times worse. The switch waits one rotation
+  ([note](docs/deferred/2026-10-10-the-ratio-view-reads-the-bar-s-label.md)).
+- **A BRANCH CAN RUN READ-ONLY AGAINST PRODUCTION WHEN LOCAL DOCKER IS WEDGED.**
+  - The setup: a throwaway container from the production image, in the code location's network
+    namespace, with the branch's source on `PYTHONPATH`. Every insert and delete is intercepted,
+    and the connection is read-only as well.
+  - What it ran: the real assets over four real securities for two nights, through http-cache.
+  - What it caught before anything shipped: the holiday-filler retractions, which were then checked
+    and kept, and VOD.L losing its wrong `EUR` until `GBX` exists.
+  - The recipe is in `dagster-pipeline-local-test`.
+- **A CHECK EVALUATION IS NOT SHAPED LIKE A MATERIALIZATION in the event log**: it has `success`, not
+  `passed`, and `metadata` as a dict rather than `metadata_entries`. `run_events.py` printed nothing
+  for checks until it learned both.
+
 ## Running an OpenSandbox server locally
 
 - **`docker run -d -p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock opensandbox/server:latest`.**

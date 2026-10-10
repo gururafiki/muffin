@@ -4,7 +4,8 @@ description:
   Use when running a muffin-ingest lane locally before shipping it — standing up Postgres for the
   pipeline, applying the committed migrations, materialising one partition of a tiny subset, and
   reading what it wrote. Also the way to find out what a database rebuilt from what is committed
-  actually does.
+  actually does, to prove one SQL change on the node when Docker here is wedged, and to drive a
+  branch's assets read-only against production before shipping them.
 license: AGPL-3.0-or-later
 metadata:
   author: muffin
@@ -139,3 +140,64 @@ the node; the second only the live run answers.
 ## 5. Tear it down
 
 `scripts/local_stack.sh down`. Leave nothing running on the host.
+
+## When Docker on this machine is wedged: prove the SQL on the node
+
+Docker Desktop can hang with its backend running while its API answers nothing (`docker version`
+times out). Read docker's own exit status, never `cmd | head`'s. Restarting it is the user's call.
+The node can stand in for one SQL change. Run a throwaway Postgres, with the **production image** as
+the client, sharing its network namespace:
+
+```bash
+docker run -d --name t-pg -e POSTGRES_PASSWORD=x postgres:17-alpine
+until docker logs t-pg 2>&1 | grep -q "PostgreSQL init process complete"; do sleep 1; done
+docker exec -i t-pg psql -U postgres -v ON_ERROR_STOP=1 --single-transaction < ddl.sql
+docker run --rm -i --network container:t-pg --entrypoint python \
+  ghcr.io/gururafiki/muffin-ingest:latest - < test.py
+docker rm -f t-pg; docker image rm postgres:17-alpine
+```
+
+- **`ddl.sql`** holds the table's own `create table` and partition block, cut from its migration by
+  line range. Stub only the tables its foreign keys reference.
+- **`test.py` embeds the branch's module source** and execs it into a registered module
+  (`types.ModuleType` plus `sys.modules`; `@dataclass` under postponed annotations looks the module
+  up). The code under test is the branch's, and psycopg is production's. That is what exercises the
+  real binding, such as `%s::uuid[]` from a Python list, which no fake reaches.
+- **Mutate by rebinding the SQL constant** (`mod.SQL = mutated`), since the function reads it from its
+  module globals. Assert that each mutation changed the string, and run each variant in a transaction
+  you roll back.
+- **Measure cost separately, on production, as the lane's role.** Run from the code-location container
+  (`INGEST_DATABASE_URL`). Use `explain (analyze)` of the real statement, with inputs chosen so it
+  changes nothing, inside a transaction you roll back. **Bound what you load into that container:**
+  its memory limit is shared with the gRPC server and every run. A probe that loaded ~50M dates there
+  was OOM-killed on 2026-10-04; the kernel picked the probe, and could as well have picked a run.
+  Batch, and watch the RSS.
+
+## Drive a branch read-only against production
+
+The question a fixture cannot answer is "what would this branch do to the REAL data?". Measured
+2026-10-10, before muffin-ingest#104 shipped, this found the first night's retractions (6 ALG.KW and
+9 AMRM.TA holiday-filler bars, checked against the table and kept) and London bars losing their
+wrong `EUR` until `GBX` existed.
+
+```bash
+cp scripts/example_price_harness.py /tmp/my_harness.py   # change the symbols and the assets
+scripts/branch_on_node.sh /tmp/my_harness.py
+```
+
+- **What it is.** The harness runs in a throwaway container from the image the code location runs,
+  in its network namespace, with this checkout's `muffin_ingest` and `muffin_ingest_dagster` first on
+  `PYTHONPATH`. It reaches the real provider through http-cache, production's subjects and control
+  tables, and production's psycopg against real tables.
+- **What it writes: nothing.** `readonly.SafePostgres` intercepts every insert, update and delete,
+  and its connection is read-only besides. `readonly.Capture` takes stage 2's rows, so compare them
+  with the table yourself. An intercepted retraction counts 0, so count what it would have removed
+  from that comparison.
+- **What it cannot reach:** write grants and RLS (it never writes), the daemon and the scheduler,
+  and the memory of a full night's run width (the container gets 1 GB).
+- **It does ask the provider**, once per subject. Keep it to a handful, and never run it inside the
+  00:00 UTC lanes.
+- **Never inside the code-location container**: its memory limit is shared with the gRPC server
+  and every run. The two secrets pass through the docker CLI's environment, never its arguments,
+  and are never printed.
+

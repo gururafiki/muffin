@@ -2723,9 +2723,24 @@ never re-asked); no Yahoo statement row has a currency; `muffin-metrics` fails 3
       2026-10-10**: the raw half pages all 75,018 rows and fails only above 113; green on the
       branch. The pairs are fiscal-year changes and a merger, not repeated years —
       [note](docs/deferred/2026-10-10-a-fiscal-year-change-reads-as-a-repeated-year.md) (Phase 5).
-- [ ] 3. Stage 0, the quote-currency spec: `GBX`, the ratio view's label from the bar,
-      `raw_price_chart` with `events=div,split`, `price_bar_history` from chart documents, the
-      `nightly_prices` job swap. Deploy-blocked by the Cloudflare token for its schema half.
+- [ ] 3. Stage 0, the quote-currency spec — **ingest half live 2026-10-10**, as built in the spec's §11.
+  - [x] `raw_price_chart` plus `price_bar_history` from chart documents and the job swap:
+        **muffin-ingest#104, rolled 19:52 UTC**.
+  - [x] Live subset (ALG.KW, AMRM.TA, AAPL): `KWD→KWF`, AMRM.TA `ILA` after 05-18, holiday filler
+        retracted, the label check clean.
+  - [ ] **2026-10-11 00:00, the first scheduled night of the new lane** (all full loads): read the
+        counters (outcomes sum to `requested`, `throttled 0`) and the label check.
+  - [ ] `GBX`: muffin-deployment#426, **merged 2026-10-10**, waiting on a deploy (the Cloudflare
+        token; the last deploy to succeed was 10-04). After it deploys, run `fx_rate_history` for the
+        `GBP` partition (stage 2 only).
+  - [x] Skills: driving a branch read-only against production (`branch_on_node.sh`), three
+        pitfalls: **muffin-ingest#105**, mirrored.
+  - [ ] The ratio view reads the bar's label, after one rotation (about 2026-10-16) and `GBX`:
+        [note](docs/deferred/2026-10-10-the-ratio-view-reads-the-bar-s-label.md).
+  - [ ] Drop `raw_price_history` and its 1.6 GB on or after 2026-10-24:
+        [note](docs/deferred/2026-10-10-the-openbb-price-raw-is-the-rollback.md).
+  - Related notes: [subunits as data](docs/deferred/2026-10-10-subunits-are-data-not-a-dict.md),
+    [chart bodies in http-cache](docs/deferred/2026-10-10-http-cache-keeps-every-yahoo-chart-for-a-year.md).
 - [x] 4. Validation from the node. **Done 2026-10-10**, recorded in the spec's *Validation*:
       quoteSummary needs a cookie and crumb (2 requests a run) and answers in 30–80 ms;
       timeseries needs none and takes all three statements per frequency (2 requests a company);

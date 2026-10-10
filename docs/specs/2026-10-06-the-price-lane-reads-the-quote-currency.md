@@ -170,3 +170,74 @@ later, as its own note; 5 today's pacing. The options as presented:
    - (c) take Yahoo's label for all of them, wrong before the break.
 4. **Subunits as data** in `market.currency`: later, as its own note (recommended), or now.
 5. **Pacing:** keep today's request rate (recommended), versus re-measuring the allowance first.
+
+## 11. As built — 2026-10-10
+
+**Ingest: muffin-ingest#104, rolled 2026-10-10 19:52 UTC. Schema: muffin-deployment#426 (`GBX`),
+open until a deploy is possible (the Cloudflare token).**
+
+### What the build found that this spec did not say
+
+- **`range=max` is not daily, so a full load is `period1=0`.** Measured from the node: with
+  `interval=1d`, `range=max` returned AAPL at `dataGranularity: 3mo` (169 points since 1984), VOD.L at
+  `3mo`, NPN.JO at `1mo` and AMRM.TA at `1wk`. `period1=0&period2=<today 00:00 UTC>` returned AAPL's
+  11,549 daily bars, every one on a date the openbb history also holds, closes within 5e-15. Stage 2
+  refuses any body whose `dataGranularity` is not `1d`. §4 said "a full load keeps `range=max`";
+  that would have stored a quarterly close as a daily bar.
+- **The stored histories were split-adjusted only by accident.** Yahoo's `close` is split-adjusted,
+  and an extension re-reads a week. The openbb lane's histories were adjusted all the same (checked
+  on APH, SFBS, 7649.T, TDPOWERSYS.BO and RUSHA across their 2026 splits) because each batch shared
+  one window: one security with an old watermark dragged the whole batch's re-read back months.
+  Per-security windows end that, so two rules replace it, both costing bytes, never requests:
+  - an extension whose body carries a **split dated on or after the stored full load** reloads the
+    whole history in the same run;
+  - a full load **90 days old** is reloaded at the next visit, which also bounds the file.
+- **A change of unit and a bounce differ in whether they are undone.** Over two years of `price_bar`:
+  96 steps above 5x in 57 series, 35 near 100x and 1 near 1,000x.
+  - The persistent ones were Tel Aviv on 2026-05-18 (96.6x to 102.6x, four lines), DIA.MC 1,029.9x,
+    BCG.L on 2026-08-24, and HOME.L's longer swings between pence and pounds.
+  - The rest were undone within 1 to 6 bars: six Johannesburg lines on 2025-01-10, SBK.JO,
+    300276.SZ, XPML11.SA, and ROSE.L's week-long swings in 2025 and 2026.
+
+  So a subunit-sized step (within 1.25x of 100 or 1,000) undone by the opposite step within 10 bars
+  is a bounce, and its bars carry no label. One that stands is a change of unit, and the bars before
+  the newest one carry no label (decision 3a).
+- **Holiday filler is retracted.** The newest document is the provider's answer for its span, so a
+  stored bar on a date it lacks is removed (`prices.retract_bars_absent_from_raw`, unchanged). The
+  first visits found the openbb lane's holiday rows: zero volume, the close carried from the session
+  before. ALG.KW lost 6 (Eid al-Adha 05-27/28 and others) and AMRM.TA 9 (Yom Kippur 09-21, the
+  Sukkot eves). Yahoo's own zero-volume sessions stay.
+- **The order of the two halves is free.** A label is given only when `market.currency` holds the
+  code, and the FX lane derives a subunit only when the table holds it. Without the second rule, FX
+  would have derived `GBX` rates and failed every rate's write on the foreign key until the
+  migration deployed. Until `GBX` deploys, London bars are unlabelled, which nothing reads yet.
+- **The ratio view waits for the relabel**
+  ([note](../deferred/2026-10-10-the-ratio-view-reads-the-bar-s-label.md)). On 2026-10-10, 527 newest
+  bars disagreed with `security.currency_code`, and for Tel Aviv and Johannesburg the bar's old guess
+  was the wrong one. Switching first would have made about a hundred P/Es a hundred times worse.
+
+### Proven
+
+- **Offline:** 14 of 14 rule deletions caught by the tests, over ten captured bodies
+  (`tests/fixtures/capture.md`).
+- **On the node, read-only:** the branch's own assets over AAPL, VOD.L, ALG.KW and AMRM.TA for two
+  nights, every write intercepted. Night 1 made 4 full loads and 22,820 bars, with closes equal to
+  the stored ones; night 2 extended all four.
+- **Live:** the real `nightly_prices` job ran once each for ALG.KW, AMRM.TA and AAPL, all succeeded,
+  and the label check found no disagreement.
+  - **ALG.KW:** 1,038 bars `KWD → KWF`, 6 retracted.
+  - **AMRM.TA:** 97 bars `ILA` from 05-18 and 404 unlabelled before it, 9 retracted.
+  - **AAPL:** `changed 3`, the three new days only.
+- **Tonight's tick (2026-10-11):** dry-run on the deployed code, 100 runs, continuing the rotation.
+
+### Left
+
+- Deploy `GBX` (muffin-deployment#426). Then re-run `fx_rate_history` for `GBP` (stage 2 only),
+  so pence gets the pound's history.
+- The ratio view reads the bar's label after one rotation:
+  [note](../deferred/2026-10-10-the-ratio-view-reads-the-bar-s-label.md).
+- Drop the openbb raw after two clean rotations:
+  [note](../deferred/2026-10-10-the-openbb-price-raw-is-the-rollback.md).
+- Subunits as data (decision 4): [note](../deferred/2026-10-10-subunits-are-data-not-a-dict.md).
+- Price-chart bodies in http-cache:
+  [note](../deferred/2026-10-10-http-cache-keeps-every-yahoo-chart-for-a-year.md).
