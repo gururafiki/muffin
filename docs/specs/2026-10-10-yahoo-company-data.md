@@ -152,6 +152,9 @@ bands), `check_derived_metrics.py`, `check_anon_read_latency.py`. Grafana: `cove
 | 11 | Statement key | **The Yahoo writer never replaces a SEC row**; key and precedence revisited with fiscal periods in Phase 5 | source in the key; skip SEC filers |
 | 12 | Market cap | **In `security_fundamentals` with its own currency**; `security_market_cap_usd` re-pointed; `security.market_cap` kept until contract | a currency column on `security`; also a daily rebased cap |
 | 13 | Wikidata | **Stays on the edge until Phase 7** | move now; retire |
+| 14 | Quote currency's writer (asked while building step 5) | **The price lane**: `derive_security_price_span` records the newest bar's label, `security_currency` prefers it, and the company lane's `price.currency` is only a cross-check | a company-lane table from quoteSummary; readers probing the newest bar live |
+| 15 | Semi-annual reporters' ratios | First **a TTM from two halves**. Measured afterwards: Yahoo gives these companies no interim flows, so there is nothing to sum. Re-decided: **the ratio view falls back to the fiscal year, per security and metric, labelled `eps_basis`** | no earnings ratios for them; decide later |
+| 16 | The TTM defect found in step 5 | **Derive SEC's fiscal Q4 and require four consecutive quarters**, retracting what the rule no longer produces | consecutive only (SEC filers lose TTM ratios until Phase 5); leave for Phase 5 |
 
 Point in time: the 09-09 design decided `observed_at`/`superseded_at` in core for Phase 1, and that
 was never built. Decision 4 replaces it for this family. Every statements document stays in raw, so
@@ -486,7 +489,7 @@ library calls it directly for the session only, and its parsing stays unused.
 | 2 | deployment | market-verify tripwire for the known annual pairs | market-verify green |
 | 3 | ingest → deployment | Stage 0, the quote-currency spec. **Ingest live 2026-10-10** (muffin-ingest#104); `GBX` is muffin-deployment#426, awaiting a deploy. As built: [§11 there](2026-10-06-the-price-lane-reads-the-quote-currency.md#11-as-built--2026-10-10) | one clean night; the 13 sampled labels right |
 | 4 | ingest | validation from the node; fixtures | *Measured* complete; transport chosen |
-| 5 | deployment | schema (above) | deploy green |
+| 5 | deployment | schema (above), plus the TTM fix, the fiscal-year fallback and the observed quote currency (decisions 14–16). **muffin-deployment#428, built and verified 2026-10-10**, waiting on a deploy. As built: *As built* below | deploy green |
 | 6 | ingest | library, `defs/companies/`, derived metrics, corporate actions, `lib/rotation.py`, checks, tests | local tiny subset |
 | 7 | ingest | roll; live tiny subset; parity against the edge tables, every difference explained | parity recorded here |
 | 8 | ingest | schedule live; first rotation, with a deferred check note | counters sum; `throttled 0`; price night clean |
@@ -523,6 +526,58 @@ Notes to write as their triggers arrive:
 - the drop dates for `security.market_cap*` and the negative-cache columns;
 - removing the Tiingo token;
 - the first rotation's check.
+
+## As built
+
+### Step 5, the schema (muffin-deployment#428, 2026-10-10)
+
+Three migrations and an http-cache change, verified on the node before the PR.
+
+| Migration | What it does | What measuring changed |
+|---|---|---|
+| `20261010200000_a_market_cap_carries_its_currency` | `security_fundamentals.market_cap` + `market_cap_currency` (FK, stored only together); `security_market_cap_usd` converts by them and falls back to the legacy pair only before the lane's first visit, appending `cap_source`; `security_current` and `instrument_current` take the same cap and append `market_cap_currency` | The stock page's "Market cap" reads `security_current`/`instrument_current`, not the USD view, so leaving those would have shown the August cap beside a fresh one. `sector_constituents` waits for the contract ([note](../deferred/2026-10-10-the-native-cap-readers-left-on-the-legacy-column.md)) |
+| `20261010210000_the_worker_derives_metrics_and_a_ttm_backlog_drains` | EXECUTE for `ingest_rw` on both derive functions **and `source_priority`**; `market.ttm_derivation`, a marker `derive_ttm` writes for every security it evaluates; `pending_ttm` asks whether a quarter arrived after it, seeded so the backlog is unchanged at cutover | `source_priority` was found by reading the function bodies. Of 4,094 pending, 656 can never form a TTM, so the old backlog had a floor it could never drain below |
+| `20261010220000_sec_depth_is_asked_of_every_cik_holder` | `pending_statements`' SEC half becomes `no_sec` (no SEC row) with a partial index; `pending_quarters` counts `half` rows; `period_type` documented | Today both populations are the same (863 CIK holders with SEC rows, 33 without, 30 marked), so nothing changes until the lane writes Yahoo rows with a currency |
+
+- **The one-shot clean-up of the edge's half-years moved from step 5 to after step 9.** Deleting them
+  now would re-queue those companies in `pending_quarters`, and the edge would write them back
+  ([note](../deferred/2026-10-10-the-edge-s-half-years-filed-as-quarters.md)).
+- **The statements source guard is not schema.** It is the `writers.upsert` option in step 6.
+- **http-cache.**
+  - `X-Muffin-Cache-No-Store` maps to `proxy_no_cache`.
+  - quoteSummary, timeseries and getcrumb each get a location with caching off.
+  - `large_client_header_buffers 4 16k`.
+  - A `cache_path` log format keeps the crumb out of the log.
+- **What the node showed, in the http-cache image on the new config:**
+  - The 12,107-byte timeseries URL answers 200, where today's answers 414.
+  - Yahoo's response header is 618 bytes. The "too big header" 502 was nginx writing the 12 KB
+    cache KEY into the 4 KB buffer, so caching off is the fix, not bigger buffers.
+  - A chart request with the header is not stored, and one without it is.
+- **Verification.** CI's migration job, replayed on the node, passes every behaviour test. The
+  bundle differs in exactly the seven redefined objects. Nine mutations, each confirmed applied,
+  are all caught.
+
+**Added the same day, after three decisions (14–16 above), in the same PR:**
+
+| Migration | What it does | What measuring changed |
+|---|---|---|
+| `20261010210000_a_ttm_is_four_consecutive_quarters` (replaces the marker-only version) | The fiscal Q4 derived as the year less its three quarters (source `derived-q4`); a TTM needs four consecutive quarters (240–300 days); TTMs and Q4s no longer produced are retracted; the marker starts empty so every security is re-evaluated once; the grants | **81,515 TTM revenue rows in 3,439 securities summed Q1+Q2+Q3+next Q1**, because SEC's XBRL writes Q1–Q3 and the old window allowed 370 days. Apple 2025-12-27: 457.45bn stored, 435.62bn true. 28,220 SEC fiscal years can have Q4 derived; 806 give a negative remainder from non-negative inputs and are skipped. Yahoo's own quarterly series already carries Q4 (Apple 2025-09-30 = 102.466bn = FY − Q1–Q3) |
+| `20261010213000_ratios_fall_back_to_the_fiscal_year` | Flows take the TTM where the security has one for that metric, else the fiscal year, never both in one series; `eps_basis` appended; a margin only across one basis; stocks take quarter or half | Yahoo's quarterly series for VOD.L, NESN.SW and BHP.AX carry balance-sheet items only at the half-year dates: no revenue, earnings or cash flow |
+| `20261010230000_the_stock_page_says_which_currency` | `security_price_span.quote_currency` from the newest bar; `security_currency` prefers it; `security_current` and `instrument_current` append `quote_currency` and `market_cap_currency` | No backfill from bars written before 2026-10-10: their labels are the old lane's guesses, a hundred times out for Tel Aviv and Johannesburg |
+
+Timings on production, read-only:
+- the new `pending_ttm`: 0.6 s;
+- a `derive_ttm` page of 100: under 1 s (the edge's ceiling is 8 s);
+- a page of 1,000: about 5 s (the worker's ceiling is 120 s).
+
+The first pass writes about 7,500 `derived-q4` rows per 100 securities, roughly 0.9M in all. It replaces the wrong TTMs as it goes, starting with the edge's `muffin-metrics` the day this deploys.
+
+**Two rules for step 6 that the node found:**
+- **Send the cookie as a `Cookie` header.** A cookie jar is scoped to `.yahoo.com`, and the cache is
+  `http-cache:8080`, so an httpx client sends no cookie there and getcrumb answers 401
+  `Invalid Cookie`. The `A3` cookie comes from `fc.yahoo.com` directly (no location), and the crumb
+  and data go through the cache. query2 serves getcrumb as query1 does (measured).
+- **Never log a URL carrying the crumb.** Redact it in raw (`Document.url`) and in any log line.
 
 ## Open questions
 

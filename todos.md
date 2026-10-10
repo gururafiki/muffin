@@ -2748,9 +2748,31 @@ never re-asked); no Yahoo statement row has a currency; `muffin-metrics` fails 3
       stored "quarters" in 2,188 securities are half-years; http-cache needs bigger buffers, a
       16 KB URL limit and no caching for quoteSummary. Left for the live subset: a pace probe,
       ZAc/ILA cap currencies, the P/E fields across currencies, the crumb's lifetime.
-- [ ] 5. Schema: `security_fundamentals.market_cap(_currency)`, `security_market_cap_usd` by it,
-      grants and RLS, EXECUTE on `derive_security_metrics`/`derive_ttm` for `ingest_rw`, the
-      statements source guard, `pending_statements` re-keyed for SEC depth.
+- [ ] 5. Schema: **muffin-deployment#428, built and verified 2026-10-10**, waiting on its checks
+      and a deploy (the Cloudflare token). In the spec's *As built — step 5*:
+  - `security_fundamentals.market_cap` + `market_cap_currency`; `security_market_cap_usd`,
+    `security_current` and `instrument_current` read them (the stock page's label follows in
+    muffin-ui).
+  - EXECUTE on `derive_security_metrics`, `derive_ttm` **and `source_priority`** for `ingest_rw`.
+  - `market.ttm_derivation`, so `pending_ttm` drains past the 656 that can never form a TTM.
+  - **The TTM defect (decision 16):** SEC's fiscal Q4 derived (`derived-q4`), four CONSECUTIVE
+    quarters required, wrong rows retracted. 81,515 TTM revenue rows in 3,439 securities summed
+    Q1+Q2+Q3+next Q1 (Apple 457.45bn vs 435.62bn).
+  - Ratios fall back to the fiscal year with `eps_basis` (decision 15: Yahoo has no interim flows
+    for semi-annual reporters); stocks read halves.
+  - The quote currency from the price lane's newest bar (decision 14): `security_price_span`,
+    `security_currency`, `security_current.quote_currency`.
+  - [ ] After the deploy: watch `muffin-metrics` drain the one-time re-evaluation (12,038
+        securities, ~0.9M `derived-q4` rows), re-measure anon latency, read Apple's P/E chart.
+  - `pending_statements`' SEC half re-keyed to `no_sec`; `pending_quarters` counts halves.
+  - http-cache: no-store header, three no-cache Yahoo locations, a 16 KB request line, the crumb
+    out of the log. Validated on the node in the http-cache image.
+  - The statements source guard moved to step 6: it is an option on `writers.upsert`, not schema.
+  - Notes: [native cap readers](docs/deferred/2026-10-10-the-native-cap-readers-left-on-the-legacy-column.md),
+    [half-years filed as quarters](docs/deferred/2026-10-10-the-edge-s-half-years-filed-as-quarters.md).
+  - [ ] muffin-ui: the stock page labels its price by `quote_currency` and its cap by
+        `market_cap_currency`, and shows `eps_basis` beside the P/E, after #428 deploys.
+  - Phase 5 note found here: [the statement key, fiscal periods and 2,259 `FY` rows](docs/deferred/2026-10-10-the-statement-key-and-fiscal-periods.md).
 - [ ] 6. Library and `defs/companies/` (summary, statements, company facts, Yahoo statement
       writer, corporate actions from chart events, derived metrics, `lib/rotation.py`, checks);
       local tiny subset.

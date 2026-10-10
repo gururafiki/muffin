@@ -4931,6 +4931,58 @@ wrong for 7 of 13 sampled listings. As built:
   `passed`, and `metadata` as a dict rather than `metadata_entries`. `run_events.py` printed nothing
   for checks until it learned both.
 
+### Phase 4 step 5: the schema, and a TTM wrong for 3,439 companies (2026-10-10)
+
+muffin-deployment#428. Spec: [docs/specs/2026-10-10-yahoo-company-data.md](docs/specs/2026-10-10-yahoo-company-data.md), *As built*.
+
+- **A WINDOW RULE THAT COUNTS ROWS ADMITS ONE MISSING PERIOD.** `derive_ttm` summed any four
+  quarters within 370 days. Four consecutive quarters span ~273 days, so 370 also admitted Q1, Q2,
+  Q3 and the NEXT Q1. SEC's XBRL resource writes Q1–Q3 only, because the 10-K carries the fourth,
+  so that was most of the table:
+  - 81,515 TTM revenue rows in 3,439 securities spanned 341–370 days;
+  - 2,819 rows were consecutive;
+  - Apple's TTM revenue at 2025-12-27 was 457.45bn, against a true 435.62bn.
+
+  Every TTM ratio inherited it. It was found by measuring the window SPANS of stored TTM rows while
+  designing something else, not by any guard. The fix:
+  - derive the fiscal Q4 as the year less its three quarters (source `derived-q4`);
+  - require 240–300 days;
+  - retract what the rule no longer produces.
+
+  **Bound a window by the span of consecutive periods, not by a year.**
+- **Yahoo's own quarterly series already carries the fiscal Q4.** Apple 2025-09-30 = 102.466bn,
+  exactly FY − Q1 − Q2 − Q3. Only the SEC path lacks it.
+- **I ASKED FOR A DECISION ON A PREMISE I HAD NOT MEASURED, AND IT WAS FALSE.** I offered "a TTM
+  from two halves" with "~2,190 companies gain P/E charts". It was approved, and the captured
+  fixtures showed within the hour that Yahoo's quarterly series for semi-annual reporters (VOD.L,
+  NESN.SW, BHP.AX) hold balance-sheet items only, with no revenue, earnings or cash flow. The
+  decision had to be re-asked (a fiscal-year fallback, labelled `eps_basis`). **Measure what an
+  option depends on before putting it to the user**, especially when the fixtures are already on
+  disk.
+- **"upstream sent too big header" can be OUR cache key, not their header.** With caching on, nginx
+  writes the cache KEY into `proxy_buffer_size` beside the response header. A 12 KB URL overflows
+  the 4 KB default while Yahoo's header is 618 bytes, measured. `proxy_cache off` removes the key;
+  `proxy_no_cache` does not, because it still looks the key up. Above 8 KB of request line, nginx
+  answers 414 itself until `large_client_header_buffers` is raised.
+- **A cookie jar is scoped to its domain, so a cookie sent to the cache host goes nowhere.** An
+  httpx jar holding Yahoo's `A3` cookie sends nothing to `http-cache:8080`, and getcrumb answers
+  401 `Invalid Cookie` through the cache while working direct. Send it as a `Cookie` header.
+- **A credential in a URL is printed by the access log.** quoteSummary takes its crumb as `?crumb=`,
+  and http-cache's log format prints `$request_uri`. Those locations log `$uri` instead
+  (`cache_path`).
+- **A grant to run a function must also cover the functions it CALLS.** `ingest_rw` needed EXECUTE on
+  `source_priority`, which both derive functions call inside their upserts. Granting the two alone
+  would fail on the first conflict. Found by reading the bodies; proven by a test that runs both as
+  `ingest_rw`.
+- **A mutation fixture must make the candidate rules disagree: a fifth time, and it caught a miss.**
+  "Mix the fiscal year into the TTM series" passed clean, because the fixture's year was OLDER than
+  its TTM, so the bar never fell in the year's span. Dating the year after the TTM made the two
+  rules give 5 and 20.
+- **Replaying CI's migration job on the node replaces a wedged Docker Desktop.** Run
+  `postgres:17-alpine` with the repo mounted, apply legacy twice then the new migrations, run
+  `extract_repeatable.py` (`apk add python3`), diff against `schemas/`, run the tests, and run the
+  mutations in the same container. A busybox `diff` prints no `diff ` header lines, so grep `+++`.
+
 ## Running an OpenSandbox server locally
 
 - **`docker run -d -p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock opensandbox/server:latest`.**
