@@ -2718,15 +2718,21 @@ never re-asked); no Yahoo statement row has a currency; `muffin-metrics` fails 3
 8 s ceiling.
 
 - [x] 1. Spec, the currency spec's §10, design §8, this section. **Done 2026-10-10.**
-- [ ] 2. market-verify tripwire for the known annual pairs (113 pairs / 56 securities), so the
-      gate is green again before parity runs through it.
+- [x] 2. market-verify tripwire for the known annual pairs (113 pairs / 56 securities), so the
+      gate is green again before parity runs through it. **muffin-deployment#424 merged
+      2026-10-10**: the raw half pages all 75,018 rows and fails only above 113; green on the
+      branch. The pairs are fiscal-year changes and a merger, not repeated years —
+      [note](docs/deferred/2026-10-10-a-fiscal-year-change-reads-as-a-repeated-year.md) (Phase 5).
 - [ ] 3. Stage 0, the quote-currency spec: `GBX`, the ratio view's label from the bar,
       `raw_price_chart` with `events=div,split`, `price_bar_history` from chart documents, the
       `nightly_prices` job swap. Deploy-blocked by the Cloudflare token for its schema half.
-- [ ] 4. Validation from the node: quoteSummary and timeseries over AAPL, SAP.DE, 7203.T,
-      005930.KS, BHP.AX, SHEL.L, VOD.L, NESN.SW, 0992.HK, CSU.TO, an ETF, a dead and an OTC symbol;
-      the transport ladder; units; `currencyCode`; key-list limit; a bounded pace probe; the
-      `writeCurrencyFor` hypothesis; fixtures.
+- [x] 4. Validation from the node. **Done 2026-10-10**, recorded in the spec's *Validation*:
+      quoteSummary needs a cookie and crumb (2 requests a run) and answers in 30–80 ms;
+      timeseries needs none and takes all three statements per frequency (2 requests a company);
+      the `writeCurrencyFor` hypothesis is confirmed; Yahoo's P/B is not FX-converted; 3,090
+      stored "quarters" in 2,188 securities are half-years; http-cache needs bigger buffers, a
+      16 KB URL limit and no caching for quoteSummary. Left for the live subset: a pace probe,
+      ZAc/ILA cap currencies, the P/E fields across currencies, the crumb's lifetime.
 - [ ] 5. Schema: `security_fundamentals.market_cap(_currency)`, `security_market_cap_usd` by it,
       grants and RLS, EXECUTE on `derive_security_metrics`/`derive_ttm` for `ingest_rw`, the
       statements source guard, `pending_statements` re-keyed for SEC depth.

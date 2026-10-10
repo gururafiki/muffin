@@ -1,8 +1,8 @@
 # Yahoo company data on Dagster (Phase 4) — design
 
 Status: APPROVED 2026-10-10 (scope, fetch, cadence, history and nine further decisions below).
-Validation from the node and the low-level details marked *to measure* are still open; they close in
-step 4 of the rollout, before any lane code is written. Extends
+Validated from the node the same day (transport, currencies, units, statement shape); the items under
+*Still to measure* close during the live tiny subset. Extends
 [the ingestion rework design](../superpowers/specs/2026-09-09-ingestion-rework-design.md) §8 (Phase 4)
 and takes [the quote-currency spec](2026-10-06-the-price-lane-reads-the-quote-currency.md) as its
 Stage 0.
@@ -93,8 +93,8 @@ sweep was clean every night: 2,500 keys, ~310 calls, `throttled 0`.
 2. **`writeCurrencyFor` writes the metrics response's `currency` into `listing.currency_code` and
    `security.currency_code`.** In openbb_yfinance 1.6.3, `KeyMetrics.currency` is an alias of Yahoo's
    `financialCurrency`, the *reporting* currency. That would explain the quote currency spec's wrong
-   labels: VOD.L EUR, 0992.HK USD, CSU.TO USD. **Unconfirmed**: `openbb-api` runs an unversioned
-   `openbb[all]`, so the alias must be measured there.
+   labels: VOD.L EUR, 0992.HK USD, CSU.TO USD. **Confirmed the same day** against `openbb-api`
+   itself (see *Validation*).
 3. **`security_market_cap_usd`** multiplies an August cap by the FX rate of `security.currency_code`.
    It feeds cap bands, style, peers and the cap-weighted aggregates.
 4. **Dividends are already held.** `raw_price_history` rows carry `dividend` and `split_ratio`
@@ -201,6 +201,15 @@ file comes from CI's `repeatable-bundle` artifact.
 
   Each gets a drop date and the query proving nothing reads it.
 - No `market.fiscal_period` (decision 6). The summary's fiscal-year-end fields stay in raw for it.
+- **Half-years.** `security_statement.period_type` gains the value `half`. The column is free text,
+  and nothing reads `half` until the app asks for it.
+  - A `market.one_shot` repair deletes the 3,090 yfinance `quarter` rows that are half-years, and
+    the `quarter` metrics derived from them. The lane re-writes them as `half` on its first visit.
+  - The rule is the gap to the previous period end: 170–195 days is a half.
+- **http-cache (`stack/proxy/nginx.conf`):**
+  - `proxy_buffer_size 16k` and `proxy_buffers 8 16k` on the `yahoo` locations;
+  - `large_client_header_buffers 4 16k` for the 12 KB statement URLs;
+  - a quoteSummary location with `proxy_no_cache 1`.
 
 ## Architecture (Dagster)
 
@@ -259,10 +268,10 @@ state, so they are fixed in the PR that introduces them and never renamed as a s
 | Request | Per company | Companies a day | Yahoo requests a day |
 |---|---|---|---|
 | quoteSummary | 1 | ~1,810 | ~1,810 |
-| fundamentals-timeseries: annual and quarterly income, balance, cash | ≤ 6, fewer if longer key lists validate | ≤ ~280 (≈139 reporting a day + the 90-day floor) | ≤ ~1,700 |
+| fundamentals-timeseries: all three statements, one request per frequency (measured: 375 types answer, 750 do not) | 2 | ≤ ~280 (≈139 reporting a day + the 90-day floor) | ≤ ~560 |
 | cookie and crumb | per run | ~20 runs | ~40 |
 
-That is about 3,500 a day at most. The edge resources it retires spend an *estimated* ~10,000 Yahoo
+That is about 2,400 a day at most. The edge resources it retires spend an *estimated* ~10,000 Yahoo
 URLs a day (news excluded). The estimate comes from openbb's per-call URL count and was not measured
 on the wire. The ~2,500-request price night is unchanged.
 
@@ -280,19 +289,15 @@ non-US symbol.
 - Stop the run on a throttle and count the rest `unasked`.
 - Never run inside 00:00–02:00 UTC, the price night.
 
-### Transport (validation decides)
+### Transport (decided by the measurements below)
 
-Candidates, in order; the first that answers quoteSummary and timeseries for US and non-US symbols
-without refusals wins:
-
-1. plain requests through http-cache's `yahoo` location, with caching off or short for these paths
-   so its 29 GB does not grow;
-2. a cookie-and-crumb session through the same location;
-3. yfinance's `YfData` session (curl_cffi browser impersonation, consent fallback), going direct.
-
-The crumb is redacted from the stored `url`, which closes
-[the raw-credentials note](../deferred/2026-09-16-raw-request-credentials.md). The worker's
-Prometheus counter counts Yahoo URLs per endpoint, not openbb calls.
+- **Our own httpx client, with a cookie-and-crumb session for quoteSummary.** The session is
+  `fc.yahoo.com` for the `A3` cookie, then `getcrumb`, once per run. Timeseries needs no crumb.
+- **Through http-cache's `yahoo` location**, once the three nginx changes below ship with the
+  schema. Direct is the measured fallback. yfinance's `YfData` session is not needed.
+- **The crumb is redacted from the stored `url`.** That closes
+  [the raw-credentials note](../deferred/2026-09-16-raw-request-credentials.md).
+- **The worker's Prometheus counter counts Yahoo URLs per endpoint**, not openbb calls.
 
 ### Raw
 
@@ -329,18 +334,120 @@ Each rule gets a fixture where the right rule and the wrong one disagree.
 
 ## Validation
 
-To measure from the node before code (rollout step 4), recorded here with dates:
+### Measured 2026-10-10, from the node
 
-- **Subjects:** quoteSummary and timeseries for AAPL, SAP.DE, 7203.T, 005930.KS, BHP.AX, SHEL.L,
-  VOD.L, NESN.SW, 0992.HK, CSU.TO, an ETF, a dead symbol and a thin OTC line (ASMLF).
-- **The transport ladder above.** Crumb needed or not, per endpoint.
-- **Bodies:** sizes; the units of every column the app reads; `marketCap`'s currency for a pence
-  listing; `currencyCode` on timeseries points; how many periods come back; the longest key list
-  that still answers.
-- **Pace:** a bounded probe of ~200 requests at the chosen pace, away from the price night.
-- **The `writeCurrencyFor` hypothesis:** `openbb-api`'s metrics `currency` for VOD.L, 0992.HK and
-  CSU.TO.
-- **Fixtures** under `libs/muffin-ingest-lib/tests/fixtures/yahoo/`, with a re-capture note.
+Throwaway containers of the deployed muffin-ingest image on `muffin-net`; ~90 requests paced
+1.5 s, midday UTC; no refusal.
+
+**Transport.**
+
+| Endpoint | Without crumb | With cookie + crumb |
+|---|---|---|
+| quoteSummary | **401** `Invalid Crumb`, through http-cache and direct | **200** through http-cache (the `Cookie` header passes) and direct with plain httpx; no TLS fingerprinting met |
+| fundamentals-timeseries | **200**, direct and through http-cache | not needed |
+| chart | 200 (the FX lane already uses it) | — |
+
+- **The session:** `GET https://fc.yahoo.com` answers 404 and still sets the `A3` cookie;
+  `GET https://query1.finance.yahoo.com/v1/test/getcrumb` with it returns an 11-character crumb.
+  That is two requests per session.
+- **yfinance's `YfData` session also works, but is not needed.**
+- **http-cache needs three changes before it can carry this family:**
+  - **`upstream sent too big header`:** a 502 on a 103-type timeseries request, every time,
+    while the same request direct returns 200. This is the NSE defect of 2026-10-03, now on the
+    `yahoo` locations, so they need `proxy_buffer_size 16k` and `proxy_buffers 8 16k`.
+  - **`414 Request-URI Too Large`** from nginx itself above 8 KB, under the default
+    `large_client_header_buffers`. The statement requests below are 12 KB, so the server needs
+    `large_client_header_buffers 4 16k`.
+  - **`proxy_no_cache`** on quoteSummary. The crumb makes every URL a new key, and the generic
+    `/yahoo/` location keeps bodies until LRU eviction against the 40 GB cap.
+- **The pick: our own httpx client, through http-cache once those three ship.** Direct is the
+  fallback, and it was measured working.
+
+**quoteSummary, 22 modules in one request.**
+
+| Measure | Result |
+|---|---|
+| Body size | 20–68 KB for most equities, **294 KB for AAPL** (971 analyst actions, SEC filings); 4 KB for SPY |
+| Latency | 30–80 ms |
+| Missing modules | never fail the request. `esgScores` is absent for every symbol, so it is dropped from the list. Non-US symbols lack `upgradeDowngradeHistory` and `secFilings`; `fundProfile` is ETF-only |
+| SPY (ETF) | answers `price`, `summaryDetail` and `defaultKeyStatistics` only; the lane asks equities only |
+| BDMS-F.BK (dead) | **404** `Quote not found for symbol: BDMS-F.BK`, an absence that names the symbol |
+| ASMLF (OTC line) | answers: financial currency EUR, quote USD |
+
+**Currencies.**
+
+| Listing | `price.currency` | `financialCurrency` |
+|---|---|---|
+| AAPL | USD | USD |
+| SAP.DE | EUR | EUR |
+| 7203.T | JPY | JPY |
+| 005930.KS | KRW | KRW |
+| BHP.AX | AUD | **USD** |
+| SHEL.L | GBp | **USD** |
+| VOD.L | GBp | **EUR** |
+| NESN.SW | CHF | CHF |
+| 0992.HK | HKD | **USD** |
+| CSU.TO | CAD | **USD** |
+
+- **`marketCap` for a pence listing is in pounds**: VOD.L 27,418,447,872 against a 118.35p price.
+  So the cap's currency is the quote currency's parent. *ZAc and ILA still to measure.*
+- **The `writeCurrencyFor` hypothesis is CONFIRMED.** `openbb-api`'s
+  `equity/fundamental/metrics.currency` is `financialCurrency`: VOD.L EUR, 0992.HK USD, CSU.TO USD.
+  That is the value the edge writes into `listing.currency_code` and `security.currency_code`, and
+  it explains the currency spec's wrong labels.
+
+**Units against today's rows** (same securities, `security_fundamentals`):
+
+| Field | Yahoo sends | Stored today | Rule |
+|---|---|---|---|
+| margins, ROE | fraction | fraction (identical) | as sent |
+| `debtToEquity` | percent-like (SAP 21.966) | 21.966 | as sent |
+| `dividendYield` | fraction (SAP 0.0133) | percent (1.39) | ×100 |
+| `fiveYearAvgDividendYield` | percent | — | stays in raw only |
+| `priceToBook` | price ÷ `bookValue` with **no FX conversion** | August rows plausible (SHEL.L 1.46, VOD.L 0.62) | see below |
+
+The `priceToBook` errors whenever the quote currency differs from the reporting currency:
+
+| Listing | Price ÷ book | Yahoo's P/B | Roughly right |
+|---|---|---|---|
+| SHEL.L | 3,793.5 GBp ÷ 24.56 USD | 154.4 | ~2 |
+| VOD.L | GBp ÷ EUR | 62.9 | ~0.7 |
+| BHP.AX | AUD ÷ USD | 4.23 | ~2.8 |
+| 0992.HK | HKD ÷ USD | 7.79 | ~1.0 |
+| CSU.TO | CAD ÷ USD | 11.0 | ~7.9 |
+
+**Stage-2 rule:** when the two currencies differ, a price-based ratio is computed by stage 2 with
+`fx_rate` (price converted, ÷ `bookValue`), never taken as sent. `security_style` reads this column.
+*Still to check: whether `trailingPE` and `forwardPE` have the same defect, before relying on them.*
+
+**fundamentals-timeseries.**
+
+| Measure | Result |
+|---|---|
+| One request | all three statements of one frequency: 375 types, 12 KB URL, 126–167 KB answer, 0.2–0.35 s |
+| 750 types (annual + quarterly) | **400** from Yahoo, so a statements visit is **2 requests** |
+| `currencyCode` | on every point, the reporting currency (VOD.L EUR, 0992.HK USD, BHP.AX USD). This closes the no-currency defect at the source |
+| Annual | 4–5 fiscal years, `periodType` `12M` |
+| Quarterly | up to 6 periods, `periodType` `3M` |
+
+- **Semi-annual reporters come back as half-years labelled `3M`:** VOD.L 2025-03-31, 2025-09-30,
+  2026-03-31; NESN.SW and BHP.AX likewise.
+- **The edge stored them as quarters.** Production holds **3,090 yfinance "quarter" periods in
+  2,188 securities that sit 170–195 days after the previous one.** That is a live mislabel: a half-year
+  served in the quarterly tables.
+- **Stage-2 rule:** a period's type comes from the gap to the previous period end, not the label;
+  half-years are written as `period_type = 'half'` (the column is free text).
+- **Gaps happen:** 0992.HK skips its fiscal Q4, which is reported in the annual.
+
+**Fixtures** were captured from these runs (13 quoteSummary bodies, 16 timeseries bodies). They go
+to `libs/muffin-ingest-lib/tests/fixtures/yahoo/` with the implementation, with a re-capture note.
+
+### Still to measure
+
+- A bounded pace probe of ~200 requests at the chosen pace, during the live tiny subset.
+- ZAc and ILA cap currencies (NPN.JO, AZRG.TA).
+- `trailingPE`/`forwardPE` across currencies.
+- The crumb's lifetime across a ~20-minute run.
 
 ## Dependencies and isolation
 
@@ -419,9 +526,14 @@ Notes to write as their triggers arrive:
 
 ## Open questions
 
-Closed by validation (step 4):
+Closed by the 2026-10-10 measurements:
 - the transport;
-- the units of `dividend_yield` and `debt_to_equity` as Yahoo sends them;
+- the units of `dividend_yield` and `debt_to_equity`;
 - `marketCap`'s currency for pence listings;
-- the timeseries key-list limit;
-- run width W.
+- the timeseries key-list limit (2 requests per company).
+
+Still open (see *Still to measure*):
+- run width W;
+- ZAc and ILA cap currencies;
+- `trailingPE`/`forwardPE` across currencies;
+- the crumb's lifetime.
