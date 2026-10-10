@@ -2709,10 +2709,45 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
             [note](docs/deferred/2026-10-06-an-index-scope-is-only-ever-seeded.md).
       - [ ] Stage 7 — Grafana universe panels, docs and skills.
 
-### Phases 4-8 — the remaining family cutovers — not started
+### Phase 4 — Yahoo company data — PLANNED 2026-10-10
 
-yfinance backlogs, SEC, regulators, macro/events, derived/serving, then retirement of the edge
-function. **Each gets its own planning session**, per the phased-work convention.
+Spec: [docs/specs/2026-10-10-yahoo-company-data.md](docs/specs/2026-10-10-yahoo-company-data.md).
+Thirteen decisions taken 2026-10-10, all as recommended. The headline findings: most of the family
+is fetched once and never refreshed (fundamentals and market cap from 08-13, quarterly statements
+never re-asked); no Yahoo statement row has a currency; `muffin-metrics` fails 30% of runs on the
+8 s ceiling.
+
+- [x] 1. Spec, the currency spec's §10, design §8, this section. **Done 2026-10-10.**
+- [ ] 2. market-verify tripwire for the known annual pairs (113 pairs / 56 securities), so the
+      gate is green again before parity runs through it.
+- [ ] 3. Stage 0, the quote-currency spec: `GBX`, the ratio view's label from the bar,
+      `raw_price_chart` with `events=div,split`, `price_bar_history` from chart documents, the
+      `nightly_prices` job swap. Deploy-blocked by the Cloudflare token for its schema half.
+- [ ] 4. Validation from the node: quoteSummary and timeseries over AAPL, SAP.DE, 7203.T,
+      005930.KS, BHP.AX, SHEL.L, VOD.L, NESN.SW, 0992.HK, CSU.TO, an ETF, a dead and an OTC symbol;
+      the transport ladder; units; `currencyCode`; key-list limit; a bounded pace probe; the
+      `writeCurrencyFor` hypothesis; fixtures.
+- [ ] 5. Schema: `security_fundamentals.market_cap(_currency)`, `security_market_cap_usd` by it,
+      grants and RLS, EXECUTE on `derive_security_metrics`/`derive_ttm` for `ingest_rw`, the
+      statements source guard, `pending_statements` re-keyed for SEC depth.
+- [ ] 6. Library and `defs/companies/` (summary, statements, company facts, Yahoo statement
+      writer, corporate actions from chart events, derived metrics, `lib/rotation.py`, checks);
+      local tiny subset.
+- [ ] 7. Roll; live tiny subset; parity against the edge tables.
+- [ ] 8. The `yahoo_companies` schedule live; first rotation; a dated check note.
+- [ ] 9. Retire: nine resources, instrument-profile if every curated equity resolves,
+      `security-metrics` and `muffin-metrics`, statements made SEC-only, the `security-refresh`
+      shim (muffin-ui "queued"), Tiingo after its parity.
+- [ ] 10. Delete the handlers after 3 clean days; contract with drop dates.
+- [ ] 11. Promotion waves (Phase 3 Stage 4) with the Yahoo-family cap; venues opted in with the
+      user.
+- [ ] 12. Grafana, docs, skills.
+
+### Phases 5-8 — the remaining family cutovers — not started
+
+SEC (with the fiscal-period dimension and the statement key), regulators, macro and events (with
+news), derived and serving (with Wikidata), then retirement of the edge function. **Each gets its
+own planning session**, per the phased-work convention.
 
 ## Other P2
 - [ ] Add new tab to donate to Ukraine with links to different funds

@@ -2,7 +2,8 @@
 
 Decided 2026-10-06: own the Yahoo fetch
 ([note](../deferred/2026-10-05-a-price-bar-s-currency-is-not-its-quote-currency.md), option 1). This
-spec plans it. It changes no code until the decisions in §10 are taken.
+spec plans it. **The decisions in §10 were taken on 2026-10-10, all as recommended, and this spec
+became Stage 0 of [Phase 4](2026-10-10-yahoo-company-data.md).**
 
 ## 1. What exists, measured 2026-10-06
 
@@ -152,6 +153,10 @@ document's `meta.currency`. It warns, and names the securities.
   breaks today.
 
 ## 10. Decisions
+
+**Taken 2026-10-10 (the user), each as recommended:** 1 a new `raw_price_chart`; 2 a security's
+first visit is a full load; 3 (a) bars before a unit change stay unlabelled; 4 subunits as data
+later, as its own note; 5 today's pacing. The options as presented:
 
 1. **Raw layout:** a new `raw_price_chart` storing each fetch's body (recommended), versus keeping
    openbb's rows and adding a second, currency-only request per security. The second option
