@@ -12,9 +12,11 @@ among them). The app shows them in the quarterly tables as if they were three mo
 `derive_ttm` is not fooled: four of them span about 18 months, past its 370-day window, so no TTM is
 formed from them. The damage is the quarterly table, and the metrics derived from those rows.
 
-The company lane (Phase 4 step 6) files a half as `period_type = 'half'`, told from a quarter by the
-gap to the previous period end, and retracts the edge's `quarter` row for the same period. That
-leaves two problems a one-shot has to finish:
+The company lane (Phase 4 step 6, muffin-ingest#107) files a half as `period_type = 'half'`, told
+from a quarter by the CADENCE of the company's quarterly series. That is half-yearly only if every
+gap between period ends is 170–195 days. It does NOT retract the edge's `quarter` row, which sits
+beside the `half` row for the same period until this repair runs. That leaves two problems a one-shot
+has to finish:
 - the edge's `security-quarters` would re-queue a company whose quarter rows disappear and write them
   back, which is why `pending_quarters` now also counts `half` rows (migration
   `20261010220000_sec_depth_is_asked_of_every_cik_holder`), and why the repair waits for the
@@ -24,9 +26,14 @@ leaves two problems a one-shot has to finish:
 ## What to do
 
 After `security-quarters` is retired (410, no `refresh_run` rows):
-1. A `market.one_shot` migration that deletes yfinance `quarter` statement rows whose gap to the
-   previous period end is 170–195 days, plus the `security_metric` rows derived from them
-   (`period_type = 'quarter'`, the same security and `as_of`, sources `yfinance` and `derived`).
+1. A `market.one_shot` migration that deletes the yfinance `quarter` statement rows of every
+   security the lane has filed a `half` row for (its cadence is half-yearly), plus the
+   `security_metric` rows derived from them (`period_type = 'quarter'`, the same security and
+   `as_of`, sources `yfinance` and `derived`).
+   **Not by the gap of each row.** Corrected 2026-10-11: 2,210 securities have a 170–195-day gap
+   in their Yahoo quarter series, and 1,451 of them also have 90-day gaps. They are quarterly
+   reporters missing a quarter (600011.SS 2025-12-31, 184 days after 2025-06-30, a three-month
+   income statement), and a per-row rule would delete their real quarters.
    TTMs need no repair: since muffin-deployment#428 a TTM needs four quarters within 240–300 days,
    which half-year spacing never meets, and a re-evaluation retracts any that remain.
 2. Count before and after, and name five securities to check on the stock page.

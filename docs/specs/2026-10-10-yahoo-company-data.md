@@ -211,7 +211,11 @@ file comes from CI's `repeatable-bundle` artifact.
   and nothing reads `half` until the app asks for it.
   - A `market.one_shot` repair deletes the 3,090 yfinance `quarter` rows that are half-years, and
     the `quarter` metrics derived from them. The lane re-writes them as `half` on its first visit.
-  - The rule is the gap to the previous period end: 170–195 days is a half.
+  - The rule is the CADENCE of a company's quarterly series: it is half-yearly only if EVERY gap
+    between period ends is 170–195 days. *Corrected 2026-10-11:* a single 170–195-day gap is not
+    enough. 2,210 securities have one, and 1,451 of them also have 90-day gaps: they are quarterly
+    reporters missing a quarter (600011.SS 2025-12-31, 184 days after 2025-06-30, carries a
+    three-month income statement).
 - **http-cache (`stack/proxy/nginx.conf`):**
   - `proxy_buffer_size 16k` and `proxy_buffers 8 16k` on the `yahoo` locations;
   - `large_client_header_buffers 4 16k` for the 12 KB statement URLs;
@@ -244,8 +248,10 @@ state, so they are fixed in the PR that introduces them and never renamed as a s
     (`yfinance`, `sql`).
 - **Due logic, in stage 1, from what raw already holds:**
   - a summary is due after 7 days;
-  - statements are due when the stored summary's earnings date has passed since the last statements
-    document, after 90 days, or if they were never fetched.
+  - statements are due when never fetched, after 90 days, when forced, or when the summary fetched in
+    the same visit names a newer period than any stored document holds. *Changed 2026-10-11, see
+    Validation:* `defaultKeyStatistics.mostRecentQuarter`/`lastFiscalYearEnd` replace the earnings
+    date, and a named period gets at most three asks.
 
   A visited partition with nothing due writes nothing new, and the merge manager keeps the stored file.
 - **On demand:** the edge's `security-refresh` becomes the shim.
@@ -286,7 +292,8 @@ cost bytes and no requests. That means assetProfile, price, quoteType, summaryDe
 defaultKeyStatistics, financialData, calendarEvents, majorHoldersBreakdown, earnings,
 earningsHistory, earningsTrend, recommendationTrend, upgradeDowngradeHistory, insiderHolders,
 insiderTransactions, netSharePurchaseActivity, institutionOwnership, fundOwnership,
-majorDirectHolders, secFilings and esgScores. Not the gutted `*StatementHistory*` modules, the
+majorDirectHolders and secFilings. Not esgScores (absent for every symbol measured), and not
+summaryProfile (assetProfile without the officers). Not the gutted `*StatementHistory*` modules, the
 trends or `futuresChain`. *To measure:* body size, and whether any module fails the request for a
 non-US symbol.
 
@@ -324,9 +331,17 @@ Each rule gets a fixture where the right rule and the wrong one disagree.
   route on captured bodies.
 - **Classification.**
   - Sectors go through the edge's sector map.
-  - Industry nodes `<sector>--<slug(label)>` are created on discovery, under the sector.
+  - Industry nodes `<sector>--<slug(label)>` are created on discovery, under **Yahoo's own sector**.
+    The edge hung them under whatever sector the security was already served under, minting
+    `industrials--software-application` for Uber. Measured 2026-10-11: the two sectors differ for
+    23 of 11,939 securities with a Yahoo sector, and those now show no industry rather than one
+    from another sector.
   - HQ country resolves through `countries` and `country_alias`, and unresolved names are counted
     and named.
+- **Statements merge per line.** Yahoo's window rolls per LINE, not per period: Samsung's
+  2025-03-31 keeps ten of the ~180 lines the edge stored in August. So stage 2 takes the newest
+  value any document carries for each (period, line), and the writer merges into the stored jsonb
+  (`merge_json`): a narrower answer never erases a stored line, and a restated one wins.
 - **Units and dates.**
   - Units as today's rows hold them, read from validation and never assumed.
   - Officer pay of 0 becomes null.
@@ -410,21 +425,39 @@ Throwaway containers of the deployed muffin-ingest image on `muffin-net`; ~90 re
 | `debtToEquity` | percent-like (SAP 21.966) | 21.966 | as sent |
 | `dividendYield` | fraction (SAP 0.0133) | percent (1.39) | ×100 |
 | `fiveYearAvgDividendYield` | percent | — | stays in raw only |
-| `priceToBook` | price ÷ `bookValue` with **no FX conversion** | August rows plausible (SHEL.L 1.46, VOD.L 0.62) | see below |
+| `priceToBook` | price as quoted ÷ `bookValue` in the quote's major unit | August rows plausible (SHEL.L 1.46, VOD.L 0.62) | ÷ the subunit factor |
 
-The `priceToBook` errors whenever the quote currency differs from the reporting currency:
+**CORRECTED 2026-10-11. The first version of this table said Yahoo's P/B was wrong whenever the
+quote and reporting currencies differ, and called BHP.AX, 0992.HK and CSU.TO wrong. They are
+right.** Comparing `bookValue` with equity per share from the balance sheet shows Yahoo converts the
+book to the QUOTE currency's major unit: BHP.AX 14.40 against 9.73 USD (AUD), 0992.HK 4.21 against
+0.55 USD (HKD), VOD.L 1.88 against 2.19 EUR (GBP). So the only error is a price in a subunit:
 
-| Listing | Price ÷ book | Yahoo's P/B | Roughly right |
+| Listing | Quote / reports | Yahoo's P/B | Right |
 |---|---|---|---|
-| SHEL.L | 3,793.5 GBp ÷ 24.56 USD | 154.4 | ~2 |
-| VOD.L | GBp ÷ EUR | 62.9 | ~0.7 |
-| BHP.AX | AUD ÷ USD | 4.23 | ~2.8 |
-| 0992.HK | HKD ÷ USD | 7.79 | ~1.0 |
-| CSU.TO | CAD ÷ USD | 11.0 | ~7.9 |
+| BHP.AX | AUD / USD | 4.23 | 4.23 |
+| 0992.HK | HKD / USD | 7.79 | 7.79 |
+| CSU.TO | CAD / USD | 11.0 | 11.0 |
+| VOD.L | GBp / EUR | 62.9 | 0.63 |
+| BARC.L | GBp / GBP | 88.2 | 0.88 |
+| NPN.JO | ZAc / USD | 144.4 | 1.44 |
+| AZRG.TA | ILA / ILS | 167.2 | 1.67 |
+| NBK.KW | KWF / KWD | 1,664 | 1.66 |
 
-**Stage-2 rule:** when the two currencies differ, a price-based ratio is computed by stage 2 with
-`fx_rate` (price converted, ÷ `bookValue`), never taken as sent. `security_style` reads this column.
-*Still to check: whether `trailingPE` and `forwardPE` have the same defect, before relying on them.*
+**Stage-2 rule:** `priceToBook` divided by the quote's subunit factor (`fx.SUBUNITS`), and as sent
+otherwise. No FX rate is needed.
+
+**P/E, measured the same way:** `summaryDetail.trailingPE` and `forwardPE` divide the major-unit price
+by EPS that Yahoo has converted to the same unit. SHEL.L's trailing EPS of 3.38 is its 4.53 USD
+in pounds; NPN.JO's 106.34 is 6.11 USD in rand. They are right everywhere measured.
+`defaultKeyStatistics.forwardPE` is not: it divides the price as quoted by EPS in the reporting
+currency (VOD.L 1,001, BHP.AX 23.5, where 11.8 and 16.3 are right). It is used only as a fallback,
+and only where the two currencies are spelled identically. BARC.L shows why identity matters:
+`GBp` and `GBP` share a major unit, and a rule comparing major units would take 665.7.
+
+**Market cap, subunits measured 2026-10-11:** cap / (price × shares) is 0.01 for ZAc (NPN.JO,
+SBK.JO) and ILA (AZRG.TA), and **0.001** for KWF (NBK.KW). So a cap is in the major unit of every
+quote.
 
 **fundamentals-timeseries.**
 
@@ -448,11 +481,17 @@ The `priceToBook` errors whenever the quote currency differs from the reporting 
 **Fixtures** were captured from these runs (13 quoteSummary bodies, 16 timeseries bodies). They go
 to `libs/muffin-ingest-lib/tests/fixtures/yahoo/` with the implementation, with a re-capture note.
 
+**When statements are due, measured 2026-10-11.** `defaultKeyStatistics.mostRecentQuarter` equals
+the newest period in the stored timeseries for all 17 listings, half-yearly reporters included
+(VOD.L and NPN.JO state 2026-03-31, their half-year). AAPL's 2026-06-27 is filed by the timeseries
+under 2026-06-30, so the comparison allows 20 days. The earnings date cannot serve:
+`calendarEvents.earnings.earningsDate` names the NEXT report, so once a company has reported, the
+date that would have said "fetch" is gone from the newest summary. A period the summary names and
+the timeseries never serves gets three asks, then waits for the 90-day refresh.
+
 ### Still to measure
 
 - A bounded pace probe of ~200 requests at the chosen pace, during the live tiny subset.
-- ZAc and ILA cap currencies (NPN.JO, AZRG.TA).
-- `trailingPE`/`forwardPE` across currencies.
 - The crumb's lifetime across a ~20-minute run.
 
 ## Dependencies and isolation
@@ -583,6 +622,33 @@ The first pass writes about 7,500 `derived-q4` rows per 100 securities, roughly 
   and data go through the cache. query2 serves getcrumb as query1 does (measured).
 - **Never log a URL carrying the crumb.** Redact it in raw (`Document.url`) and in any log line.
 
+### Step 6, the library (muffin-ingest#107, 2026-10-11)
+
+Providers `yahoo_session`, `yahoo_summary` and `yahoo_timeseries`; facets `company`, `statements` and
+`actions`; three writer options. Nothing calls them until the defs PR.
+
+| Decision | As built |
+|---|---|
+| quoteSummary request | 20 modules, `formatted=false` as yfinance asks: numbers arrive bare and the body is smaller. Officers' pay stays wrapped either way, so the reader takes both shapes |
+| P/B, P/E, cap | as corrected under *Validation*: P/B ÷ the subunit factor, `summaryDetail` P/Es as sent, the `defaultKeyStatistics.forwardPE` fallback only where the two currencies are spelled identically, the cap in the quote's major unit and withheld with its currency when that code is unknown |
+| Estimates | labelled with the quote's own code (`GBX` for VOD.L, whose targets are pence). The edge upper-cased `GBp` and filed London targets as pounds |
+| Officers | replaced per company only when the document has an `assetProfile`; Yahoo's doubled spaces collapsed; pay of 0 and years before 1900 are null |
+| Statements | openbb's spelling. Samsung's 2025 income row equals the edge's stored row key for key and value for value, now with `KRW`. Of 69 stored rows compared, every difference is Yahoo's data (restatements, the rolling window, lines added since) or a half-year relabel |
+| Statement writer | `only_replacing={"source_code": "yfinance"}` keeps SEC's rows; `merge_json=["data"]` keeps a stored line a narrower answer omits |
+| Corporate actions | from the chart documents (`events=div,split`, Stage 0). Dividends are split-adjusted (AAPL's 1987 $0.12 is 0.000536) and in the quote currency; splits are ratios. A retraction deletes only Yahoo's rows inside the covered span |
+| `security` columns | `writers.update_existing`, which never inserts and never erases (`coalesce(offered, stored)`) |
+| No jsonb cast | psycopg 3.3.6 sends a `str` untyped (its `StrDumperUnknown` is registered last), and `INSERT … VALUES` coerces it to the target column. Only `UPDATE … FROM (VALUES …)` needs casts, so `update_existing` casts every value |
+
+Found while building it:
+- `yahoo_chart.fetch` and `documents._get` raised refusals inside `metrics.request`, so every
+  refusal was counted as `transport`. The chart's refusal text also named the symbol, which
+  `vocab.throttled` reads (`HTTP 404 for 4290.T` matches `429`). Both are fixed for every Yahoo
+  provider: refusals are named by status.
+- The writer SQL ran on a throwaway `postgres:17-alpine` on the node, through the production image's
+  psycopg, because Docker Desktop is still wedged locally. Ten checks passed.
+- A new image check compares the copied yfinance keys and openbb aliases with the installed ones. A
+  one-line mutation fails it.
+
 ## Open questions
 
 Closed by the 2026-10-10 measurements:
@@ -591,8 +657,11 @@ Closed by the 2026-10-10 measurements:
 - `marketCap`'s currency for pence listings;
 - the timeseries key-list limit (2 requests per company).
 
+Closed by the 2026-10-11 measurements:
+- ZAc, ILA and KWF cap currencies;
+- `trailingPE`/`forwardPE` across currencies;
+- what decides that statements are due.
+
 Still open (see *Still to measure*):
 - run width W;
-- ZAc and ILA cap currencies;
-- `trailingPE`/`forwardPE` across currencies;
 - the crumb's lifetime.
