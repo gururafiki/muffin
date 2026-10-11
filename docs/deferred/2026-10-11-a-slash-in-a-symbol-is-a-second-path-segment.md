@@ -1,6 +1,7 @@
 # A slash in a symbol is a second path segment
 
-Created 2026-10-11 · Due with the next muffin-ingest change that touches `yahoo_chart` · Status: open
+Created 2026-10-11 · Due with the next muffin-ingest change that touches `yahoo_chart` ·
+Status: decided 2026-10-11 (encode it, option 1); being built
 
 ## Why it is deferred
 
@@ -50,7 +51,11 @@ The effect:
 - CLAUDE.md, http-cache: "a literal hostname in `proxy_pass` is resolved at startup", so every
   location proxies through `set $up` plus `rewrite … break`, and that rewrite decodes.
 
-## What to do (a decision)
+## What to do
+
+**Decided 2026-10-11 (the user): option 1** (Phase 4 decision 18). The same encoding applies to
+every Yahoo request that carries the symbol in its path: quoteSummary and fundamentals-timeseries
+in the Phase 4 company lane as well as the chart. The options as presented:
 
 1. **Encode only `/` (as `%2F`) in the chart path, and make the `yahoo` location forward the path
    as it was received.** Recommended. Yahoo then states the absence, and the lane marks it like any

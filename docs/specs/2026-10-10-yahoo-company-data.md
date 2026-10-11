@@ -155,6 +155,9 @@ bands), `check_derived_metrics.py`, `check_anon_read_latency.py`. Grafana: `cove
 | 14 | Quote currency's writer (asked while building step 5) | **The price lane**: `derive_security_price_span` records the newest bar's label, `security_currency` prefers it, and the company lane's `price.currency` is only a cross-check | a company-lane table from quoteSummary; readers probing the newest bar live |
 | 15 | Semi-annual reporters' ratios | First **a TTM from two halves**. Measured afterwards: Yahoo gives these companies no interim flows, so there is nothing to sum. Re-decided: **the ratio view falls back to the fiscal year, per security and metric, labelled `eps_basis`** | no earnings ratios for them; decide later |
 | 16 | The TTM defect found in step 5 | **Derive SEC's fiscal Q4 and require four consecutive quarters**, retracting what the rule no longer produces | consecutive only (SEC filers lose TTM ratios until Phase 5); leave for Phase 5 |
+| 17 | The chart lane's pace (asked 2026-10-11, after its first night) | **Keep 1.4 s between requests**, amending the quote-currency spec's decision 5. That figure was derived from the whole night, not the fetch step, and is ~45% of the old rate: the night ends ~02:15 instead of ~01:40, and the company lane gets headroom for its ~2,400 requests a day | back to the old ~0.65 s |
+| 18 | A symbol containing `/` (18 Bloomberg spellings) | **Encode it as `%2F` and have http-cache forward the path undecoded**, so Yahoo states the absence and the lane marks a miss like any other | refuse it as not askable; leave it |
+| 19 | Deploys rolling the ingest image | **Pin the digest**: only `roll-ingest` changes the ingest image, writing the same `…:latest@sha256:` string the deploy renders, so a deploy never restarts Dagster | the deploy fails what it killed; an operating rule only |
 
 Point in time: the 09-09 design decided `observed_at`/`superseded_at` in core for Phase 1, and that
 was never built. Decision 4 replaces it for this family. Every statements document stays in raw, so
@@ -288,7 +291,7 @@ trends or `futuresChain`. *To measure:* body size, and whether any module fails 
 non-US symbol.
 
 **Pacing:**
-- No faster per request than the price lane.
+- No faster per request than the price lane: 1.4 s between requests (decision 17).
 - Stop the run on a throttle and count the rest `unasked`.
 - Never run inside 00:00–02:00 UTC, the price night.
 
@@ -501,8 +504,9 @@ library calls it directly for the session only, and its parsing stays unused.
 **Prerequisites:**
 - **A working deploy.** The Cloudflare token is the user's to replace; #422 deploys first.
 - **The ingest-roll decision**
-  ([note](../deferred/2026-09-26-a-deploy-rolls-the-ingest-image.md)). Until it is taken, no deploy
-  inside 00:00–02:00 or 03:30–05:30 UTC.
+  ([note](../deferred/2026-09-26-a-deploy-rolls-the-ingest-image.md)). Taken 2026-10-11: pin the
+  digest (decision 19). Until it is built and deployed, no deploy inside 00:00–02:15 or 03:30–05:30
+  UTC.
 
 ## Risks and rollback
 

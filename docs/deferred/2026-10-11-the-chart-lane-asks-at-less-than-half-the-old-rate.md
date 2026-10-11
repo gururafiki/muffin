@@ -1,7 +1,7 @@
 # The chart lane asks Yahoo at less than half the old rate
 
-Created 2026-10-11 · Due with the next muffin-ingest PR (the comment); the rate is a decision ·
-Status: open
+Created 2026-10-11 · Due with the next muffin-ingest PR (the comment) ·
+Status: decided 2026-10-11 (keep 1.4 s); the comment is still to correct
 
 ## Why it is deferred
 
@@ -35,10 +35,11 @@ inherits whichever rate is chosen here.
 
 1. In the next muffin-ingest PR, correct the comment on `CHART_SECONDS_BETWEEN_REQUESTS`. It states
    a measurement that is wrong by a factor of two. Nothing else changes.
-2. Decide the rate:
+2. Decide the rate. **Decided 2026-10-11 (the user): keep 1.4 s, amending decision 5** (Phase 4
+   decision 17). The options as presented:
    - **Keep 1.4 s and amend decision 5** (recommended). The cost is about 38 minutes a night and
      nothing else. Yahoo's allowance once fell fourfold between two consecutive days, and the
-     Phase 4 company lane will add about 3,500 requests a day beside this one.
+     Phase 4 company lane will add about 2,400 requests a day beside this one.
    - **Return to the old rate, about 0.65 s.** The old lane reported `throttled 0` on every one of
      the 18 nights from 2026-09-23 to 10-10, measured from the runs' metadata. The night would end
      near 01:40 (the label check is new).

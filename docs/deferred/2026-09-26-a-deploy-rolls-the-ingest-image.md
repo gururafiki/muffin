@@ -1,7 +1,8 @@
 # A deploy rolls the ingest image, without the roll's care for in-flight runs
 
-Created 2026-09-26 · **Check 2026-10-10** · Status: open, and wider than first written (2026-10-03,
-below). Operating rule in the meantime below.
+Created 2026-09-26 · Status: **decided 2026-10-11 (the user): option 1, pin the digest** (Phase 4
+decision 19); being built. Wider than first written (2026-10-03, below). The operating rule below
+holds until the pin is deployed.
 
 ## What happened
 

@@ -171,6 +171,13 @@ later, as its own note; 5 today's pacing. The options as presented:
 4. **Subunits as data** in `market.currency`: later, as its own note (recommended), or now.
 5. **Pacing:** keep today's request rate (recommended), versus re-measuring the allowance first.
 
+**Decision 5 amended 2026-10-11 (the user).** The 1.4 s in §4 was not today's rate. It divided
+the night's time less stage 2, so it included each run's start-up. The old stage-1 step took
+1,578 s for ~2,450 securities, about 0.64 s each. So the lane shipped at ~45% of the old rate, and
+its first night took 134 minutes against 96. The user kept 1.4 s: the cost is time only, and the
+company lane (Phase 4) adds ~2,400 Yahoo requests a day beside it.
+[Note](../deferred/2026-10-11-the-chart-lane-asks-at-less-than-half-the-old-rate.md).
+
 ## 11. As built — 2026-10-10
 
 **Ingest: muffin-ingest#104, rolled 2026-10-10 19:52 UTC. Schema: muffin-deployment#426 (`GBX`),
