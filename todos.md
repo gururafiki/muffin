@@ -2438,8 +2438,12 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
             backfill). #83 evaluates it with its rungs. Roll outside the 00:00 lanes.
       - [ ] **2026-09-26 — a deploy rolls the ingest image implicitly** —
             [docs/deferred/2026-09-26-a-deploy-rolls-the-ingest-image.md](docs/deferred/2026-09-26-a-deploy-rolls-the-ingest-image.md).
-            **Decided 2026-10-11: pin the digest** (Phase 4 decision 19); being built. Until it is
-            deployed: merge an ingest PR only when about to roll it.
+            **Decided 2026-10-11: pin the digest** (Phase 4 decision 19): muffin-deployment#431,
+            merged. The roll half is live: the 2026-10-11 09:56 roll pinned all three services to
+            `muffin-ingest:latest@sha256:b4cc…`. The deploy half (Ansible keeps the pinned image)
+            ships with the next deploy. Until then, merge an ingest PR only when about to roll it.
+            - [ ] After the next deploy: check that two deploys in a row leave the three Dagster
+                  tasks untouched (`docker service ps`, `State.StartedAt`).
             **Wider than written (2026-10-03):** the first deploy after ANY roll restarts all three
             Dagster services, even with an unchanged image, because the roll leaves a spec the deploy
             does not reproduce. The #398 deploy did this at 09:40 and failed Yahoo slice 3's backfill
@@ -2745,11 +2749,13 @@ never re-asked); no Yahoo statement row has a currency; `muffin-metrics` fails 3
         - The one transport was a `/` symbol: [note](docs/deferred/2026-10-11-a-slash-in-a-symbol-is-a-second-path-segment.md).
   - [x] **The chart lane's pacing. Decided 2026-10-11: keep 1.4 s** (Phase 4 decision 17, amending
         the currency spec's decision 5): [note](docs/deferred/2026-10-11-the-chart-lane-asks-at-less-than-half-the-old-rate.md).
-        - [ ] Correct the constant's comment in the next ingest PR.
+        - [x] Correct the constant's comment in the next ingest PR: muffin-ingest#106, rolled
+              2026-10-11.
   - [ ] **A `/` symbol. Decided 2026-10-11: encode it as `%2F`, and have http-cache forward the path
         undecoded** (decision 18): [note](docs/deferred/2026-10-11-a-slash-in-a-symbol-is-a-second-path-segment.md).
-        An ingest PR and an nginx PR; live with the next deploy. Then check that a night reports no
-        `transport` for one and that the 18 carry a `miss`.
+        Ingest half: muffin-ingest#106, rolled 2026-10-11 09:56 UTC. nginx half: muffin-deployment#430,
+        merged, live with the next deploy. Then check that a night reports no `transport` for one and
+        that the 18 carry a `miss`.
   - [ ] `GBX`: muffin-deployment#426, **merged 2026-10-10**, waiting on a deploy (the Cloudflare
         token; the last deploy to succeed was 10-04). After it deploys, run `fx_rate_history` for the
         `GBP` partition (stage 2 only).

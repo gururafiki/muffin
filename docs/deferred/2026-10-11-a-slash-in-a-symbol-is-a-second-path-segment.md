@@ -1,7 +1,8 @@
 # A slash in a symbol is a second path segment
 
 Created 2026-10-11 · Due with the next muffin-ingest change that touches `yahoo_chart` ·
-Status: decided 2026-10-11 (encode it, option 1); being built
+Status: decided 2026-10-11 (encode it, option 1). The ingest half rolled 2026-10-11 09:56 UTC
+(muffin-ingest#106); the nginx half is merged (muffin-deployment#430) and waits for the next deploy
 
 ## Why it is deferred
 
@@ -45,9 +46,9 @@ The effect:
 ## Context
 
 - Spec: [the price lane reads the quote currency](../specs/2026-10-06-the-price-lane-reads-the-quote-currency.md).
-- `yahoo_chart.fetch` also serves the FX lane (`EURUSD=X`) and the index lane (`^GSPC`). The URL's
-  parameter order is http-cache's key, so changing how a URL is spelled turns every stored entry for
-  it into a miss.
+- `yahoo_chart.fetch` also serves the FX lane (`EURUSD=X`). The index lane fetches through openbb,
+  not this module. The URL's parameter order is http-cache's key, so changing how a URL is spelled
+  turns every stored entry for it into a miss.
 - CLAUDE.md, http-cache: "a literal hostname in `proxy_pass` is resolved at startup", so every
   location proxies through `set $up` plus `rewrite … break`, and that rewrite decodes.
 
@@ -65,6 +66,18 @@ in the Phase 4 company lane as well as the chart. The options as presented:
    ingest only and needs no deploy. It records nothing, so the bad spelling stays in place.
 3. **The repair note's option 2** (provider-verified spelling candidates, `/` to `-`) fixes the
    spelling where Yahoo has one. For the Thai foreign boards it does not: both spellings 404.
+
+## What shipped
+
+- **muffin-ingest#106** (rolled 2026-10-11 09:56 UTC): `yahoo_chart.path_segment` sends `/` as `%2F`
+  and changes nothing else, so the FX URLs and their cache keys are unchanged.
+- **muffin-deployment#430** (merged, not deployed): the chart, quoteSummary and timeseries
+  locations proxy to `https://$up$yahoo_upstream_uri`, where a `map` takes the path from
+  `$request_uri`, which nginx never decodes. The cache key was already `$request_uri`, so stored
+  entries stay valid. Search, getcrumb and the generic `/yahoo/` location keep the `rewrite`.
+
+Until the deploy, a `/` symbol goes out encoded and the cache's `rewrite` decodes it again, so it
+still reads as `transport`. Neither half makes anything worse alone.
 
 ## Done when
 

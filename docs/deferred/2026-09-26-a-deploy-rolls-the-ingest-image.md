@@ -1,8 +1,9 @@
 # A deploy rolls the ingest image, without the roll's care for in-flight runs
 
 Created 2026-09-26 · Status: **decided 2026-10-11 (the user): option 1, pin the digest** (Phase 4
-decision 19); being built. Wider than first written (2026-10-03, below). The operating rule below
-holds until the pin is deployed.
+decision 19); built in muffin-deployment#431. The roll half is live (2026-10-11 09:56 UTC); the
+deploy half ships with the next deploy. Wider than first written (2026-10-03, below). The operating
+rule below holds until two deploys are seen to leave Dagster alone.
 
 ## What happened
 
@@ -83,6 +84,22 @@ digest. Pinning only the deploy would still differ from the roll's bare tag.
    deploy, fail what was killed. The deploy would still roll ingest; it would just clean up after.
 3. **Operating rule only**: never merge a muffin-ingest PR while a deploy is running or about to be
    dispatched. Cheap, and exactly the kind of rule that is forgotten.
+
+## As built (muffin-deployment#431)
+
+- **The running service spec is the record**, not a repo variable or a file. `muffin-roll-ingest.sh`
+  reads the digest it pulled (`RepoDigests`) and updates the three services to
+  `ghcr.io/gururafiki/muffin-ingest:latest@sha256:<digest>`, the string `docker stack deploy` would
+  render for that digest. It then prints `== specs ==` and fails if any service is left unpinned.
+- **The deploy reads the running spec** (`muffin_stack.yml`, before rendering the stack): if the
+  ingest service runs a pinned image of the same `repo:tag` that `image_ingest` names, that string is
+  what the stack file renders. A pinned image of a different tag, an unpinned spec, or a node with
+  no ingest service falls through to `image_ingest` as before.
+- Measured on a throwaway stack on the node before merging: a bare-tag roll followed by a deploy
+  created a new task, while a pinned roll followed by a deploy of the same string created none.
+- **First pinned roll, 2026-10-11 09:56 UTC:** all three services moved from `sha256:70756adb…` to
+  `sha256:b4cc1cea…`, and all three specs read `pinned`. Before it, every spec held the bare tag the
+  10-10 roll had written, so that roll is what makes the next deploy a no-op for Dagster.
 
 ## Operating rule until then
 

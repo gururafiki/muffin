@@ -4279,6 +4279,11 @@ labelling defect fixed in #79 before the Yahoo rung's first run. Spec:
   and `--syntax-check` fails with `failed at splitting arguments, either an unbalanced jinja2 block
   or quotes`. The repo's offline guards (bash-only syntax, inline Jinja) both passed. Run
   `ansible-playbook --syntax-check ansible/muffin_stack.yml` locally before pushing an Ansible change.
+- **A `set_fact` OUTLIVES ITS PLAY, SO TEST CASES SHARING ONE PLAYBOOK CONTAMINATE EACH OTHER.** A
+  fact set for a host persists into every later play against that host, at a precedence above
+  `include_vars` and play `vars`. Testing #431's "keep the pinned image" task, the second case
+  failed because it inherited the first case's pin, which read as a bug in the task. It can as easily
+  make a case pass. Run each case as its own `ansible-playbook`.
 - **THE SECTOR PAGE'S STOCK LIST WAS EMPTY FOR ABOUT TWO WEEKS, AND EVERY LATENCY PROBE PASSED.**
   `sector_constituents` answered `57014` to the app's own query: 14.2 s for Information Technology
   against anon's 3 s, so the page fell back to "No stocks yet".
@@ -4475,6 +4480,11 @@ parity gate for retiring the edge `fund-holdings` found.
   runs, and before the planned tiny-subset check. Until
   [the deferred note](docs/deferred/2026-09-26-a-deploy-rolls-the-ingest-image.md) is resolved:
   **merge an ingest PR only when about to roll it.**
+  **Decided 2026-10-11 (Phase 4 decision 19), built in muffin-deployment#431:** the roll pins each
+  service to `muffin-ingest:latest@sha256:<what it pulled>`, the string `docker stack deploy` writes,
+  and the deploy renders whatever pinned image the running spec holds. The running spec is the
+  record, so there is no variable to keep in step. The roll half went live 2026-10-11 09:56 UTC; the
+  rule above holds until two deploys are seen to leave the Dagster tasks alone.
 - **A migration touching `cron.job` must guard on `to_regclass('cron.job')`**, not with
   `exception when others`: the migration tests run on plain Postgres with no pg_cron, where even
   PLANNING a query that names it fails, and a swallow-everything handler would also hide a real
@@ -4950,6 +4960,12 @@ wrong for 7 of 13 sampled listings. As built:
     again, because the location's `rewrite` works on the decoded URI.
   - 18 symbols carry a `/`. Each is asked every rotation and can never be marked or repaired
     ([note](docs/deferred/2026-10-11-a-slash-in-a-symbol-is-a-second-path-segment.md)).
+  - **Fixed in two halves (decision 18).** The lane encodes `/` and nothing else (muffin-ingest#106),
+    so FX URLs and their cache keys do not change. The chart, quoteSummary and timeseries locations
+    take the upstream path from `$request_uri`, which nginx never decodes, through a `map`
+    (muffin-deployment#430). A `proxy_pass` built from variables sends that URI exactly as written,
+    query string included, and appends nothing. The cache key was already `$request_uri`, so stored
+    entries stay valid. Each half alone changes nothing, so their order does not matter.
 - **A SHORT DAY IS OFTEN A HOLIDAY. SPLIT IT BY MARKET BEFORE CALLING IT A GAP.** 2026-10-09 held
   2,887 bars. 219 of the 221 securities in the night's slice that had none were Taiwanese (National
   Day, observed on the Friday) or Korean (Hangul Day). 10-05 to 10-07 held no Shanghai or Shenzhen
