@@ -17,6 +17,11 @@ Replay over the other 261, with no provider call: 259 get no proposal, and 2 mor
 notation churn (`3BBIF-F.BK`, `BLA-F.BK`). The churn is bounded. The next sweep records the new
 spelling's death, OpenFIGI repeats it, and it is excluded.
 
+**Correction, 2026-10-11: under the chart lane it is not bounded.** The chart lane puts the symbol
+into the URL path, so Yahoo answers a `/` spelling with an HTML 404 that states nothing about the
+symbol. The lane counts it as `transport`, records no miss, and asks again every rotation
+([note](2026-10-11-a-slash-in-a-symbol-is-a-second-path-segment.md)).
+
 ## The dead symbols, by cause
 
 262 on 2026-10-04. Suffix counts are exact; a cause is "verified" only where Yahoo was asked.

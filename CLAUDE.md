@@ -4930,6 +4930,30 @@ wrong for 7 of 13 sampled listings. As built:
 - **A CHECK EVALUATION IS NOT SHAPED LIKE A MATERIALIZATION in the event log**: it has `success`, not
   `passed`, and `metadata` as a dict rather than `metadata_entries`. `run_events.py` printed nothing
   for checks until it learned both.
+- **THE FIRST SCHEDULED NIGHT (2026-10-11) WAS CLEAN.**
+  - 100/100 runs, and the outcomes summed to `requested` in every run (2,447 answered, 1 absent,
+    1 transport, 51 not askable); `throttled 0`.
+  - The label check disagreed on 0 of 2,447 securities. 374 labels changed, led by CNY→HKD (147
+    Hong Kong lines).
+  - `changed` was 1.72 M of 11.58 M rows sent, about what relabelling 374 histories costs, which is
+    consistent with the closes matching the openbb ones (not separately measured).
+- **A RATE TAKEN FROM A NIGHT'S WALL CLOCK INCLUDES EVERYTHING ELSE IN THE NIGHT.** The chart lane's
+  1.4 s spacing was derived as "~3,500 s on 2,500 securities". That was the night less stage 2,
+  including ~15 s of start-up per run. The old stage-1 step took 1,578 s, 0.64 s per security. So
+  the lane asks Yahoo at ~45% of the old rate, and the night grew from 96 to 134 minutes. Measure a
+  stage from its steps' `STEP_SUCCESS.duration_ms`, never from run times
+  ([note](docs/deferred/2026-10-11-the-chart-lane-asks-at-less-than-half-the-old-rate.md)).
+- **A `/` IN A SYMBOL IS A SECOND PATH SEGMENT, AND http-cache UNDOES THE ENCODING.**
+  - `3BBIF/F.BK` sent as it is gets an HTML 404, which states nothing about the symbol, so the lane
+    counts it as `transport` and never records a miss.
+  - `%2F` sent directly gets Yahoo's JSON absence. `%2F` sent through http-cache gets the HTML 404
+    again, because the location's `rewrite` works on the decoded URI.
+  - 18 symbols carry a `/`. Each is asked every rotation and can never be marked or repaired
+    ([note](docs/deferred/2026-10-11-a-slash-in-a-symbol-is-a-second-path-segment.md)).
+- **A SHORT DAY IS OFTEN A HOLIDAY. SPLIT IT BY MARKET BEFORE CALLING IT A GAP.** 2026-10-09 held
+  2,887 bars. 219 of the 221 securities in the night's slice that had none were Taiwanese (National
+  Day, observed on the Friday) or Korean (Hangul Day). 10-05 to 10-07 held no Shanghai or Shenzhen
+  bar at all (Golden Week).
 
 ### Phase 4 step 5: the schema, and a TTM wrong for 3,439 companies (2026-10-10)
 

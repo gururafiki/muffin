@@ -2728,8 +2728,25 @@ never re-asked); no Yahoo statement row has a currency; `muffin-metrics` fails 3
         **muffin-ingest#104, rolled 19:52 UTC**.
   - [x] Live subset (ALG.KW, AMRM.TA, AAPL): `KWD→KWF`, AMRM.TA `ILA` after 05-18, holiday filler
         retracted, the label check clean.
-  - [ ] **2026-10-11 00:00, the first scheduled night of the new lane** (all full loads): read the
-        counters (outcomes sum to `requested`, `throttled 0`) and the label check.
+  - [x] **2026-10-11 00:00, the first scheduled night of the new lane** (all full loads): read the
+        counters (outcomes sum to `requested`, `throttled 0`) and the label check. **Clean, read
+        2026-10-11.**
+        - 100/100 runs SUCCESS, and the outcomes summed to `requested` in every run: 2,447 answered
+          + 1 absent + 1 transport + 51 not askable = 2,500.
+        - `throttled 0`; every plan `never_loaded`; 1.09 GB of chart JSON, 428 MB of Parquet.
+        - The label check found 0 disagreements over 2,447 securities, and 374 labels changed
+          (CNY→HKD 147, GBP→none 60, USD→CAD 28, ZAR→ZAC 27).
+        - The 72 `GBp` lines stay unlabelled until `GBX` deploys.
+        - None of the spec's 13 sampled listings was in the slice; they are relabelled on their first
+          visit, by about 10-15.
+        - The night took 134 min against 96: [the pacing note](docs/deferred/2026-10-11-the-chart-lane-asks-at-less-than-half-the-old-rate.md),
+          which needs a decision.
+        - The one transport was a `/` symbol: [note](docs/deferred/2026-10-11-a-slash-in-a-symbol-is-a-second-path-segment.md).
+  - [ ] **Decide the chart lane's pacing** (keep 1.4 s and amend decision 5, or return to the
+        measured old rate of ~0.65 s), and correct the constant's comment in the next ingest PR:
+        [note](docs/deferred/2026-10-11-the-chart-lane-asks-at-less-than-half-the-old-rate.md).
+  - [ ] **Decide how a `/` symbol is asked** (18 symbols; encode it and pass it through http-cache,
+        or refuse it as not askable): [note](docs/deferred/2026-10-11-a-slash-in-a-symbol-is-a-second-path-segment.md).
   - [ ] `GBX`: muffin-deployment#426, **merged 2026-10-10**, waiting on a deploy (the Cloudflare
         token; the last deploy to succeed was 10-04). After it deploys, run `fx_rate_history` for the
         `GBP` partition (stage 2 only).
