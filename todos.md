@@ -2820,7 +2820,8 @@ never re-asked); no Yahoo statement row has a currency; `muffin-metrics` fails 3
     Then, in one roll outside the run windows: merge muffin-ingest#110 (the company lane) and
     muffin-ingest#112 (the security bumps for all nine Dependabot alerts, decided 2026-10-13), and
     close Dependabot's #48, #96, #97, #108 and #109 if it does not. Read the first `daily_indices`
-    night after: lxml went 5 to 6, and finviz scraping may reach it.
+    night after: lxml went 5 to 6, and finviz scraping may reach it. **lxml 6 stays in #112,
+    confirmed by the user 2026-10-14:** the high alert has no fix on lxml 5 (6.1.0 is the first).
 - [ ] 8. The `yahoo_companies` schedule live; first rotation; a dated check note.
 - [ ] 9. Retire: nine resources, instrument-profile if every curated equity resolves,
       `security-metrics` and `muffin-metrics`, statements made SEC-only, the `security-refresh`
