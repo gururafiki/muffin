@@ -13,6 +13,9 @@ Created 2026-10-13 · Status: **open, check 2027-04-01** · Owner: the companies
   ones where nothing new was fetched; the writer then skips the identical rows.
 - On a visit with nothing due, the Parquet manager reads the stored file and writes it back
   unchanged (`_merge_with_stored` with no new rows).
+- Stage 1 reads the same file, bodies included, to decide whether statements are due:
+  `statements.held_period` parses the newest document of each frequency, but `stored_rows_for`
+  loads them all first.
 
 ## Why it is deferred
 
