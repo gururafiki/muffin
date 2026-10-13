@@ -2816,6 +2816,11 @@ never re-asked); no Yahoo statement row has a currency; `muffin-metrics` fails 3
         the largest file and a run's peak memory —
         [note](docs/deferred/2026-10-13-stage-2-re-reads-every-statements-document.md).
 - [ ] 7. Roll; live tiny subset; parity against the edge tables.
+  - **Waiting on the deploy of muffin-deployment#428 (blocked on a new `CLOUDFLARE_API_TOKEN`).**
+    Then, in one roll outside the run windows: merge muffin-ingest#110 (the company lane) and
+    muffin-ingest#112 (the security bumps for all nine Dependabot alerts, decided 2026-10-13), and
+    close Dependabot's #48, #96, #97, #108 and #109 if it does not. Read the first `daily_indices`
+    night after: lxml went 5 to 6, and finviz scraping may reach it.
 - [ ] 8. The `yahoo_companies` schedule live; first rotation; a dated check note.
 - [ ] 9. Retire: nine resources, instrument-profile if every curated equity resolves,
       `security-metrics` and `muffin-metrics`, statements made SEC-only, the `security-refresh`
