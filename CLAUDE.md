@@ -5064,8 +5064,10 @@ muffin-ingest#107 (library, rolled 10-11) and #110 (defs, waits on #428's deploy
 - **A GUARD BROADER THAN THE RULE DECIDED TURNS A PROVIDER'S GAP INTO A PERMANENT FAILURE.** The FX
   stale-body guard was decided as "fail when the body's `regularMarketTime` predates the window"
   and built as "fail any weekday with no rate in the window". Yahoo has no EURUSD bar at all for
-  Monday 2026-10-12 (Columbus Day; Labor Day has one), so the partition fails on every re-run:
-  [note](docs/deferred/2026-10-13-yahoo-has-no-fx-bar-for-a-weekday.md).
+  Monday 2026-10-12 (Columbus Day; Labor Day has one), so the partition failed on every re-run.
+  Yahoo then filled the day ~21 hours after it ended. muffin-ingest#111 restores the decided rule
+  and adds an insert-only re-read of the days before a night's own, so a late fill now arrives by
+  itself: [note](docs/deferred/2026-10-13-yahoo-has-no-fx-bar-for-a-weekday.md).
 - **A THROWAWAY DATABASE CAN TEST THE WORKER'S REAL GRANTS.** Built on the node from
   muffin-deployment's migrations (legacy, then everything after the baseline, as CI does), it has
   `ingest_rw` as a NOLOGIN role with its 120 s timeout; `alter role ingest_rw login password …`

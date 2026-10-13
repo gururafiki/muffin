@@ -1,6 +1,20 @@
 # Yahoo has no FX bar for a weekday, and the stale-body guard fails it for good
 
-Created 2026-10-13 · Status: **open, the user's decision**
+Created 2026-10-13 · Status: **CLOSED 2026-10-13** — option 3 decided and shipped (muffin-ingest#111,
+rolled 21:24 UTC); Yahoo filled the day late, and the re-run after the roll stored all 41 rates
+
+## Resolved (2026-10-13)
+
+- **Decided:** option 3, the rule as decided plus a re-read.
+- **Shipped:** muffin-ingest#111, rolled 21:24 UTC (`5a67c183…`). A weekday with no rate of its own
+  fails only when every body predates the day's end; otherwise it materialises empty and is named in
+  `provider_skipped_days`. Each night also offers the days before its own, insert-only.
+- **Yahoo filled the day between 19:07 and ~21:30 UTC on 10-13**, about 21 hours after it ended.
+  The re-run after the roll (backfill `xzgwjcij`) published 41 rates for 10-12 (EUR 1.12047),
+  `provider_skipped_days: none`. Under the new rule the 10-14 00:00 night would have filled it by
+  itself, from the 10-13 body.
+- **Still to read:** the 10-14 00:00 run, the first night on the new code (`reread_offered`,
+  `refilled`, and the 10-13 rates).
 
 ## What happened
 
