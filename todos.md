@@ -2804,9 +2804,16 @@ never re-asked); no Yahoo statement row has a currency; `muffin-metrics` fails 3
   - [ ] muffin-ui: the stock page labels its price by `quote_currency` and its cap by
         `market_cap_currency`, and shows `eps_basis` beside the P/E, after #428 deploys.
   - Phase 5 note found here: [the statement key, fiscal periods and 2,259 `FY` rows](docs/deferred/2026-10-10-the-statement-key-and-fiscal-periods.md).
-- [ ] 6. Library and `defs/companies/` (summary, statements, company facts, Yahoo statement
+- [x] 6. Library and `defs/companies/` (summary, statements, company facts, Yahoo statement
       writer, corporate actions from chart events, derived metrics, `lib/rotation.py`, checks);
-      local tiny subset.
+      local tiny subset. **Library: muffin-ingest#107, rolled 2026-10-11. Defs: muffin-ingest#110,
+      open, merges only after #428 deploys.** The tiny subset ran on the node (Docker Desktop still
+      wedged) over five companies as `ingest_rw`: every counter sums, 140 statement rows all with a
+      currency, 1,103 metrics and 130 TTMs, 315 corporate actions matching history, a second visit
+      asking nothing. As built in the spec.
+  - [ ] check 2027-04-01 — stage 2 re-reads every stored statements document on every visit; measure
+        the largest file and a run's peak memory —
+        [note](docs/deferred/2026-10-13-stage-2-re-reads-every-statements-document.md).
 - [ ] 7. Roll; live tiny subset; parity against the edge tables.
 - [ ] 8. The `yahoo_companies` schedule live; first rotation; a dated check note.
 - [ ] 9. Retire: nine resources, instrument-profile if every curated equity resolves,

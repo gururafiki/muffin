@@ -5023,6 +5023,55 @@ muffin-deployment#428. Spec: [docs/specs/2026-10-10-yahoo-company-data.md](docs/
   `extract_repeatable.py` (`apk add python3`), diff against `schemas/`, run the tests, and run the
   mutations in the same container. A busybox `diff` prints no `diff ` header lines, so grep `+++`.
 
+### Phase 4 step 6: the company lane (2026-10-11..13)
+
+muffin-ingest#107 (library, rolled 10-11) and #110 (defs, waits on #428's deploy). Spec:
+[docs/specs/2026-10-10-yahoo-company-data.md](docs/specs/2026-10-10-yahoo-company-data.md), *As built*.
+
+- **A RATIO A PROVIDER COMPUTES ACROSS TWO UNITS IS WRONG BY EXACTLY THE UNIT FACTOR.** Yahoo
+  converts `bookValue` to the quote's MAJOR unit, then divides a price still in pence, cents, agorot
+  or fils by it: VOD.L's P/B reads 62.9 for 0.63, NBK.KW's 1,664 for 1.66. BHP.AX and 0992.HK
+  quote in one currency and report in another and are RIGHT, so "convert when the currencies
+  differ" would have broken the correct ones. `defaultKeyStatistics.forwardPE` divides the price as
+  quoted by EPS in the reporting currency (VOD.L 1,001 for 11.8). Measured on 18 listings in 13
+  currencies before writing a rule.
+- **YAHOO'S STATEMENT WINDOW ROLLS PER LINE, NOT PER PERIOD.** Samsung's 2025-03-31 quarter keeps ten
+  of the ~180 lines the edge stored in August. A newer document covering a period with fewer lines
+  is a narrower window, not a retraction, so stage 2 takes the newest value any document carries for
+  each (period, line) and the writer merges into the stored jsonb (`merge_json`).
+- **THE EARNINGS DATE NAMES THE NEXT REPORT**, so it cannot say "fetch, the company has reported":
+  the moment it would, it has moved on. `defaultKeyStatistics.mostRecentQuarter` and
+  `lastFiscalYearEnd` name the newest period reported, and equalled the timeseries' newest period on
+  all 17 listings measured, half-yearly reporters included.
+- **psycopg 3.3.6 SENDS A `str` UNTYPED**, so `INSERT … VALUES` coerces it to the target column
+  (no `::jsonb` needed), while `UPDATE … FROM (VALUES …)` has no target and types it `text`:
+  `uuid = text` then has no operator. `writers.update_existing` casts every value.
+- **A REFUSAL RAISED INSIDE `metrics.request` IS COUNTED AS TRANSPORT**, which is the block's rule for
+  an exception escaping it. `yahoo_chart.fetch` and `documents._get` did that for every refusal, and
+  the chart's message named the symbol, which `vocab.throttled` reads: `HTTP 404 for 4290.T`
+  matched `429`. Refusals are now raised after the block and named by status.
+- **A MULTI-ASSET BUILT FROM `specs=` CANNOT GIVE AN INPUT METADATA.** Dagster 1.13 refuses an
+  `AssetIn` carrying anything but its key when the specs also declare the dep
+  (`validate_can_coexist`), so `allow_missing_partitions` is unavailable there. In the job stage 1
+  writes a file for every partition, so only a hand-launched re-parse can meet a missing one.
+- **THE DEFS LOADER COLLECTS EVERY MODULE-LEVEL LIST OF SPECS.** `find_objects_in_module_of_types`
+  yields the members of any list whose elements are all definitions, so the specs list a
+  multi-asset was built from defined each asset twice ("Asset key security_profile is defined
+  multiple times"). A tuple is not collected.
+- **`from __future__ import annotations` BREAKS A DAGSTER ASSET'S SIGNATURE.** The config parameter
+  becomes the string `'CompanyRun'`, and validation fails with "'CompanyRun' cannot be resolved". No
+  family module uses it; a library module may.
+- **A GUARD BROADER THAN THE RULE DECIDED TURNS A PROVIDER'S GAP INTO A PERMANENT FAILURE.** The FX
+  stale-body guard was decided as "fail when the body's `regularMarketTime` predates the window"
+  and built as "fail any weekday with no rate in the window". Yahoo has no EURUSD bar at all for
+  Monday 2026-10-12 (Columbus Day; Labor Day has one), so the partition fails on every re-run:
+  [note](docs/deferred/2026-10-13-yahoo-has-no-fx-bar-for-a-weekday.md).
+- **A THROWAWAY DATABASE CAN TEST THE WORKER'S REAL GRANTS.** Built on the node from
+  muffin-deployment's migrations (legacy, then everything after the baseline, as CI does), it has
+  `ingest_rw` as a NOLOGIN role with its 120 s timeout; `alter role ingest_rw login password …`
+  lets the run connect as the worker, so a missing grant fails the run instead of passing under a
+  superuser. `market.currency` holds only `GBX` there: production learns codes at runtime.
+
 ## Running an OpenSandbox server locally
 
 - **`docker run -d -p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock opensandbox/server:latest`.**

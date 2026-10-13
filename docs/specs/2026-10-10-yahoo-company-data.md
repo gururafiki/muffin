@@ -649,6 +649,66 @@ Found while building it:
 - A new image check compares the copied yfinance keys and openbb aliases with the installed ones. A
   one-line mutation fails it.
 
+### Step 6, the defs (muffin-ingest#110, 2026-10-13)
+
+`defs/companies/` plus one asset in the prices family. **Merges only after #428 deploys**: it writes
+`security_fundamentals.market_cap` and needs #428's grants.
+
+| Asset | As built |
+|---|---|
+| `raw_yahoo_company` | one multi-asset step for `raw_yahoo_summary` and `raw_yahoo_statements`, because whether statements are due is read off the summary fetched a moment earlier. Pool `yfinance`, `multi_run(100)`, paced at 1.4 s through `lib/pacing.py` (shared with the chart lane) |
+| `company_facts` | one step, one transaction, an asset per table: `security_profile` (also `security.provider_country_iso2`), `security_officer`, `security_fundamentals` (also `security.reporting_currency`), `security_share_stats`, `security_estimate`, `yahoo_classification` |
+| `yahoo_statement` | through `postgres_io`, with `only_replacing` and `merge_json` read from asset metadata |
+| `derived_security_metrics` | pages `derive_security_metrics(2000)` then `derive_ttm(null, 1000)`, one transaction per call (both functions build `on commit drop` temporary tables), stopping when a page does not shrink its backlog |
+| `yahoo_corporate_action` | in `nightly_prices`, `multi_run(25)`, from the chart documents; `security_return` depends on it |
+
+Decided while building it:
+- **The quote currency is not this lane's.** The spec left open how `security_listing.currency_code`
+  would take the summary's `price.currency`. Step 5 resolved it: `security_price_span.quote_currency`
+  comes from the newest price bar, which the chart lane labels with `meta.currency`, and
+  `security_currency` prefers it. Nothing in this lane writes a quote currency.
+- **A snapshot table takes the newest document whole, nulls included**, so a P/E Yahoo withdraws when
+  earnings turn negative does not survive from last week. `security` columns are set only where the
+  document states one (`update_existing`).
+- **Officers** are retracted only for a company whose document has an `assetProfile`; a profile
+  listing none retracts all of them.
+- **Classification** is replaced per company when its profile names a sector muffin maps, or none (a
+  fund). A label muffin does not map keeps the stored rows and is counted and named, so a vocabulary
+  change upstream cannot read as Yahoo withdrawing every sector.
+- **An answered summary replaces the stored one; an absence or an unreadable body is filed beside
+  it.** Stage 2 reads the newest, so an absence writes nothing and the answer stays for the day
+  Yahoo answers again.
+- **The outcomes partition the companies twice:** `summary_{answered, empty, absent, unreadable,
+  transport, not_due, unasked}` and `statements_{fetched, partial, failed, not_due, skipped,
+  unasked}` each sum to `requested` with `not_askable`. A throttle or a refused session stops the
+  run; a stop after one frequency was filed counts that company `partial`.
+- **`yahoo_companies`** runs at 03:30 UTC over `ceil(grid / 7)` keys in runs of 100, resumed after
+  the previous day's last key (`lib/rotation.py`, extracted from `nightly_prices`), with a 30-minute
+  `dagster/max_runtime`. It ships STOPPED.
+- **Checks:** `no_company_is_far_behind_the_rotation` (14 days, WARN to 10%, ERROR past 20%; red
+  until the first rotation ends, because the edge fetched most fundamentals once, in August),
+  `statements_carry_a_currency` (the run's own rows, by `as_of` after the run started), and
+  `fundamental_units_are_conventional` (the medians, over the lane's own rows, from 50 values).
+- **`company_facts` cannot tolerate a missing raw partition**: a multi-asset built from specs may
+  give an input nothing but its key. The job always writes every partition, so only a hand-launched
+  re-parse can meet one.
+
+Verified:
+- 363 library tests, 197 project tests, 13 mutations each caught by the test meant for it.
+- **Run on the node over AAPL, 7203.T, VOD.L, 005930.KS and SAP.DE**, as `ingest_rw` against a
+  database built from muffin-deployment's migrations, asking Yahoo directly:
+  - 16 requests; every outcome counter sums to 5;
+  - Vodafone: cap £27.3bn, P/B 0.634, targets in `GBX` (121.68), reporting EUR, half-year rows for
+    the balance sheet only;
+  - 140 statement rows, every one with a currency; 1,103 metrics and 130 TTMs, each backlog drained
+    in one page, every metric labelled with its currency;
+  - 315 corporate actions matching known history: Samsung's 50-for-1 (2018), Toyota's 5-for-1
+    (2021), Apple's five splits, Vodafone's consolidations of 2006 (0.875) and 2014 (6 for 11);
+  - a second visit asked nothing and changed no row.
+
+Left for later: stage 2 re-reads every stored statements document on every visit
+([note](../deferred/2026-10-13-stage-2-re-reads-every-statements-document.md)).
+
 ## Open questions
 
 Closed by the 2026-10-10 measurements:
@@ -663,5 +723,5 @@ Closed by the 2026-10-11 measurements:
 - what decides that statements are due.
 
 Still open (see *Still to measure*):
-- run width W;
-- the crumb's lifetime.
+- run width W: 100 is the starting value; the first scheduled days give the measurement;
+- the crumb's lifetime: a run renews a refused session once, and counts `crumb_rejected`.
