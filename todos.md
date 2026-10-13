@@ -1723,6 +1723,11 @@ cut over one at a time.
   green including an in-image load as uid 10001. Outstanding: a local tiny-subset run against a
   throwaway Postgres (Docker Desktop would not start here on 09-19), then a
   `dagster-pipeline-local-test` skill written from it.
+- [ ] decide — Yahoo has no FX bar for Monday 2026-10-12, so `daily_fx` failed that partition and a
+  re-run fails it again: the guard as built fails any weekday with no rate in its window, broader
+  than the 09-17 decision (fail only a body whose `regularMarketTime` predates the window).
+  Options: the rule as decided, keep the broad rule, or the rule as decided plus a five-day re-read
+  (recommended) — docs/deferred/2026-10-13-yahoo-has-no-fx-bar-for-a-weekday.md
 
 ### Structure and tooling (2026-09-16)
 
