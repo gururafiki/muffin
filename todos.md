@@ -1727,8 +1727,9 @@ cut over one at a time.
   decision) failed the partition on every re-run. DECIDED: the rule as decided plus an insert-only
   re-read; shipped in muffin-ingest#111, rolled 21:24 UTC. Yahoo filled the day ~21 h late, and the
   re-run stored 41 rates — docs/deferred/2026-10-13-yahoo-has-no-fx-bar-for-a-weekday.md
-  - [ ] check 2026-10-14 — the 00:00 `daily_fx` run, the first on the new code: 10-13's 41 rates,
-        `reread_offered` > 0, `refilled` 0, `provider_skipped_days: none`.
+  - [x] check 2026-10-14 — the 00:00 `daily_fx` run, the first on the new code: SUCCESS (`d77e17da`),
+        10-13's 41 rates (EUR 1.11602), `reread_offered` 123, `refilled` 0,
+        `provider_skipped_days: none`; 10-12 kept the late fill (EUR 1.12047).
 
 ### Structure and tooling (2026-09-16)
 

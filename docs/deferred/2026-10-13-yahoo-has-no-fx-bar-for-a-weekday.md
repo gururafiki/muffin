@@ -13,8 +13,9 @@ rolled 21:24 UTC); Yahoo filled the day late, and the re-run after the roll stor
   The re-run after the roll (backfill `xzgwjcij`) published 41 rates for 10-12 (EUR 1.12047),
   `provider_skipped_days: none`. Under the new rule the 10-14 00:00 night would have filled it by
   itself, from the 10-13 body.
-- **Still to read:** the 10-14 00:00 run, the first night on the new code (`reread_offered`,
-  `refilled`, and the 10-13 rates).
+- **The first night on the new code was clean** (10-14 00:00, run `d77e17da`, SUCCESS): 10-13's 41
+  rates (EUR 1.11602), `reread_offered` 123 (41 pairs × 10-08, 10-09 and 10-12), `refilled` 0, and
+  `provider_skipped_days: none`. 10-12 kept the late fill (EUR 1.12047).
 
 ## What happened
 

@@ -1,6 +1,7 @@
 # http-cache keeps every Yahoo chart response for a year, and the price lane now sends it 2,500 a night
 
-Created 2026-10-10 · Due when Phase 4's company lane is built (step 5's nginx changes) · Status: open
+Created 2026-10-10 · Due when Phase 4's company lane is built (step 5's nginx changes) · Status: **built,
+waiting on the deploy and the roll** (2026-10-14)
 
 ## Why it is deferred
 
@@ -30,6 +31,17 @@ token blocks every deploy.
 2. Leave the FX lane cached: its URLs repeat within the hour by design.
 3. Measure the cache size before and after one rotation (`muffin-cache-size.sh` metrics on the Cache
    dashboard).
+
+## Built (2026-10-14)
+
+- **nginx:** `proxy_no_cache $http_x_muffin_cache_no_store` in muffin-deployment#428, merged and
+  waiting on the deploy (the Cloudflare token).
+- **The lane:** muffin-ingest#110 (commit `046f7d2`). `yahoo_chart.fetch(store=False)` sends
+  `X-Muffin-Cache-No-Store: 1`. The price lane passes it, and the FX lane passes `store=True`. Each
+  rule is mutation-proven. It had been missed when #110 was first built: the note named the price
+  lane, and nothing tracked that half.
+- **The size before:** 31.4 GB on 2026-10-13 (`muffin_volume_bytes`), up from 29 GB on 10-10, with
+  `/mnt/data` at 71% (from 67%).
 
 ## Done when
 
