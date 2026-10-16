@@ -1,7 +1,7 @@
 # The ratio view takes its quote currency from the bar
 
 Created 2026-10-10 · Due after the first chart rotation (about 2026-10-16) and the `GBX` deploy ·
-Status: open
+Status: **built in muffin-deployment#433 (2026-10-16), deploys with #426 and #428**
 
 ## Why it is deferred
 
@@ -27,6 +27,23 @@ relabel would make about a hundred P/Es a hundred times worse. London also needs
   currency, and `coverage_current` uses `price_bar` for existence only).
 - The view: `muffin-deployment/stack/supabase/schemas/0117-security_ratio_series.sql`, where both
   `quote_currency` lines read `s.currency_code`.
+
+## Built (2026-10-16)
+
+- **Step 1, measured:** all 11,542 securities with a bar in the last week have a `raw_price_chart`
+  partition, and `labels_changed` ran 374, 205, 121, 367 and 228 over the first five nights, then 0
+  on 10-16, the first night of the second rotation.
+- **Step 2 is not met and does not need to be first.** `GBX` arrives with #426 in the same deploy.
+  Ten large London lines checked serve no price ratio at all today (no TTM, and half-year balance
+  sheets are read only from #428), and #428 would make them appear a hundred times out under the
+  old rule. Deploying the switch with #426 and #428 leaves London as gaps until each line's next
+  chart visit labels its bars `GBX` (about five nights), then right.
+- **Who it moves,** over the 12,006 securities with a bar in the last 14 days: 11,109 unchanged,
+  493 change quote currency, 150 gain one, 248 lose it (238 London, 7 Lima, 1 Bangkok, 8 US OTC).
+- **Step 3:** muffin-deployment#433. Both arms read `price_bar.currency_code`; a new behaviour test
+  makes the rules disagree on both grains, and reverting either arm fails it. CI's migrations job
+  was replayed on the node: the bundle matches, and 107 of 107 tests pass.
+- **Step 4** waits on the deploy.
 
 ## What to do
 
