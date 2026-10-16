@@ -1635,8 +1635,10 @@ cut over one at a time.
   families left behind: ten negative caches and markers on `security`, `currency.history_missing_at`,
   `security_price` (5.3 GB), `market.prices`, the `exchange_*` sweep tables —
   docs/deferred/2026-09-30-the-retired-families-leave-columns-behind.md
-- [ ] due 2026-10-16 (or before the first keyed provider's raw asset) — redact API keys from raw
-  document URLs — docs/deferred/2026-09-16-raw-request-credentials.md
+- [ ] at Phase 4 step 7 (the company lane's first live run) — redact API keys from raw document
+  URLs. Checked 2026-10-16: Yahoo's crumb is redacted by its adapter (muffin-ingest#107), and none of
+  37,503 stored raw URLs holds a credential; scan `raw_yahoo_summary` once it exists —
+  docs/deferred/2026-09-16-raw-request-credentials.md
 - [x] 2026-09-19 — FX spot writes the day's own rates with no hand-run: 41 rates for every weekday
   through 09-18 across two scheduled nights (was 0 rows). Note CLOSED —
   docs/deferred/2026-09-16-http-cache-serves-stale-to-daily-lanes.md
