@@ -1,7 +1,7 @@
 # The ratio view takes its quote currency from the bar
 
 Created 2026-10-10 · Due after the first chart rotation (about 2026-10-16) and the `GBX` deploy ·
-Status: **built in muffin-deployment#433 (2026-10-16), deploys with #426 and #428**
+Status: **merged in muffin-deployment#433 (2026-10-16), deploys with #426 and #428**
 
 ## Why it is deferred
 

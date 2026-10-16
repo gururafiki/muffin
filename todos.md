@@ -2770,7 +2770,7 @@ never re-asked); no Yahoo statement row has a currency; `muffin-metrics` fails 3
         `GBP` partition (stage 2 only).
   - [x] Skills: driving a branch read-only against production (`branch_on_node.sh`), three
         pitfalls: **muffin-ingest#105**, mirrored.
-  - [ ] The ratio view reads the bar's label: **built 2026-10-16, muffin-deployment#433**, to deploy
+  - [ ] The ratio view reads the bar's label: **merged 2026-10-16, muffin-deployment#433**, deploys
         with #426 and #428. The rotation is complete (`labels_changed` 0 on 10-16); after the
         deploy, re-measure anon latency and read a London, a Tel Aviv and a Kuwaiti P/E chart —
         [note](docs/deferred/2026-10-10-the-ratio-view-reads-the-bar-s-label.md).
