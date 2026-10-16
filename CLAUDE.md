@@ -5098,6 +5098,12 @@ muffin-deployment#433 (merged, deploys with #426 and #428) and muffin-ui#137 (op
 - **A UI that reads a new column cannot be render-checked before the column is live.** The render
   harness proxies to production, where PostgREST answers 400 for a column #428 has not deployed. So
   #137 is built and checked offline, and stays open until the deploy, then gets the render check.
+- **muffin-ui's rendered check (`smoke-market.mjs`) is the offline half that CAN run, and its
+  fixture had every currency USD.** So it could not tell which field the page reads, and its
+  market-cap check passed on any "$X.XXT" on the page while the cap itself was unlabelled. It
+  failed only where the new field was missing from the mock. AAPL's legacy `currency` is now GBP
+  beside USD `quote_currency` and `market_cap_currency`. Reverting the page to the old field fails
+  five named checks. Same rule as the SQL fixtures: make the candidate rules disagree.
 
 ## Running an OpenSandbox server locally
 
