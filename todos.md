@@ -2808,7 +2808,11 @@ never re-asked); no Yahoo statement row has a currency; `muffin-metrics` fails 3
   - Notes: [native cap readers](docs/deferred/2026-10-10-the-native-cap-readers-left-on-the-legacy-column.md),
     [half-years filed as quarters](docs/deferred/2026-10-10-the-edge-s-half-years-filed-as-quarters.md).
   - [ ] muffin-ui: the stock page labels its price by `quote_currency` and its cap by
-        `market_cap_currency`, and shows `eps_basis` beside the P/E, after #428 deploys.
+        `market_cap_currency`, and shows `eps_basis` beside the P/E. **Built 2026-10-16,
+        muffin-ui#137, open:** merge only after #428 deploys and a render check (VOD.L, a Hong Kong
+        line, an ADR, AAPL). It also says which of three facts withholds a ratio (listing currency
+        unknown, reporting currency unknown, no rate), since #433 leaves London unlabelled until
+        `GBX` relabels it.
   - Phase 5 note found here: [the statement key, fiscal periods and 2,259 `FY` rows](docs/deferred/2026-10-10-the-statement-key-and-fiscal-periods.md).
 - [x] 6. Library and `defs/companies/` (summary, statements, company facts, Yahoo statement
       writer, corporate actions from chart events, derived metrics, `lib/rotation.py`, checks);
