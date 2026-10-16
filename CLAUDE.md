@@ -5074,6 +5074,31 @@ muffin-ingest#107 (library, rolled 10-11) and #110 (defs, waits on #428's deploy
   lets the run connect as the worker, so a missing grant fails the run instead of passing under a
   superuser. `market.currency` holds only `GBX` there: production learns codes at runtime.
 
+### Stage 0's reader switch, and what a pending deploy changes (2026-10-16)
+
+muffin-deployment#433 (merged, deploys with #426 and #428) and muffin-ui#137 (open until #428 is live).
+
+- **A READER SWITCH SEQUENCED AGAINST ONE CHANGE CAN TURN OUT TO PROTECT AGAINST ANOTHER.** The
+  ratio view's switch to the bar's label was sequenced "after `GBX` deploys", so that London would
+  not become gaps. Measured: ten large London lines serve no price ratio at all today (no TTM, and
+  half-year balance sheets are read only from #428). #428 would make them appear, and under the old
+  rule a pence price divided by pound earnings is a hundred times out. So the switch rides the SAME
+  deploy as #428: gaps until each London line's next chart visit labels it `GBX`, then right.
+- **I wrote "London's ratios are a hundred times out today" into the migration header before
+  reading one.** The served values were null. Read the served value before describing it: the
+  formula says what the view would do, the row says what it does.
+- **Count who a switch moves before shipping it.** Over the 12,006 securities with a recent bar:
+  11,109 unchanged, 493 change quote currency (Hong Kong lines labelled CNY or USD, Kuwait in fils,
+  Tel Aviv in agorot), 150 gain one, 248 lose it (238 London). The newest bar's label against
+  `security.currency_code`, one primary-key probe per security, answers it in seconds.
+- **The node replay of CI's migration job must apply the legacy set TWICE**, as the recipe above
+  says and as I first did not. A view defined `select st.*` picks up a column a later migration
+  adds only on the second pass, so a single pass shows a spurious bundle diff
+  (`security_statement_current`, `st.derived_at`) that has nothing to do with the change.
+- **A UI that reads a new column cannot be render-checked before the column is live.** The render
+  harness proxies to production, where PostgREST answers 400 for a column #428 has not deployed. So
+  #137 is built and checked offline, and stays open until the deploy, then gets the render check.
+
 ## Running an OpenSandbox server locally
 
 - **`docker run -d -p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock opensandbox/server:latest`.**
