@@ -5200,6 +5200,18 @@ one already live.
   the ADR's dollars. Over 12,013 securities, 796 titles would have contradicted the bar's own label,
   and 223 would have shown a guess over an unlabelled bar. The unit checks passed: they test the
   formatting, not where the code comes from. #137 is held.
+- **ONE DATE PER METRIC STILL SPLITS A PERIOD, BECAUSE A TABLE PIVOTS ON THE DATE.**
+  `security_metric_series` collapsed a quarter's two dates per metric, so SEC's revenue sat on
+  06-27 and Yahoo-only R&D on 06-30, and Apple's quarterly tab showed four "2026" columns with
+  alternating blanks. muffin-deployment#441 clusters across all of a period's metrics.
+  - **A tie must go to where the rows sit, not to the later date.** SEC states IFRS 9/15/16 opening
+    balances on the day AFTER a year end, so "later" would have moved SAP's FY2016 to 2017-01-01.
+    That was found by running the new view as a temporary view against production and comparing
+    every row before shipping. The fixture had no such row, so the replay could not have found it.
+- **A WAIT LOOP KEYED ON A START TIME MISSES WHAT STARTED A SECOND EARLIER.** Waiting for "a
+  deploy created after 20:10" sat for ten minutes beside a deploy dispatched at 20:09:38 that had
+  already succeeded. Wait on the run the event created (its id, or the dispatching run's
+  `headSha`), never on a clock.
 - **zsh does not word-split `set -- $q`, a second time.** A DNS loop built that way reported every
   name NXDOMAIN, including the zone's own NS records. It was caught before being reported. Use a
   function.

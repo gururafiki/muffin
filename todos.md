@@ -2847,7 +2847,7 @@ never re-asked); no Yahoo statement row has a currency; `muffin-metrics` fails 3
     [half-years filed as quarters](docs/deferred/2026-10-10-the-edge-s-half-years-filed-as-quarters.md).
   - [ ] muffin-ui: the stock page labels its price by `quote_currency` and its cap by
         `market_cap_currency`, and shows `eps_basis` beside the P/E. **Built 2026-10-16,
-        muffin-ui#137, open, NOT TO MERGE AS IS.** The render check against live data on 2026-10-17
+        muffin-ui#137, MERGED 2026-10-17 after decision 20 (below).** The first render check against live data on 2026-10-17
         passed for the cap, the P/E basis and the withheld note: AAPL $4.51T and 39.1x TTM, DOM.L
         £788.23M and 15.4x on the fiscal year, VOD.L "the currency this listing trades in is not
         known". It FAILED for the price chart's title. The title reads
@@ -2857,8 +2857,16 @@ never re-asked); no Yahoo statement row has a currency; `muffin-metrics` fails 3
           own label and 223 would show a guess over an unlabelled bar. Examples: `VOD.L (EUR)` over
           pence, `992.HK (USD)` over HK$, and `TSM (TWD)` over the ADR's dollars, where
           `instrument_current` reads the linked company's security.
-        - Before #137 the title carried no currency, so merging now would be a regression. The
-          label must come only from observed bar labels; how is the user's decision. It also says which of three facts withholds a ratio (listing currency
+        - Before #137 the title carried no currency, so merging as is would have been a
+          regression.
+        - [x] **Decision 20 (the user, 2026-10-17): the chart names the currency of the bars it
+          draws.** `price_series` serves each bar's `currency_code` (muffin-deployment#440,
+          deployed 20:03 UTC). The hook names the newest bar's, and the dividends use the same
+          value. The second render check: `VOD.L` unlabelled, `992.HK (HKD)`, `TSM (USD)`,
+          `DOM.L (GBX)` with dividends `GBX 3.70`/`7.70`, and Lenovo's dividends `HK$0.34`.
+          Merged as 7f3c910.
+        - Left: Lenovo's cap reads `$432.92B`, a HK$ figure under the legacy USD fallback, until
+          the company lane visits it (step 8). It also says which of three facts withholds a ratio (listing currency
         unknown, reporting currency unknown, no rate), since #433 leaves London unlabelled until
         `GBX` relabels it.
   - Phase 5 note found here: [the statement key, fiscal periods and 2,259 `FY` rows](docs/deferred/2026-10-10-the-statement-key-and-fiscal-periods.md).
@@ -2896,7 +2904,18 @@ never re-asked); no Yahoo statement row has a currency; `muffin-metrics` fails 3
     muffin-deployment#439, deployed 2026-10-17 16:06 UTC: within ten days, the higher-priority
     source's quarter stands for it. This blocked step 8: every 52/53-week filer the lane visits would
     have lost its TTMs.
-- [ ] 8. The `yahoo_companies` schedule live; first rotation; a dated check note.
+  - [x] **2026-10-17 — the same doubling split the quarterly statement table.** Decision 21 (the
+    user): align in the view. muffin-deployment#441, deployed 20:03 UTC: `security_metric_series`
+    clusters dates across all of a period's metrics and serves them at the highest-priority source's
+    date. On a priority tie it takes the date most of that source's rows sit on, because SEC states
+    IFRS adoption opening balances the day after a year end (SAP, Toyota, Vodafone 2017-2019).
+    Apple's quarters went from nine dates to five. All 23 anon probes pass.
+- [x] 8. The `yahoo_companies` schedule live. **Declared RUNNING in muffin-ingest#113, rolled
+      2026-10-17 20:27 UTC** (`df0ed5…` → `a09b15…`, pinned). The instance reads it as
+      `DECLARED_IN_CODE`. The dry run of the first tick (2026-10-18 03:30 UTC) against the deployed
+      code: 18 runs of 100 companies, one day tag, one resume key.
+  - [ ] **check 2026-10-18 and 2026-10-25 — the first day and the first full rotation:**
+        [note](docs/deferred/2026-10-17-the-company-lane-s-first-rotation.md).
 - [ ] 9. Retire: nine resources, instrument-profile if every curated equity resolves,
       `security-metrics` and `muffin-metrics`, statements made SEC-only, the `security-refresh`
       shim (muffin-ui "queued"), Tiingo after its parity.
