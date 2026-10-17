@@ -5105,6 +5105,81 @@ muffin-deployment#433 (merged, deploys with #426 and #428) and muffin-ui#137 (op
   beside USD `quote_currency` and `market_cap_currency`. Reverting the page to the old field fails
   five named checks. Same rule as the SQL fixtures: make the candidate rules disagree.
 
+### The deploy that unblocked Phase 4, and what it found (2026-10-16/17)
+
+The first deploy since 2026-10-04, unblocked by a new `CLOUDFLARE_API_TOKEN`, shipped #422 (Stage 6),
+#426 (`GBX`), #428 (Phase 4's schema), #430 (the `/` path) and #433 (the ratio view's label).
+Reading Traefik's log while it ran found an outage two days away, and the latency probe after it found
+one already live.
+
+- **A SWARM SECRET UNDER A FIXED NAME KEEPS ITS FIRST VALUE, AND EVERY DEPLOY AFTER A ROTATION
+  REPORTS SUCCESS.** `Create Docker secrets` tolerates "already exists", so Traefik's
+  `cf_dns_api_token`, created 2026-07-20, outlived the replacement of `CLOUDFLARE_API_TOKEN` on
+  09-21. Its DNS-01 renewals failed with Cloudflare 401 every day from 2026-09-19. Five origin
+  certificates (muffin., muffin-api., muffin-chat., supabase., supabase-studio.) reached two days
+  from expiry, and with Cloudflare in Full (strict), expiry takes those hosts down.
+  - **The fix (muffin-deployment#434):** the secret is named by a hash of its value, so a new token
+    is a new secret and the stack deploy restarts Traefik onto it. The mount target is the KEY in
+    the stack file, so the container still reads `/run/secrets/cf_dns_api_token`. This was proved on
+    the node with a throwaway stack before shipping.
+  - **The other three secrets keep fixed names on purpose:** rotating a Postgres password is a
+    database operation, not a secret swap.
+- **THE METRIC THAT WOULD HAVE SAID SO WAS SCRAPED FOR WEEKS AND READ BY NOTHING.** Prometheus held
+  `traefik_tls_certs_not_after` for each certificate throughout the 27-day decline. An unplotted
+  metric cannot be seen to be wrong. muffin-deployment#435 alerts when any certificate has fewer than
+  25 days left (Traefik renews at 30 and retries daily). It also fires on no data, because the guard
+  is then blind.
+- **THE NEW TOKEN EXPIRES 2026-10-30 18:50 UTC, and the September one died after about the same
+  fourteen days.** That date comes from Cloudflare's own `/accounts/{id}/tokens/verify`
+  (`expires_on`). When a token with an end date lapses, the deploy fails at Terraform refresh, and
+  Traefik's renewals fail when the next window opens. Check `expires_on` whenever a token is set:
+  [note](docs/deferred/2026-10-17-the-cloudflare-token-expires-2026-10-30.md).
+  - Verify an account-owned (`cfat_`) token at `/accounts/{id}/tokens/verify`. `GET /accounts` with
+    the same token returns the id, and `/user/tokens/verify` answers 401 for it by design.
+  - Pass a token to curl as a header FILE (`curl -H @file`), written with the editor and deleted
+    after, so it is never in a process's argv.
+- **EVERY P/E CHART TIMED OUT FOR ANON FROM THAT DEPLOY UNTIL THE NEXT DAY.** `security_ratio_series`
+  computed its metric spans with `lead()` over all of `security_metric`. A filter cannot pass a
+  window that does not partition by its column, so drawing AAPL's 271 bars meant reading 1,316,977
+  metric rows and sorting 738,608 to disk: 6.4 s warm and 15 s cold, against anon's 3 s.
+  - The shape was as old as the view. #428's fiscal-year fallback (an anti-join probed 616,179 times
+    a read) and the night's TTM re-derivation (~250,000 rows) took it past the ceiling.
+  - My post-deploy latency probe found it 25 minutes after the deploy, and market-verify failed on it
+    the next morning, its only failure.
+  - **The fix (muffin-deployment#437):** the spans join `symbol_security` (one row per security) and
+    partition by the symbol too, and the join to the bars matches on it. Postgres then pushes the
+    filter below the window: 71 ms daily, 153–346 ms weekly.
+  - A LATERAL per security was tried first. It was right for daily, but took 4.6 s weekly: a
+    misestimate re-ran the window once per weekly bar.
+  - **A key a serving view is read by must be in every window's `PARTITION BY` on the path, AND in
+    the join that carries the filter to it.** Mutations proved each half is needed on its own.
+- **WHEN A TIMING CANNOT FAIL ON A FIXTURE, COUNT THE ROWS THE READ TOUCHES.** On CI's data every
+  plan takes milliseconds. `a-one-symbol-ratio-read-reads-one-security.sql` sums `Actual Rows ×
+  Loops` over every `security_metric` node of `EXPLAIN (ANALYZE, FORMAT JSON)`. It reads 2 rows of
+  2,002 on the new view, and 2,002 on the old one and on each half-fix. Three details make it fail
+  honestly:
+  - the target's id sorts LAST, so a merge join reading the spans in security order cannot stop
+    early and look narrow;
+  - seq scans are off, because on 2,000 rows a seq scan can be the cheapest plan, and it reads every
+    row even when the filter reaches below the window;
+  - it asserts a floor (the target's own 2 rows), so a plan walk that finds nothing cannot pass.
+- **A ROLL RE-SORTS A SERVICE'S MOUNTS BY SOURCE PATH, SO THE FIRST DEPLOY AFTER A ROLL STILL
+  REPLACED THE CODE LOCATION.** #431's pin held for the image. But `docker service update --force
+  --image` rewrites the mounts in source order, and the stack file listed them otherwise, so the
+  deploy replaced the task with the same image. #436 lists them sorted, and quality.yml fails any
+  rolled service whose mounts are not. Env order is not re-sorted.
+  **Verified 2026-10-17:** after the 14:29 roll, the 14:35 deploy of #436 left all three containers'
+  `StartedAt` at 14:29.
+- **A STAGE-2 REPLAY OF A PRE-2026-09-12 FX HISTORY PARTITION DERIVES NOTHING, AND THIS FILE ALREADY
+  SAID SO.** The todo for `GBX` read "run `fx_rate_history` for the GBP partition (stage 2 only)".
+  Run that way it reported `legacy_rows` and derived nothing, because that raw file holds the old
+  pivot (§ "Raw is the vendor's answer, whole"). Re-fetching the raw partition (one call) and
+  re-running stage 2 wrote 523 `GBX` rates, 2016-10-10..2026-10-12. Read `legacy_rows` before
+  believing a replay.
+- **zsh does not word-split `set -- $q`, a second time.** A DNS loop built that way reported every
+  name NXDOMAIN, including the zone's own NS records. It was caught before being reported. Use a
+  function.
+
 ## Running an OpenSandbox server locally
 
 - **`docker run -d -p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock opensandbox/server:latest`.**

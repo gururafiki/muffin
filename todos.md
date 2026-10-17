@@ -2451,8 +2451,15 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
             merged. The roll half is live: the 2026-10-11 09:56 roll pinned all three services to
             `muffin-ingest:latest@sha256:b4cc…`. The deploy half (Ansible keeps the pinned image)
             ships with the next deploy. Until then, merge an ingest PR only when about to roll it.
-            - [ ] After the next deploy: check that two deploys in a row leave the three Dagster
-                  tasks untouched (`docker service ps`, `State.StartedAt`).
+            - [x] After the next deploy: check that two deploys in a row leave the three Dagster
+                  tasks untouched (`docker service ps`, `State.StartedAt`). **Observed 2026-10-16/17.**
+                  The 10-16 18:56 deploy kept the pinned digest, but it still replaced the code
+                  location's task: the roll had re-sorted its mounts by source path. The 19:06
+                  deploy replaced nothing. muffin-deployment#436 lists the mounts in sorted order
+                  and checks it in CI. After the 10-17 14:29 roll, the 14:35 deploy replaced no
+                  Dagster task.
+            - [ ] Not yet seen: a deploy run between an ingest merge and its roll. Keep the rule
+                  until one leaves the three services unchanged.
             **Wider than written (2026-10-03):** the first deploy after ANY roll restarts all three
             Dagster services, even with an unchanged image, because the roll leaves a spec the deploy
             does not reproduce. The #398 deploy did this at 09:40 and failed Yahoo slice 3's backfill
@@ -2693,7 +2700,7 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
             alone was decided and shipped (#101). Publishing only the run's own rows was not
             chosen.
       - [x] Stage 6 — a database rebuilt from the repo works. **Merged 2026-10-06 in
-            muffin-deployment#422; its deploy is blocked by the Cloudflare token (below).** `before-migrations.sql` creates the two roles
+            muffin-deployment#422, deployed 2026-10-16; its checks hold on production.** `before-migrations.sql` creates the two roles
             and `pg_cron` (a third gap, found while building it). The baseline now carries 2,557
             seeded rows and 671 privilege statements. Two migrations declare the 12 legacy cron
             jobs and derive the 73 index scopes (a fourth gap: seeded once from the retired
@@ -2711,7 +2718,18 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
             applied only where the schema exists. A CI step compares a database rebuilt from the
             repo with the reference. The Supabase CLI matches versions only (its
             `FindPendingMigrations`), so production is unaffected.
-      - [ ] **2026-10-06 — every deploy fails: the Cloudflare token answers 401.** Terraform's
+      - [x] **RESOLVED 2026-10-16:** the user set a new token and the deploys of `db2ac2c` and
+            `9ff6dcb` succeeded. They also found Traefik still holding the July token: Docker
+            secrets are immutable, and its DNS-01 renewals had failed since 09-19, with five origin
+            certificates two days from expiry.
+            - muffin-deployment#434 names the secret by a hash of its value. All five certificates
+              renewed, to 2027-01-14.
+            - muffin-deployment#435 alerts below 25 days left.
+      - [ ] **check 2026-10-30 — the new Cloudflare token expires 2026-10-30 18:50 UTC.** This is the
+            user's credential decision: a token with no expiry date (recommended), or rotate and
+            deploy before then —
+            [note](docs/deferred/2026-10-17-the-cloudflare-token-expires-2026-10-30.md).
+      - [x] ~~**2026-10-06 — every deploy fails: the Cloudflare token answers 401.**~~ Terraform's
             refresh gets `401 / code 10000 Authentication error` on all 10 Cloudflare resources,
             twice, so nothing was applied. The last good deploy was 2026-10-04 18:44. Needs a new
             `CLOUDFLARE_API_TOKEN` on muffin-deployment (the user's step). Then deploy #422 and
@@ -2763,17 +2781,21 @@ never re-asked); no Yahoo statement row has a currency; `muffin-metrics` fails 3
   - [ ] **A `/` symbol. Decided 2026-10-11: encode it as `%2F`, and have http-cache forward the path
         undecoded** (decision 18): [note](docs/deferred/2026-10-11-a-slash-in-a-symbol-is-a-second-path-segment.md).
         Ingest half: muffin-ingest#106, rolled 2026-10-11 09:56 UTC. nginx half: muffin-deployment#430,
-        merged, live with the next deploy. Then check that a night reports no `transport` for one and
-        that the 18 carry a `miss`.
-  - [ ] `GBX`: muffin-deployment#426, **merged 2026-10-10**, waiting on a deploy (the Cloudflare
-        token; the last deploy to succeed was 10-04). After it deploys, run `fx_rate_history` for the
-        `GBP` partition (stage 2 only).
+        deployed 2026-10-16. Left: check that a night reports no `transport` for one, and that the 18
+        carry a `miss`.
+  - [x] `GBX`: muffin-deployment#426, **deployed 2026-10-16**. "Stage 2 only" was wrong. The `GBP`
+        raw partition predates 09-12, so stage 2 alone reported `legacy_rows` and derived nothing,
+        as CLAUDE.md already said. After re-fetching the raw partition (one call), stage 2 wrote
+        523 `GBX` rates, 2016-10-10..2026-10-12.
   - [x] Skills: driving a branch read-only against production (`branch_on_node.sh`), three
         pitfalls: **muffin-ingest#105**, mirrored.
-  - [ ] The ratio view reads the bar's label: **merged 2026-10-16, muffin-deployment#433**, deploys
-        with #426 and #428. The rotation is complete (`labels_changed` 0 on 10-16); after the
-        deploy, re-measure anon latency and read a London, a Tel Aviv and a Kuwaiti P/E chart —
-        [note](docs/deferred/2026-10-10-the-ratio-view-reads-the-bar-s-label.md).
+  - [ ] The ratio view reads the bar's label: **muffin-deployment#433, deployed 2026-10-16.** The
+        sampled P/Es are right: ALG.KW 11.09 (12,305 before), AZRG.TA 22.72 (2,547 before), and
+        DOM.L 15.41 (231.2p ÷ £0.15 × 100).
+        - London relabels as the rotation visits it: 25 of 238 lines after the first night, so
+          about five nights.
+        - Left: reading the charts in the app, with muffin-ui#137's render check —
+          [note](docs/deferred/2026-10-10-the-ratio-view-reads-the-bar-s-label.md).
   - [ ] Drop `raw_price_history` and its 1.6 GB on or after 2026-10-24:
         [note](docs/deferred/2026-10-10-the-openbb-price-raw-is-the-rollback.md).
   - Related notes: [subunits as data](docs/deferred/2026-10-10-subunits-are-data-not-a-dict.md),
@@ -2785,8 +2807,8 @@ never re-asked); no Yahoo statement row has a currency; `muffin-metrics` fails 3
       stored "quarters" in 2,188 securities are half-years; http-cache needs bigger buffers, a
       16 KB URL limit and no caching for quoteSummary. Left for the live subset: a pace probe,
       ZAc/ILA cap currencies, the P/E fields across currencies, the crumb's lifetime.
-- [ ] 5. Schema: **muffin-deployment#428, built and verified 2026-10-10**, waiting on its checks
-      and a deploy (the Cloudflare token). In the spec's *As built — step 5*:
+- [x] 5. Schema: **muffin-deployment#428, deployed 2026-10-16 19:06 UTC.** In the spec's *As built —
+      step 5*:
   - `security_fundamentals.market_cap` + `market_cap_currency`; `security_market_cap_usd`,
     `security_current` and `instrument_current` read them (the stock page's label follows in
     muffin-ui).
@@ -2799,8 +2821,24 @@ never re-asked); no Yahoo statement row has a currency; `muffin-metrics` fails 3
     for semi-annual reporters); stocks read halves.
   - The quote currency from the price lane's newest bar (decision 14): `security_price_span`,
     `security_currency`, `security_current.quote_currency`.
-  - [ ] After the deploy: watch `muffin-metrics` drain the one-time re-evaluation (12,038
+  - [x] After the deploy: watch `muffin-metrics` drain the one-time re-evaluation (12,038
         securities, ~0.9M `derived-q4` rows), re-measure anon latency, read Apple's P/E chart.
+        **Done 2026-10-17.**
+        - The re-evaluation drained: `pending_ttm` reached 0.
+        - Apple's TTM revenue at 2025-12-27 now reads 435.62bn (457.45bn before), and its newest
+          P/E reads 39.15.
+        - The latency check found every P/E read timing out for anon, 25 minutes after the deploy:
+          see the next item.
+  - [x] **2026-10-16/17 — every P/E chart timed out for anon (`57014`) from the deploy until the
+        fix.**
+        - Cause: `security_ratio_series` ran `lead()` over all of `security_metric`, so the symbol
+          filter stopped at the window. AAPL read 1.32M metric rows and took 6.4 s warm, 15 s cold.
+          #428's fallback and the TTM re-derivation pushed an old shape past the ceiling.
+        - Fix: muffin-deployment#437, deployed 2026-10-17 14:45 UTC. The window partitions by the
+          symbol, and the join carries it.
+        - After: P/E daily 852 ms and weekly 1,154 ms as anon, and all 23 probes ok.
+        - The new test counts the metric rows a one-symbol read touches: 2 of 2,002. It fails on the
+          old view and on each half-fix.
   - `pending_statements`' SEC half re-keyed to `no_sec`; `pending_quarters` counts halves.
   - http-cache: no-store header, three no-cache Yahoo locations, a 16 KB request line, the crumb
     out of the log. Validated on the node in the http-cache image.
@@ -2809,15 +2847,25 @@ never re-asked); no Yahoo statement row has a currency; `muffin-metrics` fails 3
     [half-years filed as quarters](docs/deferred/2026-10-10-the-edge-s-half-years-filed-as-quarters.md).
   - [ ] muffin-ui: the stock page labels its price by `quote_currency` and its cap by
         `market_cap_currency`, and shows `eps_basis` beside the P/E. **Built 2026-10-16,
-        muffin-ui#137, open:** merge only after #428 deploys and a render check (VOD.L, a Hong Kong
-        line, an ADR, AAPL). It also says which of three facts withholds a ratio (listing currency
+        muffin-ui#137, open, NOT TO MERGE AS IS.** The render check against live data on 2026-10-17
+        passed for the cap, the P/E basis and the withheld note: AAPL $4.51T and 39.1x TTM, DOM.L
+        £788.23M and 15.4x on the fiscal year, VOD.L "the currency this listing trades in is not
+        known". It FAILED for the price chart's title. The title reads
+        `security_current.quote_currency`, which falls back to the listing's and the security's
+        legacy columns wherever the price lane has not yet recorded the bar's label (decision 14).
+        - Measured over 12,013 securities with a recent bar: 796 titles would contradict the bar's
+          own label and 223 would show a guess over an unlabelled bar. Examples: `VOD.L (EUR)` over
+          pence, `992.HK (USD)` over HK$, and `TSM (TWD)` over the ADR's dollars, where
+          `instrument_current` reads the linked company's security.
+        - Before #137 the title carried no currency, so merging now would be a regression. The
+          label must come only from observed bar labels; how is the user's decision. It also says which of three facts withholds a ratio (listing currency
         unknown, reporting currency unknown, no rate), since #433 leaves London unlabelled until
         `GBX` relabels it.
   - Phase 5 note found here: [the statement key, fiscal periods and 2,259 `FY` rows](docs/deferred/2026-10-10-the-statement-key-and-fiscal-periods.md).
 - [x] 6. Library and `defs/companies/` (summary, statements, company facts, Yahoo statement
       writer, corporate actions from chart events, derived metrics, `lib/rotation.py`, checks);
       local tiny subset. **Library: muffin-ingest#107, rolled 2026-10-11. Defs: muffin-ingest#110,
-      open, merges only after #428 deploys.** The tiny subset ran on the node (Docker Desktop still
+      merged 2026-10-16, rolled 2026-10-17 14:29 UTC.** The tiny subset ran on the node (Docker Desktop still
       wedged) over five companies as `ingest_rw`: every counter sums, 140 statement rows all with a
       currency, 1,103 metrics and 130 TTMs, 315 corporate actions matching history, a second visit
       asking nothing. As built in the spec.
@@ -2825,12 +2873,18 @@ never re-asked); no Yahoo statement row has a currency; `muffin-metrics` fails 3
         the largest file and a run's peak memory —
         [note](docs/deferred/2026-10-13-stage-2-re-reads-every-statements-document.md).
 - [ ] 7. Roll; live tiny subset; parity against the edge tables.
-  - **Waiting on the deploy of muffin-deployment#428 (blocked on a new `CLOUDFLARE_API_TOKEN`).**
-    Then, in one roll outside the run windows: merge muffin-ingest#110 (the company lane) and
-    muffin-ingest#112 (the security bumps for all nine Dependabot alerts, decided 2026-10-13), and
-    close Dependabot's #48, #96, #97, #108 and #109 if it does not. Read the first `daily_indices`
-    night after: lxml went 5 to 6, and finviz scraping may reach it. **lxml 6 stays in #112,
-    confirmed by the user 2026-10-14:** the high alert has no fix on lxml 5 (6.1.0 is the first).
+  - [x] **Rolled 2026-10-17 14:29 UTC.** muffin-ingest#110 (the company lane) and #112 (the
+    security bumps, lxml 6 confirmed by the user 2026-10-14) merged 2026-10-16 19:29. The roll moved
+    all three services `5a67c1…` → `df0ed5…`, pinned. Dependabot's #48, #96, #97, #108 and #109 are
+    closed. The `yahoo_companies` schedule ships STOPPED.
+  - [ ] **check 2026-10-18 — the first night on the new image.** Read:
+    - `daily_indices`: lxml went 5 to 6, and finviz scraping may reach it;
+    - `yahoo_corporate_action` in `nightly_prices`;
+    - the chart lane's no-store header: no new chart entries in http-cache;
+    - `derived_security_metrics` at :17/:47 (its first run, 14:47 on 10-17, found both backlogs at 0:
+      the edge's `muffin-metrics` is keeping up);
+    - the heartbeat.
+  - [ ] Live tiny subset of `yahoo_companies`, then parity against the edge tables.
 - [ ] 8. The `yahoo_companies` schedule live; first rotation; a dated check note.
 - [ ] 9. Retire: nine resources, instrument-profile if every curated equity resolves,
       `security-metrics` and `muffin-metrics`, statements made SEC-only, the `security-refresh`

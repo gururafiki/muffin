@@ -101,6 +101,21 @@ digest. Pinning only the deploy would still differ from the roll's bare tag.
   `sha256:b4cc1cea…`, and all three specs read `pinned`. Before it, every spec held the bare tag the
   10-10 roll had written, so that roll is what makes the next deploy a no-op for Dagster.
 
+## Observed 2026-10-16/17: the pin held, and the mount order restarted the code location
+
+- **The 2026-10-16 18:56 deploy replaced the code-location task on the SAME digest**
+  (`5a67c1…` → `5a67c1…`), and left the daemon and the webserver alone. The pin had held. But the
+  10-14 roll's `docker service update --force --image` had rewritten the service's mounts in
+  source-path order, and the stack file listed them in another order, so the deploy saw a changed
+  task template. Env order is not re-sorted. The 19:06 deploy, straight after, replaced nothing.
+- **muffin-deployment#436** lists the code location's mounts in source order. `quality.yml` now fails
+  any service named in the roll's `SERVICES=(…)` whose mounts are listed otherwise.
+- **2026-10-17, the after-a-roll case, verified.** The roll ran at 14:29 (`5a67c1…` → `df0ed5…`, all
+  three pinned), and the deploy of `2e3c4ea` (#436 and #437) followed at 14:35. Afterwards all three
+  containers still had `StartedAt` 14:29, and `docker service ps` showed no task newer than the roll.
+- **Still unobserved:** a deploy run between an ingest merge and its roll. #110 and #112 merged after
+  both 10-16 deploys and were rolled before the next one, so that case never occurred.
+
 ## Operating rule until then
 
 - Merge a muffin-ingest PR only when you are about to roll it.

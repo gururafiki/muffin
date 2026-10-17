@@ -1,5 +1,23 @@
 # Every deploy fails: the Cloudflare token answers 401
 
+## Resolved 2026-10-16
+
+The user set a new `CLOUDFLARE_API_TOKEN`, and `deploy.yml` runs 38951132658 (`db2ac2c`, 18:56 UTC)
+and 38952436380 (`9ff6dcb`, 19:06 UTC) succeeded. #422's checks held on production, and so did the
+migrations merged behind it (#426, #428, #430, #433).
+
+Reading Traefik's log during that deploy found a second, older failure. Traefik still held the token
+created on 2026-07-20. Docker secrets are immutable, and Ansible's create task tolerates "already
+exists", so the replacements of 09-21 and 10-16 never reached it. Its DNS-01 renewals had failed
+with Cloudflare 401 every day since 09-19. Five origin certificates were two days from expiry, and
+with Cloudflare in Full (strict), expiry takes those hosts down.
+- muffin-deployment#434 names the secret by a hash of its value, so a new token restarts Traefik
+  onto it. One forced restart renewed all five certificates, to 2027-01-14.
+- muffin-deployment#435 alerts when any certificate has fewer than 25 days left.
+
+**The new token expires 2026-10-30 18:50 UTC**:
+[note](2026-10-17-the-cloudflare-token-expires-2026-10-30.md).
+
 ## Why
 
 `deploy.yml` runs 37536299564 (apply) and 37536550774 (plan), 2026-10-06 21:47 and ~21:55 UTC,

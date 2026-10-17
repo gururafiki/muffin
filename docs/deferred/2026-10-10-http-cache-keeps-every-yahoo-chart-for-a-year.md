@@ -43,6 +43,16 @@ token blocks every deploy.
 - **The size before:** 31.4 GB on 2026-10-13 (`muffin_volume_bytes`), up from 29 GB on 10-10, with
   `/mnt/data` at 71% (from 67%).
 
+## Live (2026-10-17)
+
+The nginx half deployed 2026-10-16 19:06 UTC. The lane half rolled 2026-10-17 14:29 UTC
+(muffin-ingest#110, image `df0ed5…`). So the night of 2026-10-18 is the first price night whose
+chart answers are not stored.
+
+**The size before, 2026-10-17 14:50 UTC:** `muffin_volume_bytes{volume="muffin_http-cache-data"}`
+reads 27.79 GB, with `/mnt/data` at 69%. That is down from 31.4 GB on 10-13: the zone's LRU had
+already evicted some entries. Read it again after one rotation (~2026-10-23).
+
 ## Done when
 
 A rotation of the price lane no longer grows the cache, and the size panel shows it.

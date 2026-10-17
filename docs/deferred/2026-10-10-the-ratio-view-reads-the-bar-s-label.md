@@ -45,6 +45,23 @@ relabel would make about a hundred P/Es a hundred times worse. London also needs
   was replayed on the node: the bundle matches, and 107 of 107 tests pass.
 - **Step 4** waits on the deploy.
 
+## Deployed (2026-10-16/17)
+
+- **Live 2026-10-16 19:06 UTC**, in the same deploy as #426 (`GBX`) and #428.
+- **Step 4's latency check found every P/E read timing out for anon (`57014`), 25 minutes after the
+  deploy.** The label switch did not cause it. The view's spans ran `lead()` over all of
+  `security_metric`, so the symbol filter stopped at the window. #428's fiscal-year fallback and the
+  TTM re-derivation pushed that past the ceiling. Fixed in muffin-deployment#437, deployed
+  2026-10-17 14:45 UTC. As anon afterwards: daily 852 ms, weekly 1,154 ms, SAP.DE 775 ms, and all
+  23 probes ok (timed from a laptop, network included).
+- **Sampled P/Es, newest daily bar, 2026-10-17:**
+  - ALG.KW 11.09 (12,305 before), AZRG.TA 22.72 (2,547 before), NBK.KW 13.49, AMRM.TA 18.48;
+  - DOM.L 15.41, which is 231.2p ÷ (£0.15 × 100).
+- **London relabels as the rotation visits it.** 25 of the 238 London lines carried `GBX` after the
+  first night. VOD.L, SHEL.L and AZN.L were not yet visited, so they serve no P/E: a gap, as
+  designed.
+- **Left:** reading the charts in the app. That rides with muffin-ui#137's render check.
+
 ## What to do
 
 1. Confirm the rotation is complete. Every equity with a bar in the last week should have a
