@@ -2884,7 +2884,18 @@ never re-asked); no Yahoo statement row has a currency; `muffin-metrics` fails 3
     - `derived_security_metrics` at :17/:47 (its first run, 14:47 on 10-17, found both backlogs at 0:
       the edge's `muffin-metrics` is keeping up);
     - the heartbeat.
-  - [ ] Live tiny subset of `yahoo_companies`, then parity against the edge tables.
+  - [x] **Live tiny subset of `yahoo_companies`, then parity against the edge tables. Done
+    2026-10-17, recorded in the spec's *Step 7*.**
+    - Five companies (005930.KS, 7203.T, AAPL, SAP.DE, VOD.L): all SUCCESS, `throttled=0`, every
+      statement row with a currency, SEC's 159 rows untouched.
+    - Parity: taxonomy identical; officers the same people (the edge kept Yahoo's double spaces);
+      fundamentals with two months of drift, in the same units, plus a cap with its own currency.
+  - [x] **2026-10-17 — the subset broke Apple's P/E, and #439 fixed it.** The same quarter from SEC
+    and from Yahoo, days apart, made `derive_ttm` refuse every window and retract the right TTMs:
+    P/E 39.15 → 51.74. ATROB, WOLF and MMED had been frozen the same way since 2025.
+    muffin-deployment#439, deployed 2026-10-17 16:06 UTC: within ten days, the higher-priority
+    source's quarter stands for it. This blocked step 8: every 52/53-week filer the lane visits would
+    have lost its TTMs.
 - [ ] 8. The `yahoo_companies` schedule live; first rotation; a dated check note.
 - [ ] 9. Retire: nine resources, instrument-profile if every curated equity resolves,
       `security-metrics` and `muffin-metrics`, statements made SEC-only, the `security-refresh`

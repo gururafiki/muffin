@@ -5176,6 +5176,30 @@ one already live.
   pivot (§ "Raw is the vendor's answer, whole"). Re-fetching the raw partition (one call) and
   re-running stage 2 wrote 523 `GBX` rates, 2016-10-10..2026-10-12. Read `legacy_rows` before
   believing a replay.
+- **A QUARTER TWO SOURCES REPORT ARRIVES TWICE, DAYS APART, AND A TTM THAT COUNTS ROWS REFUSES THE
+  YEAR. MY LIVE SUBSET BROKE APPLE'S P/E TO FIND IT.** SEC dates a quarter by its last day and Yahoo
+  by the month end. For a 52/53-week filer (Apple, much of retail and tech) the two differ by days.
+  - **The failure.** `derive_ttm`'s window counted rows, so four rows held two quarters, the window
+    spanned under 240 days, and the rule refused it. Its retraction then removed the TTMs that had
+    been right. Apple's P/E went from 39.15 to 51.74, on a TTM EPS from mid-2025.
+  - **Already present.** ATROB, WOLF and MMED had been frozen the same way for a year by the edge's
+    own Yahoo quarters, and nothing reported it.
+  - **The fix (muffin-deployment#439).** Within ten days, the higher-priority source's quarter stands
+    for the quarter.
+  - **Its cost.** Comparing `source_priority()` on every probed row made the read 4.4x slower.
+    Comparing only cross-source pairs keeps it flat (1.05 s against 1.17 s per 1,000 securities).
+  - **A refusal rule's retraction needs checking against the case it refuses.** Declining to publish
+    a wrong number is right. Retracting a right one because a second source arrived is not.
+  - **A local subset over a database with no SEC quarters cannot see an interaction with them.**
+    Compare a live subset's SERVED numbers before and after, not only the rows it wrote.
+- **A LABEL READ FROM A VIEW WITH A FALLBACK IS THE FALLBACK'S GUESS WHEREVER THE OBSERVED VALUE IS
+  MISSING.** muffin-ui#137 titled the price chart with `security_current.quote_currency`. That column
+  prefers the price lane's recorded bar label, but falls back to the listing's and the security's
+  legacy currency, the columns the edge filled with the REPORTING currency. Rendered against live
+  data on 2026-10-17, VOD.L read `(EUR)` over pence, Lenovo `(USD)` over HK$, and TSM `(TWD)` over
+  the ADR's dollars. Over 12,013 securities, 796 titles would have contradicted the bar's own label,
+  and 223 would have shown a guess over an unlabelled bar. The unit checks passed: they test the
+  formatting, not where the code comes from. #137 is held.
 - **zsh does not word-split `set -- $q`, a second time.** A DNS loop built that way reported every
   name NXDOMAIN, including the zone's own NS records. It was caught before being reported. Use a
   function.

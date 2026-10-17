@@ -709,6 +709,53 @@ Verified:
 Left for later: stage 2 re-reads every stored statements document on every visit
 ([note](../deferred/2026-10-13-stage-2-re-reads-every-statements-document.md)).
 
+### Step 7, the live subset and parity (2026-10-17)
+
+**Rolled** 2026-10-17 14:29 UTC: muffin-ingest#110 and #112, image `df0ed5…`, all three services
+pinned. The `yahoo_companies` schedule ships STOPPED.
+
+**The subset:** `yahoo_companies` for 005930.KS, 7203.T, AAPL, SAP.DE and VOD.L, one run each,
+launched 15:18 UTC. All five succeeded in ~28 s each, serialised on the `yfinance` pool.
+- **Fetch.** Each company took 3 calls (cookie, crumb, summary) plus its 2 timeseries documents.
+  Summaries were 271–548 KB, with `throttled=0`, `crumb_rejected=0` and every outcome counter
+  summing to `requested`.
+- **Statements.** 18–32 rows per company, every one with a currency, and `unknown_keys=0`. Fewer
+  rows changed for Toyota (19 of 30) and Vodafone (6 of 18), because SEC holds those periods and
+  the Yahoo writer never replaces SEC.
+
+**Parity against the edge's rows**, snapshotted before the runs:
+
+| Table | Result |
+|---|---|
+| SEC statement rows | 159 before, 159 after, every one byte-identical |
+| `security_taxonomy` | identical: the same sector and industry nodes |
+| `security_officer` | the same people. The edge stored Yahoo's double spaces in names ("Mr. Hark-Kyu  Park"); stage 2 collapses them. Apple's list really changed: Joswiak out, Ternus in |
+| `security_fundamentals` | two months of drift, in the same units (margins as fractions, `dividend_yield` in percent). New: `market_cap` with its own currency. **VOD.L reads £28.28bn in GBP**: the stock page's €27.58bn was a GBP figure the edge labelled with the reporting currency |
+| Yahoo statement rows | a currency on every row, and more history: SAP 32 rows where the edge had none, Toyota 16 quarters where it had 3 annual rows. No re-written row lost a field (45 compared) |
+| `security.provider_country_iso2` | set for all five (empty before) |
+| share stats, estimates | one row appended each, as a time series should |
+| Apple FY2025 from Yahoo | revenue $416.161bn, net income $112.01bn, diluted EPS 7.46: SEC's figures |
+
+**Found: a quarter two sources report was counted twice, and the TTM refused the year**
+(muffin-deployment#439):
+- **The cause.** SEC dates a quarter by its last day and Yahoo by the month end, so a 52/53-week
+  filer's quarters arrived twice, days apart.
+- **The effect.** `derive_ttm` refused every window as "the same quarter twice" and retracted the
+  TTMs that had been right. Apple's P/E went from 39.15 to 51.74, on a TTM EPS from mid-2025.
+- **Not only Apple.** ATROB, WOLF and MMED had been frozen the same way since 2025 by the edge's own
+  Yahoo quarters.
+- **The fix.** Within ten days, the higher-priority source's quarter stands for the quarter. The
+  probe compares priorities only for cross-source pairs, so the cost is unchanged (1.05 s against
+  1.17 s per 1,000 securities). Deployed 2026-10-17 16:06 UTC. The 16:17 derivation drained
+  `pending_ttm` to 0: Apple's TTM EPS is 8.72 at 2026-06-27, its P/E is 39.10 again, and ATROB
+  (35.88) and WOLF have their TTMs back through mid-2026.
+- **Why the local subset missed it.** It ran on a throwaway database with no SEC quarters.
+
+**Not yet measured:**
+- corporate actions from chart events, after the first night (2026-10-18);
+- the pace probe of ~200 requests (the subset made 25);
+- the crumb's lifetime.
+
 ## Open questions
 
 Closed by the 2026-10-10 measurements:
