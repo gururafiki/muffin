@@ -1,7 +1,7 @@
 # http-cache keeps every Yahoo chart response for a year, and the price lane now sends it 2,500 a night
 
-Created 2026-10-10 · Due when Phase 4's company lane is built (step 5's nginx changes) · Status: **built,
-waiting on the deploy and the roll** (2026-10-14)
+Created 2026-10-10 · Due when Phase 4's company lane is built (step 5's nginx changes) · Status: **live
+2026-10-17; the first night stored no price-lane chart (2026-10-18); one rotation left to read**
 
 ## Why it is deferred
 
@@ -52,6 +52,24 @@ chart answers are not stored.
 **The size before, 2026-10-17 14:50 UTC:** `muffin_volume_bytes{volume="muffin_http-cache-data"}`
 reads 27.79 GB, with `/mnt/data` at 69%. That is down from 31.4 GB on 10-13: the zone's LRU had
 already evicted some entries. Read it again after one rotation (~2026-10-23).
+
+## The first night, read 2026-10-18
+
+**The header works.** Since the 2026-10-17 20:27 UTC roll, http-cache stored 39 new
+`/yahoo/v8/finance/chart` entries, read from the entries' own `KEY:` lines.
+- All 39 are the FX lane's `range=5d&interval=1d` spot requests at 00:00, one per currency, which
+  stay cached by design. Each currency's key is the same every day, so its file is rewritten in place
+  and adds no size.
+- None of the price lane's 2,440 chart requests that night was stored.
+
+**The size:**
+- `muffin_volume_bytes` read **27.92 GB** at 14:05 UTC (`du -sb` 27.89 GB at 07:40), against
+  27.79 GB at 10-17 14:50: +0.13 GB in a day.
+- The growth came from SEC (4,733 new entries), openbb-api (about 800) and Tiingo (99). None is chart.
+- 473,917 files. `/mnt/data` at 71%.
+
+Read it again after the price lane's first full rotation (~2026-10-23). Until then, one night says
+the chart lane no longer grows the cache; it does not yet say the size panel shows a flat rotation.
 
 ## Done when
 

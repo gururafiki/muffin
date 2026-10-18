@@ -2778,11 +2778,16 @@ never re-asked); no Yahoo statement row has a currency; `muffin-metrics` fails 3
         the currency spec's decision 5): [note](docs/deferred/2026-10-11-the-chart-lane-asks-at-less-than-half-the-old-rate.md).
         - [x] Correct the constant's comment in the next ingest PR: muffin-ingest#106, rolled
               2026-10-11.
-  - [ ] **A `/` symbol. Decided 2026-10-11: encode it as `%2F`, and have http-cache forward the path
+  - [x] **A `/` symbol. Decided 2026-10-11: encode it as `%2F`, and have http-cache forward the path
         undecoded** (decision 18): [note](docs/deferred/2026-10-11-a-slash-in-a-symbol-is-a-second-path-segment.md).
         Ingest half: muffin-ingest#106, rolled 2026-10-11 09:56 UTC. nginx half: muffin-deployment#430,
-        deployed 2026-10-16. Left: check that a night reports no `transport` for one, and that the 18
-        carry a `miss`.
+        deployed 2026-10-16. **Checked 2026-10-18:**
+        - The price night reported `transport 0`. `ACS/D.MC`, asked as `%2F`, got Yahoo's JSON
+          absence and its miss at 01:35.
+        - All 18 carry a miss. 17 are bound to the symbol asked today. `3BBIF/F.BK`'s miss is bound to
+          its old spelling `3BBIF-F.BK`, so it stays askable until the price lane next visits it.
+        - The company lane asked it at 03:30 and counted a transport, because quoteSummary words a
+          slash symbol's absence differently. Fixed in muffin-ingest#115 (step 8).
   - [x] `GBX`: muffin-deployment#426, **deployed 2026-10-16**. "Stage 2 only" was wrong. The `GBP`
         raw partition predates 09-12, so stage 2 alone reported `legacy_rows` and derived nothing,
         as CLAUDE.md already said. After re-fetching the raw partition (one call), stage 2 wrote
@@ -2885,13 +2890,21 @@ never re-asked); no Yahoo statement row has a currency; `muffin-metrics` fails 3
     security bumps, lxml 6 confirmed by the user 2026-10-14) merged 2026-10-16 19:29. The roll moved
     all three services `5a67c1…` → `df0ed5…`, pinned. Dependabot's #48, #96, #97, #108 and #109 are
     closed. The `yahoo_companies` schedule ships STOPPED.
-  - [ ] **check 2026-10-18 — the first night on the new image.** Read:
-    - `daily_indices`: lxml went 5 to 6, and finviz scraping may reach it;
-    - `yahoo_corporate_action` in `nightly_prices`;
-    - the chart lane's no-store header: no new chart entries in http-cache;
-    - `derived_security_metrics` at :17/:47 (its first run, 14:47 on 10-17, found both backlogs at 0:
-      the edge's `muffin-metrics` is keeping up);
-    - the heartbeat.
+  - [x] **check 2026-10-18 — the first night on the new image. Clean, read 2026-10-18.**
+    - Every run since the 10-17 20:27 roll succeeded: 9 heartbeats and 25 asset-job runs, among them
+      every `derived_security_metrics` run at :17/:47.
+    - `nightly_prices`: 101 runs. 2,439 answered + 1 absent + 60 not askable = 2,500 requested.
+      `throttled 0`, `transport 0`.
+    - `price_bar_history`: 27 labels changed, 11 unit changes and 20 bounces found. The label check
+      found 0 disagreements, and 658 securities (5.2%) are stale.
+    - `yahoo_corporate_action`: 71,252 rows (66,073 dividends, 5,179 splits) for 2,439 securities, 7
+      retracted.
+    - `daily_indices`: finviz still returns all 11 sector groups (77 rows) under lxml 6, and all 61
+      index scopes.
+    - `daily_fx`: 39 currencies answered. No rates for Saturday 10-17, correctly; the re-read offered
+      210 and refilled none.
+    - The no-store header holds: no price-lane chart was stored
+      ([note](docs/deferred/2026-10-10-http-cache-keeps-every-yahoo-chart-for-a-year.md)).
   - [x] **Live tiny subset of `yahoo_companies`, then parity against the edge tables. Done
     2026-10-17, recorded in the spec's *Step 7*.**
     - Five companies (005930.KS, 7203.T, AAPL, SAP.DE, VOD.L): all SUCCESS, `throttled=0`, every
@@ -2914,8 +2927,25 @@ never re-asked); no Yahoo statement row has a currency; `muffin-metrics` fails 3
       2026-10-17 20:27 UTC** (`df0ed5…` → `a09b15…`, pinned). The instance reads it as
       `DECLARED_IN_CODE`. The dry run of the first tick (2026-10-18 03:30 UTC) against the deployed
       code: 18 runs of 100 companies, one day tag, one resume key.
-  - [ ] **check 2026-10-18 and 2026-10-25 — the first day and the first full rotation:**
+  - [x] **2026-10-18, the first scheduled day:** 18 of 18 runs SUCCESS, every counter summing,
+        `throttled 0`, `crumb_rejected 0`. Read in full in the
+        [note](docs/deferred/2026-10-17-the-company-lane-s-first-rotation.md). Two defects:
+        - **One `summary_transport`:** Yahoo words a slash symbol's absence `Quote not found for ticker
+          symbol`. muffin-ingest#115, rolled 2026-10-18 08:05 UTC, verified live.
+        - **The TTM spot check:** COST, PEP, AZO and DPZ (12/12/12/16-week years) had no TTM, and 797
+          windows counted a quarter twice (Greif's newest TTM EPS among them).
+          muffin-deployment#443, deployed 2026-10-18 14:14 UTC. The 14:17 derivation re-derived the
+          236 re-queued securities: COST 49.75 and PEP 17.23 on TTM, Greif B on its fiscal year,
+          AAPL/NVDA/JACK unchanged.
+        - The lane held the `sql` pool for 2 h 20 min (03:30–05:51), so the derived runs waited. Roll
+          or deploy after about 06:00, not 05:30.
+  - [ ] **check 2026-10-25 — the first full rotation:**
         [note](docs/deferred/2026-10-17-the-company-lane-s-first-rotation.md).
+  - [ ] **check by 2026-10-21 — the stock page's statements read resolves every symbol**, so it grows
+        with the ~44,600 statement rows a day the rotation adds. It was 0.65–0.85 s as anon on
+        2026-10-18, and 1,993 ms in the guard right after a deploy. Move the view onto
+        `symbol_security` once its readers are listed:
+        [note](docs/deferred/2026-10-18-the-statements-read-resolves-every-symbol.md).
 - [ ] 9. Retire: nine resources, instrument-profile if every curated equity resolves,
       `security-metrics` and `muffin-metrics`, statements made SEC-only, the `security-refresh`
       shim (muffin-ui "queued"), Tiingo after its parity.

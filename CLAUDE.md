@@ -5216,6 +5216,67 @@ one already live.
   name NXDOMAIN, including the zone's own NS records. It was caught before being reported. Use a
   function.
 
+### The company lane's first day, and two TTM rules it exposed (2026-10-18)
+
+The first scheduled `yahoo_companies` day: 18 of 18 runs SUCCESS, every counter summing, `throttled
+0`. Measurements in `docs/deferred/2026-10-17-the-company-lane-s-first-rotation.md`. Three defects
+were fixed the same day and a fourth is open, each found by reading production rather than by any
+check.
+
+- **YAHOO WORDS AN ABSENCE TWO WAYS, AND A SLASH IN THE SYMBOL PICKS THE OTHER ONE.**
+  - quoteSummary answers `Quote not found for symbol: ZZQQXX` for most symbols.
+  - It answers `Quote not found for ticker symbol: KEY/R.TO` for every symbol containing a `/`
+    (measured over seven symbols, both ways).
+  - The lane matched only the first, so `3BBIF/F.BK` counted as a transport fault. Three such
+    symbols in a row at the start of a run would have tripped its "three transport failures and
+    nothing answered" stop.
+  - muffin-ingest#115 lists both wordings. Fifth instance of this file's "a provider states 'no
+    data' in more than one wording".
+- **A TTM's FOURTH-QUARTER BOUNDS WERE WRITTEN FOR A 13-WEEK CALENDAR.** `derive_ttm` derived SEC's
+  missing Q4 only when Q1 to Q3 spanned 170–200 days and Q3 to the year end 80–100.
+  - Costco, PepsiCo, AutoZone and Domino's file 12/12/12/16 weeks: 168 and 112 days, 119 in a 53-week
+    year. They had no TTM at all, and their P/E stood on the fiscal year (COST 54.32 against 49.75 on
+    the TTM).
+  - Found by spot-checking COST's P/E, not by any count.
+  - **Measure every gap shape over the whole table before choosing bounds, then read every year the
+    new bounds admit:** 18 securities, all legitimate or refused by another guard.
+- **A QUARTER COUNTED TWICE WITH ANOTHER MISSING STILL SPANS A YEAR.** The window tested only that
+  four rows spanned 240–300 days, so one quarter under two dates plus one quarter absent passed.
+  Sources of such pairs:
+  - SEC re-dates a 52/53-week quarter (ATI 2023-09-30 and 10-01);
+  - restatements file a quarter twice (YUM 2016 Q1 as 03-19 and 03-31);
+  - a fiscal-year change makes Yahoo serve both calendars (Greif's newest TTM EPS of 7.845 counted a
+    summer twice).
+
+  797 of 1,004,396 accepted windows were affected. **The threshold came from the distribution of the
+  smallest gap**: 783 windows at 0–32 days and 14 at 33–44, against 198 at 55–64, where genuine
+  years live. Jack in the Box's 12-week quarter is dated by Yahoo 59 days after the one before. So the
+  threshold is 45, half a quarter, and 60 would have removed real years: one fixture keeps each
+  side honest (muffin-deployment#443).
+- **THE COMPANY LANE HOLDS THE `sql` POOL FOR ITS WHOLE DAY**, because pools are run-granularity.
+  Each run of 100 companies takes ~470 s, and 18 run back to back. The four `derived_security_metrics`
+  runs created during it, and the listing runs, waited until it ended (up to 7,418 s).
+  - Nothing failed, but the no-roll window after 03:30 is about 06:00, not 05:30.
+  - The first rotation is the long case, because every company's statements were never fetched:
+    5,215 Yahoo requests, 3.0 per company. From the second rotation statements are due only after an
+    earnings date or at 90 days.
+- **A LONG ssh COMMAND OUTLIVES THIS MACHINE SLEEPING, AND THEN HANGS FOR HOURS.** A replay and a
+  rolled-back production check sat for five hours with nothing running on the node, and both
+  reported nothing. Wrap a long remote command in `timeout` and pass `-o ServerAliveInterval=30`.
+  Before re-running, read `pg_stat_activity` to confirm that nothing is still holding a transaction.
+- **THE STATEMENTS READ IS THE LAST SERVING VIEW STILL ON `security_symbol`, AND IT GROWS WITH THE
+  ROTATION.** `security_statement_current` joins the LATERAL view rather than the indexed
+  `symbol_security`, so one symbol's income statement scans every income row (80,619) and every
+  security (27,977). 407 ms on the server warm, 0.65–0.85 s as anon, 1,993 ms in the guard right
+  after a deploy, while the company lane adds ~44,600 statement rows a day until 10-24. The fix is
+  #437's and migration 102's, but the join swap changes the rows a reader that does not filter by
+  symbol sees, so the readers come first:
+  `docs/deferred/2026-10-18-the-statements-read-resolves-every-symbol.md`.
+- **COMPARE TWO SIZE READINGS FROM THE SAME INSTRUMENT.** The http-cache baseline was
+  `muffin_volume_bytes`, so the after-reading is that metric too (27.79 → 27.92 GB, +0.13 GB in a
+  day). A `du -sb` happened to agree (27.89 GB), but agreement is luck unless both were measured the
+  same way.
+
 ## Running an OpenSandbox server locally
 
 - **`docker run -d -p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock opensandbox/server:latest`.**

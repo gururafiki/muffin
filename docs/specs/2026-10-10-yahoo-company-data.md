@@ -758,6 +758,38 @@ launched 15:18 UTC. All five succeeded in ~28 s each, serialised on the `yfinanc
 - the pace probe of ~200 requests (the subset made 25);
 - the crumb's lifetime.
 
+### Step 8, the first scheduled day (2026-10-18)
+
+Read in full in `docs/deferred/2026-10-17-the-company-lane-s-first-rotation.md`. In short:
+
+**Runs.**
+- 18 of 18 SUCCESS, 03:30–05:51 UTC. Each took ~470 s against a 1,800 s `max_runtime`, serialised
+  on the `yfinance` pool.
+- The runs also held the `sql` pool, so the derived runs created meanwhile waited until 05:51.
+- Every counter sums to `requested`, with `throttled 0` and `crumb_rejected 0`.
+
+**What was measured that step 7 left open.**
+- **The pace:** 5,179 data requests over 18 runs, ~1.6 s each, and no throttle. That answers the
+  ~200-request pace probe at 25 times the size.
+- **The crumb:** one session per run lasted every run's ~8 minutes and 100 companies, and was never
+  refused. Its full lifetime is still unknown.
+- **Corporate actions from chart events:** 71,252 rows for 2,439 securities on the first night
+  (66,073 dividends, 5,179 splits).
+- **Spend:** 3.0 Yahoo requests per company on a first visit (a summary, annual and quarterly
+  timeseries), plus 2 per run for the session. 5,215 on the first day, every company's statements
+  being due. From the second rotation, statements are due only after an earnings date or at 90 days.
+- **Raw:** 488 MB transferred, stored as 124 MB of Parquet.
+
+**Found, and fixed the same day:**
+- **A slash symbol's absence:** `Quote not found for ticker symbol`, a second wording, counted as
+  transport. Fixed in muffin-ingest#115.
+- **Two TTM rules in `derive_ttm`:**
+  - A 12/12/12/16-week year got no fourth quarter, so COST, PEP, AZO and DPZ had no TTM.
+  - A window counting one quarter twice, with another missing, still spanned a year: 797 windows,
+    Greif's newest TTM among them.
+  - Fixed in muffin-deployment#443, deployed 14:14 UTC and live at the 14:17 derivation. COST's P/E
+    went 54.32 → 49.75 and PEP's 21.92 → 17.23; AAPL, NVDA, MSFT and JACK are unchanged.
+
 ## Open questions
 
 Closed by the 2026-10-10 measurements:
