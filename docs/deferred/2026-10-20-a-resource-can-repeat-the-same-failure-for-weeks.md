@@ -1,7 +1,8 @@
 # A resource can repeat the same failure for weeks, and no alert sees it
 
-Created 2026-10-20 · Status: open. **The alert is the user's decision**; the two instances belong to
-Phases 5 and 6.
+Created 2026-10-20 · Status: open. **Decided 2026-10-20 (the user): no alert.** Each instance is fixed
+when its family leaves the edge: `security-segments` in Phase 5, `earnings-history` in Phase 6. The
+sweep stays in `market-diagnose` for finding the next one.
 
 ## Why
 
@@ -32,7 +33,7 @@ among those to write. It was not written until now.
 - The edge keeps running the families of Phases 5–8 for months. A subject that fails at the head of
   its queue for ever is the head-of-line stall that CLAUDE.md already records seven times.
 
-## Options for the alert (the user's decision)
+## Options for the alert (decided: option 3)
 
 1. **A `stuck` column on `market.resource_health`**: the resource's newest N completed runs carry
    the same report, with a failure and nothing written. The stalled-resource rule and
@@ -48,9 +49,7 @@ these two resources, and nothing else.
 
 ## What to do
 
-- **The alert**, once decided. Its fixture must make "repeats the same failure" and "failed once"
-  disagree, and the replay should name both instances.
-- **`security-segments`** (Phase 5, or sooner with the alert):
+- **`security-segments`** (Phase 5):
   - Fetch the filing's index and instance from the node and find where the read ends.
   - A filing that cannot be read is a permanent fact about that filing. Stamp it with its error
     (the queue already uses `segments_parsed_at` as a permanent cursor) rather than asking SEC every
@@ -61,8 +60,9 @@ these two resources, and nothing else.
 
 ## Done when
 
-An alert fires on a resource that repeats the same failure. Both instances are then either fixed,
-or recorded as known with a date by which they will be fixed.
+`security-segments` no longer asks about an unreadable filing on every run (Phase 5), and
+`earnings-history` steps past the date nasdaq cannot serve (Phase 6). If this shape recurs often
+enough to matter, revisit the alert.
 
 ## Context
 

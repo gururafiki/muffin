@@ -5374,7 +5374,8 @@ alerts. Two were real stalls, three weeks and two weeks old; the third was a gua
 
   Both report `ok: true` with `failed: 1`, so `resource_health.last_worked` counts them as working.
   Their queues sit under the backlog alerts' deliberate floors (100 and 500), or have no view at
-  all. The alert is a decision:
+  all. Decided the same day (the user): no alert. Each is fixed in its own phase, and
+  `market-diagnose` carries the sweep:
   `docs/deferred/2026-10-20-a-resource-can-repeat-the-same-failure-for-weeks.md`.
 
 ## Running an OpenSandbox server locally

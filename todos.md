@@ -3029,12 +3029,12 @@ never re-asked); no Yahoo statement row has a currency; `muffin-metrics` fails 3
         movement), and `pending_price_targets` and `pending_in_history` keep falling.
   - [ ] [The cache serves a failing provider's last answer for as long as it fails](docs/deferred/2026-10-20-the-cache-serves-a-failing-provider-s-last-answer-for-ever.md):
         decide per location.
-  - [ ] [A resource can repeat the same failure for weeks, and no alert sees it](docs/deferred/2026-10-20-a-resource-can-repeat-the-same-failure-for-weeks.md):
-        decide the alert (a `stuck` column on `resource_health` recommended). Found while closing
-        out Phase 4: `earnings-history` has asked for the window ending 2016-06-30 hourly since
-        2026-09-06, and `security-segments` has failed on TNDM's 2014 10-Q every five minutes since
-        2026-09-30. Both report `ok: true`, and their queues are under the backlog alerts' floors
-        or have no view.
+  - [x] [A resource can repeat the same failure for weeks, and no alert sees it](docs/deferred/2026-10-20-a-resource-can-repeat-the-same-failure-for-weeks.md).
+        Found while closing out Phase 4: `earnings-history` has asked for the window ending
+        2016-06-30 hourly since 2026-09-06, and `security-segments` has failed on TNDM's 2014 10-Q
+        every five minutes since 2026-09-30. Both report `ok: true`. **Decided 2026-10-20 (the
+        user): no alert**; each is fixed in its phase (listed under Phases 5-8), and
+        `market-diagnose` carries the sweep that found them.
 
 ### Phases 5-8 — the remaining family cutovers — not started
 
