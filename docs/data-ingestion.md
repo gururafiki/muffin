@@ -1,12 +1,25 @@
 # Market data ingestion — how it works
 
-**Status: current as of 2026-09-09.** Numbers are measured against production, not estimated.
+**Status: current as of 2026-09-09; §4 and §5 updated 2026-10-18.** Numbers are measured against
+production, not estimated.
 
-> **THIS DESCRIBES THE SYSTEM BEING REPLACED.** A rework is underway — a Python library, a task
-> ledger in Postgres and Dagster assets, in the `muffin-ingest` submodule — designed in
+> **THIS DESCRIBES THE SYSTEM BEING REPLACED.** Ingestion is moving, family by family, to Dagster
+> assets in the `muffin-ingest` submodule, designed in
 > [docs/superpowers/specs/2026-09-09-ingestion-rework-design.md](superpowers/specs/2026-09-09-ingestion-rework-design.md).
-> Nothing has moved yet: the edge function still ingests everything, and families are cut over one
-> at a time. This document stays authoritative until each one is, and each cutover updates it.
+> Moved so far:
+> - **prices, returns and FX** (D2, 2026-09-12);
+> - **the universe** (Phase 3, to 2026-10-06): fund holdings, the venue directory, symbology, the
+>   SEC and NSE registries and classification;
+> - **Yahoo company data and the metric derivation** (Phase 4, 2026-10-18): profiles, industries,
+>   fundamentals, share stats and estimates, officers, Yahoo's statements, dividends and splits,
+>   `derive_security_metrics` / `derive_ttm`
+>   ([spec](specs/2026-10-10-yahoo-company-data.md)).
+>
+> A retired resource answers **410** naming its replacement (§5 lists all 31). This document stays
+> authoritative for what is still on the edge: SEC's statements, XBRL, filings, insider trades and
+> segments; the Korean, Indian and Chinese regulators; macro; earnings, price targets and news;
+> Tiingo's corporate actions until their parity check; and the facets refresh and observability
+> samples.
 
 > **Changed 2026-08-27:** the scheduler moved out of GitHub Actions into **pg_cron** (§4).
 > `market-warmup.yml` no longer exists; `market.cron_resource` is the source of truth for what runs.
@@ -302,8 +315,10 @@ flowchart TD
 - **The app**: stale-while-revalidate. A screen reading a row past `stale_after` fires a background
   refresh; **the reader is never blocked**. Writes are admin-only (`app_metadata.role`, never
   `user_metadata`, which users can write themselves).
-- **On demand**: `security-refresh` does returns, market cap, fundamentals **and statements** for one
-  symbol — so a security someone actually opens is not last in a multi-week queue.
+- **On demand**: `security-refresh` launches the stock's partition of the Dagster `yahoo_companies`
+  job with `force: true` (since 2026-10-18), so a security someone actually opens is not last in a
+  week-long rotation. It answers `{queued: true, runId}` and fetches nothing itself; the figures land
+  minutes later, and returns come from the price lane's nightly run.
 - **Manual** (the `gh workflow run market-warmup.yml` recipe is GONE — that workflow was deleted
   when the scheduler moved into the database):
   ```bash
@@ -348,6 +363,48 @@ watching — which is why the Track button requires `promoted === true`.
 
 ## 5. The resources
 
+### Retired, and where each went
+
+Each answers 410 before the admin gate and names its replacement; `logic-check.ts` holds this
+list equal to the migrations' `-- RETIRES:` markers. Their rows in the table below are kept for
+their history until step 10 of each phase deletes the handlers.
+
+| Resource | Replaced by |
+|---|---|
+| `security-prices` | Dagster price lane (price_bar) — read market.price_series |
+| `security-daily-history` | Dagster price history lane (price_bar_history) — read market.price_series |
+| `security-price-history` | Dagster price history lane (price_bar_history) — read market.price_series |
+| `instrument-prices` | Dagster price lane (price_bar) — read market.price_series |
+| `security-performance` | Dagster security_return — read market.performance |
+| `instrument-performance` | Dagster security_return — read market.performance |
+| `sector-performance` | Dagster daily_indices (index_return) — read market.performance |
+| `country-performance` | Dagster daily_indices (index_return) — read market.performance |
+| `group-performance` | Dagster daily_indices (index_return) — read market.performance |
+| `fx-rates` | Dagster daily_fx — read market.fx_rate |
+| `fund-holdings` | Dagster N-PORT discovery (fund_holding, discovered_security) — read market.fund_holdings |
+| `exchange-listings` | Dagster venue sweep (venue_listing) — read market.untracked_listing |
+| `security-tickers` | Dagster symbology ladder (raw_figi_ticker → security_symbology) |
+| `security-local-symbols` | Dagster symbology ladder (raw_figi_local_symbol → security_symbology) |
+| `security-yahoo-symbols` | Dagster symbology ladder (raw_yahoo_symbol → security_symbology) |
+| `security-symbol-repair` | Dagster symbology ladder (security_symbology) |
+| `promote-wave` | the market.promote_listing RPC; waves move to Dagster (Phase 3 stage 4) |
+| `promote-listing` | the market.promote_listing RPC — the Track button calls it directly |
+| `sec-cik-map` | Dagster registries (raw_sec_cik_map → security_cik) — read market.security.cik |
+| `in-symbols` | Dagster registries (raw_nse_equity_list → security_nse_filer) |
+| `derive-classifications` | Dagster security_classification — read market.security_taxonomy |
+| `security-profiles` | Dagster company lane (yahoo_companies) — read market.security_taxonomy |
+| `security-profile-detail` | Dagster company lane (yahoo_companies) — read market.security_profile |
+| `security-industries` | Dagster company lane (yahoo_companies) — read market.security_taxonomy |
+| `security-fundamentals` | Dagster company lane (yahoo_companies) — read market.security_fundamentals |
+| `security-share-stats` | Dagster company lane (yahoo_companies) — read market.security_share_stats |
+| `security-management` | Dagster company lane (yahoo_companies) — read market.security_officer |
+| `security-quarters` | Dagster company lane (yahoo_companies) — read market.security_statement |
+| `security-dividends` | Dagster price lane (yahoo_corporate_action) — read market.security_corporate_action |
+| `instrument-profile` | Dagster company lane (yahoo_companies) — read market.instrument_current |
+| `security-metrics` | Dagster derived_security_metrics — read market.security_metric |
+
+### The resources as they were
+
 Twenty on-demand/backlog resources plus four declarative ones. **Every resource declares its TTL
 explicitly; there is no default** — a fallback default once left three resources on a 7-day TTL and
 stopped price ingestion for three days while every signal said "healthy".
@@ -363,7 +420,7 @@ stopped price ingestion for three days while every signal said "healthy".
 | `security-profiles` | 10 min | yfinance | `pending_profile` | `security_taxonomy`, `security.market_cap`, `provider_country_iso2` |
 | `security-industries` | 10 min | yfinance | `pending_industry` | `security_taxonomy` (level 2) |
 | `security-fundamentals` | 10 min | yfinance | `pending_fundamentals` | `security_fundamentals`, `security.currency_code` |
-| `security-statements` | 10 min | **sec**, yfinance fallback | `pending_statements` | `security_statement` (+ `currency`, `period_type`) |
+| `security-statements` | 10 min | **sec** only since 2026-10-18 (Yahoo's statements are the company lane's) | `pending_statements`: a CIK, a US listing, no `sec` row | `security_statement` (+ `currency`, `period_type`) |
 | `security-metrics` | 10 min | **none — SQL only** | `pending_metrics` (a drift counter, not a queue) | `security_metric` |
 | `sec-cik-map` | 30 days | SEC `company_tickers.json` | — (one file, applied in one statement) | `security.cik` |
 | `security-xbrl` | 10 min | **SEC XBRL direct**, not openbb | `pending_xbrl` | `security_metric` (`sec-xbrl`) |
@@ -386,7 +443,7 @@ stopped price ingestion for three days while every signal said "healthy".
 | `promote-wave` | 10 min | — (pure SQL) | `pending_promotion` | `security` + identifiers, **≤100/run** |
 | `macro-indicators` | 6 h | openbb (oecd/fed/fred/yfinance) | `macro_indicator` | `macro_observation` |
 | `facets-refresh` | 60 min | — (pure SQL) | — | refreshes `symbol_security` **and** `security_facets` concurrently, then calls `refresh_segment_spine()` as a **second RPC** — one statement cannot hold all three under the role's 8 s timeout |
-| `security-refresh` | 10 min | yfinance | one symbol | performance, cap, fundamentals, statements |
+| `security-refresh` | 1 min | — (launches Dagster) | one symbol | nothing: queues the stock's `yahoo_companies` partition |
 | `instrument-prices` | 24 h | yfinance | `instruments` | `prices` |
 | `instrument-profile` | 7 d | yfinance | `instruments` | `instruments` |
 | `sector-` / `country-` / `group-` / `instrument-performance` | 24 h | finviz / yfinance | — | `performance` |

@@ -1,7 +1,7 @@
 # The stock page's statements read resolves every security's symbol
 
 Created 2026-10-18 · Check by 2026-10-21, mid-way through the company lane's first rotation · Status:
-**open**
+**closed 2026-10-18** (muffin-deployment#447, see *Resolved* below)
 
 ## Why it is deferred
 
@@ -47,3 +47,21 @@ A reader that does not filter by symbol would see different rows, so the readers
 
 A one-symbol statements read touches only that security's rows. The four reads take well under a
 second, and do not grow with the table.
+
+## Resolved, 2026-10-18 (muffin-deployment#447, deployed 20:23 UTC)
+
+- **The readers:** two, both filtering by symbol: muffin-ui's `use-statements.ts` and
+  `check_anon_read_latency.py`. No view depends on this one, and no Grafana panel or script reads it.
+- **The rows did not change.** The worry above was wrong. `security_symbol` already excludes a security
+  with no symbol, and `symbol_security` is its rows with a symbol, one per security: 12,402 each, 0
+  differing. Compared on production in a rolled-back transaction, AAPL, MSFT, 7203.T, VOD.L,
+  005930.KS, SAP.DE, NVDA and BRK-B differ by 0 rows either way. The only difference is freshness:
+  a symbol change shows after the next facets refresh.
+- **The read:** about 250 ms → about 1 ms on the server (index scans from the symbol inward). As anon
+  through Cloudflare, best of three: AAPL 125 ms, MSFT 107 ms, 7203.T 87 ms, VOD.L 95 ms.
+- **The guard:** `a-one-symbol-statements-read-reads-one-security.sql` counts the rows the read touches
+  across every relation: 4 on the new view, 605 on the old view and on a per-row lateral.
+- **What it found on the way:** the view's two existing tests became snapshot tests (rows inserted in a
+  test are invisible to the matview until it is refreshed). One of them,
+  `the-gate-must-see-the-effective-country.sql`, would have kept passing on an empty view, since it
+  asserts that no row disagrees. Both now refresh, and that one gained a floor.

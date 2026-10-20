@@ -2941,18 +2941,86 @@ never re-asked); no Yahoo statement row has a currency; `muffin-metrics` fails 3
           or deploy after about 06:00, not 05:30.
   - [ ] **check 2026-10-25 — the first full rotation:**
         [note](docs/deferred/2026-10-17-the-company-lane-s-first-rotation.md).
-  - [ ] **check by 2026-10-21 — the stock page's statements read resolves every symbol**, so it grows
-        with the ~44,600 statement rows a day the rotation adds. It was 0.65–0.85 s as anon on
-        2026-10-18, and 1,993 ms in the guard right after a deploy. Move the view onto
-        `symbol_security` once its readers are listed:
-        [note](docs/deferred/2026-10-18-the-statements-read-resolves-every-symbol.md).
+  - [x] **The stock page's statements read resolved every symbol.** muffin-deployment#447,
+        deployed 2026-10-18 20:23 UTC, moved the view onto `symbol_security` with the same rows.
+        As anon it now takes 87–125 ms, against 0.65–0.85 s that morning:
+        [note](docs/deferred/2026-10-18-the-statements-read-resolves-every-symbol.md), closed.
 - [ ] 9. Retire: nine resources, instrument-profile if every curated equity resolves,
       `security-metrics` and `muffin-metrics`, statements made SEC-only, the `security-refresh`
       shim (muffin-ui "queued"), Tiingo after its parity.
+  - [x] **The family leaves the edge: muffin-deployment#445, deployed 2026-10-18 19:41 UTC.**
+        Retired: the nine resources, `instrument-profile` (all 35 curated equities resolve to a
+        security the lane visits) and `security-metrics`, with `muffin-metrics` unscheduled.
+        Verified live:
+        - each of the ten answers 410 naming its Dagster replacement, while a non-retired
+          resource still answers 403;
+        - the ten `cron_resource` rows are disabled, and no `cron.job` names `security-metrics`;
+        - the Dagster services were untouched (`StartedAt` 08:05, the morning roll);
+        - `refresh_run` holds no run of the ten since, apart from the ten 410 verification calls.
+  - [x] **The `security-refresh` shim (#445).** A service-role call for AAPL answered `queued` with a
+        run id. That `yahoo_companies` run (`47a63e88`, tags `dagster/partition`,
+        `dagster/max_runtime=600`, `muffin/reason`) succeeded: summary answered, statements forced
+        (`statements_reason_forced=1`), 29 statement rows, `throttled=0`.
+  - [x] **muffin-ui#140 merged 2026-10-18**: the stock page's button says "queued" and explains
+        that the figures arrive minutes later, and the Markets page's universe-wide refresh is gone.
+  - [x] **Statements SEC-only: muffin-deployment#446, deployed 2026-10-18 20:14 UTC.** The yfinance
+        half held 26 dead symbols. The queue went 29 → 5, and the handler's reads went from 230 to
+        90 ms. A forced run asked 5 and marked Verisure and Midea (named 404s).
+        - Before it, every run also re-wrote 11 currency-less yfinance rows for one of these, over
+          the company lane's labelled rows.
+        - The other three (REAX, OCTLF, CIB) answer 204 while nothing else in the run answers, so
+          they could never be marked. muffin-deployment#449 asks a control filer (AAPL) when nothing
+          answered, and marks them only if it answers.
+        - **#449 verified 2026-10-20:** the first scheduled run after its deploy (10-18 20:50) asked
+          the three, got nothing, asked the control (`controlAnswered: true`) and marked them
+          (`secNone: 3`). 38 runs since, all `ok`, `pending_statements` 0.
+        - **But that control went through http-cache**, which serves an expired 200 while the
+          provider fails (below). muffin-deployment#454 sends it, and `fetchWithIsolation`'s control,
+          past the cache.
+  - [ ] Tiingo (`security-corporate-actions`) after its parity, once the price rotation covers its
+        369 securities (about 10-22).
+  - Step 10's three clean days run from the 19:41 UTC deploy: the handlers can go on or after
+    2026-10-21 20:00 UTC.
 - [ ] 10. Delete the handlers after 3 clean days; contract with drop dates.
 - [ ] 11. Promotion waves (Phase 3 Stage 4) with the Yahoo-family cap; venues opted in with the
       user.
-- [ ] 12. Grafana, docs, skills.
+- [x] 12. Grafana, docs, skills.
+  - [x] Docs and skills for steps 8–9: muffin-deployment#448 (2026-10-18). Its rewrite of
+        `market-refresh-security` broke the skill's YAML frontmatter (`": "` in a plain scalar);
+        #451 (2026-10-20) fixed it and made CI parse every skill's frontmatter.
+  - [x] Grafana: muffin-deployment#450 (2026-10-18), with a Dagster lanes row, the ingest worker's
+        requests by provider, and two alerts on Dagster's run storage. Verified 2026-10-20:
+        - Grafana restarted 10-18 20:39 and provisioned dashboards and alerting with no errors;
+        - both Dagster rules, replayed as `metrics_ro`, read 0, and neither is firing.
+- [x] **Check-in 2026-10-20: three alerts had fired since at least 10-16, and no check-in read
+      them.** `docker service logs muffin_grafana | grep "Sending alerts"` lists the firing rules.
+  - [x] *An origin certificate is not being renewed* was false. Traefik kept a gauge for the
+        certificate it replaced, and `min by (cn)` read it. The fix is muffin-deployment#452
+        (`max by (cn)`), deployed with the openbb image at 12:20 UTC. **Resolved:** the 12:40
+        evaluation no longer sent it.
+  - [x] *A backlog is not draining* / *FLAT for a week*, part 1, `pending_price_targets` (3,265).
+        finviz had refused openbb-api with 403 since about 2026-09-30, because of finvizfinance
+        1.3.0's User-Agent. openbb-mcp-docker#5 pins the image's package set and takes
+        finvizfinance >= 1.5.0. The control symbol was answered by the cache, so the lane reported
+        the provider healthy: muffin-deployment#454.
+        [Note](docs/deferred/2026-10-20-the-price-target-lane-trusted-a-cached-control.md):
+        Phase 6 can parse analyst actions from the stored Yahoo summaries instead.
+        **Live 2026-10-20 12:20 UTC:**
+        - openbb-api and openbb-mcp run finvizfinance 1.5.0, with every other package unchanged;
+        - finviz answers (AAPL 20 rows, sectors 11), and the MCP server lists its 219 tools;
+        - the 12:30 run advanced 120 securities and wrote 1,974 actions, and the queue fell
+          3,265 → 3,145.
+  - [x] *FLAT for a week*, part 2, `pending_in_history` (295). The handler's stamp matched no row
+        for a company NSE listed nothing for. muffin-deployment#453 adds a walk cursor on the
+        security, deployed with #454 at 12:31 UTC. The 12:43 run stamped the six on the security,
+        and the queue fell 295 → 289. Its head is now IRB, SCHNEIDER, AIIL, CGCL, ABSLAMC and
+        NAVA, which hold NSE filer rows.
+  - [ ] **check 2026-10-21:**
+        - both backlog alerts have cleared (their samples need to see the movement);
+        - `in-filings` maps the companies now at its head (`mapped > 0`);
+        - `pending_price_targets` keeps falling.
+  - [ ] [The cache serves a failing provider's last answer for as long as it fails](docs/deferred/2026-10-20-the-cache-serves-a-failing-provider-s-last-answer-for-ever.md):
+        decide per location.
 
 ### Phases 5-8 — the remaining family cutovers — not started
 

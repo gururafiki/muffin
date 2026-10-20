@@ -5126,9 +5126,11 @@ one already live.
     database operation, not a secret swap.
 - **THE METRIC THAT WOULD HAVE SAID SO WAS SCRAPED FOR WEEKS AND READ BY NOTHING.** Prometheus held
   `traefik_tls_certs_not_after` for each certificate throughout the 27-day decline. An unplotted
-  metric cannot be seen to be wrong. muffin-deployment#435 alerts when any certificate has fewer than
-  25 days left (Traefik renews at 30 and retries daily). It also fires on no data, because the guard
-  is then blind.
+  metric cannot be seen to be wrong. muffin-deployment#435 alerts when a name's NEWEST certificate
+  has fewer than 25 days left (Traefik renews at 30 and retries daily). It also fires on no data,
+  because the guard is then blind. **It shipped as `min by (cn)` and cried wolf from its first
+  hour:** Traefik kept a gauge for the certificate it had replaced, so supabase. read -1.6 days
+  while the origin served one valid to 2027-01-14. `max by (cn)` since #452 (2026-10-20).
 - **THE NEW TOKEN EXPIRES 2026-10-30 18:50 UTC, and the September one died after about the same
   fourteen days.** That date comes from Cloudflare's own `/accounts/{id}/tokens/verify`
   (`expires_on`). When a token with an end date lapses, the deploy fails at Terraform refresh, and
@@ -5269,13 +5271,102 @@ check.
   `symbol_security`, so one symbol's income statement scans every income row (80,619) and every
   security (27,977). 407 ms on the server warm, 0.65–0.85 s as anon, 1,993 ms in the guard right
   after a deploy, while the company lane adds ~44,600 statement rows a day until 10-24. The fix is
-  #437's and migration 102's, but the join swap changes the rows a reader that does not filter by
-  symbol sees, so the readers come first:
-  `docs/deferred/2026-10-18-the-statements-read-resolves-every-symbol.md`.
+  #437's and migration 102's: muffin-deployment#447, the same evening. **Correction: the swap changes
+  no rows.** `security_symbol` already excludes a security with no symbol, and `symbol_security` is
+  its rows with a symbol, one per security (12,402 = 12,402, 0 differing). Only freshness differs.
 - **COMPARE TWO SIZE READINGS FROM THE SAME INSTRUMENT.** The http-cache baseline was
   `muffin_volume_bytes`, so the after-reading is that metric too (27.79 → 27.92 GB, +0.13 GB in a
   day). A `du -sb` happened to agree (27.89 GB), but agreement is luck unless both were measured the
   same way.
+
+### Step 9: the Yahoo company family leaves the edge (2026-10-18)
+
+muffin-deployment#445 (ten resources retired, `muffin-metrics` unscheduled, the Refresh shim), #446
+(`security-statements` SEC-only), #447 (the statements read on `symbol_security`), #449 (a control
+filer for empty SEC answers), muffin-ui#140. Docs and skills: #448. Recorded in the spec's *Step 9*.
+
+- **A GRAPHQL `launchRun` DOES NOT RECEIVE THE JOB'S `run_tags`.** `define_asset_job(run_tags=…)`
+  reaches only the runs a schedule or sensor creates. Measured on `yahoo_companies`: the scheduled
+  runs carry `dagster/max_runtime=1800`, and the shim's first GraphQL launch carried none, so the
+  run monitor would have allowed it six hours. The shim sends the tag, and the ops script's `job`
+  command gained `--max-runtime` (#448). The skill had said a hand launch got the job's tags.
+- **MEASURE WHAT A FALLBACK STILL SERVES BEFORE KEEPING IT.** The yfinance half of the statements
+  queue held 26 securities when it retired: 19 Philippine and 5 Emirati lines, a misspelled Chilean
+  one and a money-market fund. 25 were already marked absent, and all 26 were dead in the price
+  lane. It had become a 30-day re-ask of answers already held. Dropping it moved the queue 29 → 5
+  and the handler's reads from 230 to 90 ms.
+- **MOVING A VIEW ONTO A MATVIEW TURNS ITS TESTS INTO SNAPSHOT TESTS, AND ONE OF THEM PASSED ON
+  NOTHING.** Rows a test inserts are invisible to `symbol_security` until it is refreshed.
+  `a-figure-is-labelled-by-the-filing.sql` failed loudly. `the-gate-must-see-the-effective-country.sql`
+  kept passing, because it asserts that no row disagrees, and an empty view has no row to disagree.
+  **A check phrased as "no row is wrong" needs a floor ("the rows I expect are there")**, proven by
+  running it against the empty case. Both now refresh, and the second has the floor.
+- **A VIEW MUTATION THAT SELECTS AN UNGROUPED COLUMN NEVER APPLIES.** `create or replace` fails, so
+  the replay printed `MUTATION DID NOT APPLY` and a fingerprint equal to the restored one, and the
+  guard was never tested. Group by the column too (now in `muffin-schema-change`).
+- **A QUEUE OF ONLY UNANSWERABLE COMPANIES CAN NEVER PROVE ITS OWN PROVIDER HEALTHY.**
+  `security-statements` marks an empty SEC answer only when some security in the run got rows
+  (`secOk`). After #446 its queue held five, all absent at SEC, and a forced run reported
+  `unanswered: 3` while REAX, OCTLF and CIB answered 204 and AAPL answered in the same seconds.
+  They would have been asked on every run for ever. #449 holds empty answers until the run ends,
+  and when nothing else answered it asks a control filer (AAPL, the control `fetchWithIsolation`
+  uses). It is the same rule as "a run-level tally stacked on per-batch evidence", met from the
+  other end: here the tally is missing, not stacked.
+- **A VERIFICATION CALL TO A RETIRED RESOURCE IS A FAILED RUN IN `refresh_run`.** Ten 410s at 19:42
+  are ten `ok = false` rows. The stalled-resource alert skips them, since nothing schedules those
+  resources, but a raw failure count includes them.
+
+### Three alerts nobody read, and the stalls behind them (2026-10-20)
+
+Found by reading Grafana's log while verifying #450, not by any check-in. Three alerts had fired
+since at least 2026-10-16, and the check-ins of 10-17 and 10-18 read the pipeline, never the
+alerts. Two were real stalls, three weeks and two weeks old; the third was a guard I had shipped.
+
+- **READ THE FIRING ALERTS FIRST, IN EVERY CHECK-IN.** No API password is needed: Grafana logs
+  `rule_uid=<uid> … msg="Sending alerts to local notifier"` for each firing rule on every
+  evaluation, so `docker service logs muffin_grafana --since 2h | grep "Sending alerts"` lists
+  them. Then replay each rule's own SQL or PromQL to see what it is counting.
+- **A CLIENT LIBRARY'S USER-AGENT AGES OUT, AND ONE CONTAINER'S FAILURE IS NOT THE NODE'S.**
+  finviz refused every request from openbb-api with 403 from about 2026-09-30. openbb-api's image
+  dates from 2026-08-10 and carries finvizfinance 1.3.0, whose User-Agent is a 2020 Chrome/81;
+  1.5.0 replaced it because "a trivially-outdated client string is an easy flag for anti-bot
+  heuristics". muffin-ingest, on 1.5.0, got 11 sector rows and 20 AAPL price targets from the same
+  node in the same minute, and finviz answered this laptop. **Compare a second client on the same
+  address before blaming the address.** The image installed `openbb[all]` unpinned, so a rebuild
+  would also have moved yfinance 1.5.2 -> 1.7.0 under the agent: openbb-mcp-docker#5 pins the
+  running image's own `pip freeze` and takes only finvizfinance forward.
+- **http-cache SERVES A FAILING PROVIDER'S LAST 200 FOR AS LONG AS IT FAILS.** `use_stale updating`
+  plus `background_update on` hands every request the expired entry while a background refresh
+  runs, and a refresh that gets a status nginx does not store (openbb's 400 for finviz's 403)
+  leaves it there. `/openbb/` has a 1-hour TTL and served AAPL's price targets `STALE … -> 200`
+  for three weeks. The 2026-09-16 bullet above says the FIRST request after expiry gets the stale
+  entry; while the provider keeps failing, every request does.
+  `docs/deferred/2026-10-20-the-cache-serves-a-failing-provider-s-last-answer-for-ever.md`.
+- **A CONTROL ANSWERED BY A CACHE PROVES NOTHING.** That stale 200 was `fetchWithIsolation`'s
+  control, so it reported "control AAPL answered — the provider is up and these symbols are
+  unanswerable" about a provider that answered nobody. `security-price-targets` marks nothing, so
+  no security was mislabelled, but it re-wrote AAPL's cached rows with a fresh `fetched_at` and
+  reported `ok` for three weeks. The SEC control filer I added in #449 two days earlier had the
+  same path. Both now send `X-Muffin-Cache-Bypass` (#454), and the isolation test's stub behaves
+  like the cache.
+- **AN UPDATE THAT MATCHES NO ROW IS NOT AN ERROR — a seventh head-of-line stall.** `in-filings`
+  stamped a walk on a `security_filer` row it created only when NSE listed something, so six
+  companies NSE lists nothing for (five REITs/InvITs, and TD Power asked as `TDPS`) headed
+  `pending_in_history` every 15 minutes from at least 2026-10-06, with 289 behind them unreached.
+  A stamp must check what it matched. #453 records the miss on a 90-day cursor,
+  `security.nse_history_walked_at`, read only while no filer row exists: a filer row means NSE
+  lists the company and the coverage model counts it as `held`.
+- **YAHOO ALREADY HOLDS THE ANALYST ACTIONS** finviz was being asked for: the company lane's
+  quoteSummary requests `upgradeDowngradeHistory`, and AAPL's stored document carries 969 entries
+  with firm, grades and prior and current target, against finviz's 20. Ninth instance of "the
+  answer is already in a response you fetch".
+  `docs/deferred/2026-10-20-the-price-target-lane-trusted-a-cached-control.md`.
+- **THE 03:00 BACKUP MAKES ALERT QUERIES TIME OUT.** `muffin-resource-stalled` hit `metrics_ro`'s
+  10-second timeout at 03:00:40 on 10-19 and 10-20, during the nightly `pg_dump` (03:00:01 to
+  03:04). Off-peak the same query takes 31 ms. A retry succeeded both nights, so no alert fired.
+- **A SKILL'S FRONTMATTER CAN BREAK WITH EVERY CHECK GREEN.** #448 put `": "` in a plain YAML
+  scalar, and `market-refresh-security` lost its description in the agent's skill list. CI now
+  parses every skill's frontmatter (#451).
 
 ## Running an OpenSandbox server locally
 

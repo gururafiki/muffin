@@ -790,6 +790,90 @@ Read in full in `docs/deferred/2026-10-17-the-company-lane-s-first-rotation.md`.
   - Fixed in muffin-deployment#443, deployed 14:14 UTC and live at the 14:17 derivation. COST's P/E
     went 54.32 → 49.75 and PEP's 21.92 → 17.23; AAPL, NVDA, MSFT and JACK are unchanged.
 
+### Step 9, the retirement (2026-10-18)
+
+**Why it could go now.** Over the 24 hours to 14:30 UTC, the edge resources still ran beside the
+lane:
+- `security-dividends` wrote 11,201 rows into the table the chart-events writer fills, under the
+  same source and keys.
+- `security-quarters` wrote 275 statements beside the lane's statement writer.
+- `muffin-metrics` wrote 209,100 metric rows beside `derived_security_metrics`.
+- The other six resources and `instrument-profile` ran 13–14 times each and wrote nothing.
+
+**muffin-deployment#445, deployed 19:41 UTC.**
+- `RETIRES` markers and 410s for the nine resources, `instrument-profile` (all 35 curated
+  equities resolve to a security the lane visits) and `security-metrics`. Their `cron_resource`
+  rows are disabled and `muffin-metrics` is unscheduled.
+- Verified live:
+  - each of the ten answers 410 naming its replacement, while a non-retired resource answers 403;
+  - no `cron.job` names `security-metrics`;
+  - the Dagster services were not restarted (the #431/#436 pins hold);
+  - `refresh_run` has no run of the ten except the verification calls.
+- Rollback until step 10: delete the `RETIRED` entries, re-enable the rows, and
+  `select cron.schedule('muffin-metrics', '24,54 * * * *', $$select market.cron_post('security-metrics')$$)`.
+
+**The refresh button (decision 8).**
+- `security-refresh` resolves the symbol and launches the stock's `yahoo_companies` partition over
+  GraphQL with `force: true`, `dagster/max_runtime=600` and a `muffin/reason` tag. It answers
+  `{queued: true, runId}`.
+- A service-role call for AAPL launched run `47a63e88`, which succeeded with the summary answered,
+  the statements forced, 29 rows and `throttled=0`.
+- muffin-ui#140 (merged the same evening) says "queued" and that the figures arrive minutes later.
+  It also removes the Markets page's universe-wide refresh.
+
+**Statements, SEC-only: muffin-deployment#446.**
+- What the yfinance half still held: 26 securities, and Yahoo answers nothing for any of them
+  (19 `.PS`, 5 `.AE`, `ANDINAB.SN` and `BISXX`). 25 were already marked, and all 26 are dead in the
+  price lane.
+- The queue now needs a CIK, a US listing and no `sec` row, with SEC's own negative cache for both
+  halves. `statements_missing_at` loses its only writer. `backlog_negative_cache` pairs the queue
+  with `statement_currency_missing_at`, so `backlog_drain` watches the column the handler writes.
+- On production's rows, rolled back: 29 → 5, and both handler reads went from 230 ms to 90 ms.
+- Deployed 20:14 UTC. A forced run asked 5 and marked the two named 404s (Verisure, Midea).
+- **Before it, every run re-wrote 11 currency-less yfinance rows** for one of the `no_sec` three,
+  over the company lane's labelled rows: the second-writer risk, real for those three.
+- **The other three could never be marked.** REAX, OCTLF and CIB answer 204, and nothing else in the
+  run answers, so `secOk` never becomes true. muffin-deployment#449 holds empty answers until the run
+  ends, and when nothing else answered it asks a control filer (AAPL) before marking them.
+  Verified 2026-10-20: the first run after its deploy (10-18 20:50) reported
+  `controlAnswered: true, secNone: 3, remaining: 0`, and all 38 runs since have reported `ok` with an
+  empty queue. That control went through http-cache, though, which serves an expired 200 while the
+  provider fails. #454 sends it past the cache.
+
+**The statements read (muffin-deployment#447, deployed 20:23 UTC).** `security_statement_current` now
+joins `symbol_security`: the same rows, the app's read about 250 ms → 1 ms on the server, and 87–125 ms
+as anon. Closes `docs/deferred/2026-10-18-the-statements-read-resolves-every-symbol.md`.
+
+**Left in step 9:** Tiingo, after its parity (its 369 securities are covered by about 10-22).
+Step 10 deletes the handlers on or after 2026-10-21 20:00 UTC.
+
+### Step 12, Grafana, docs and skills (2026-10-18)
+
+- **Docs and skills: muffin-deployment#448** covers:
+  - the company lane in `muffin-dagster-operations`, whose `job` command gained `--max-runtime` and
+    `--op-config`, because a GraphQL launch does not receive the job's `run_tags`;
+  - the run windows in `muffin-deploy`;
+  - `market-refresh-routine` and `market-refresh-security` for what is left on the edge;
+  - the README's resource tables;
+  - the umbrella's `docs/data-ingestion.md`, which gained the 31 retired resources and their
+    replacements.
+- **Grafana: muffin-deployment#450.** This is also Phase 3's step 3b, never built:
+  - a Dagster row on the Pipeline dashboard: runs by job, failed runs, queue wait, asset checks;
+  - the ingest worker's requests by provider and outcome on the Providers dashboard;
+  - two alerts: a failed run, and an ERROR check that regressed after passing. The second excludes
+    the rotation check, which reads ERROR by design until 10-24.
+- **Verified 2026-10-20.** Grafana restarted on 10-18 at 20:39 and provisioned its dashboards and
+  alerting with no errors. Both Dagster rules, replayed as `metrics_ro` against Dagster's database,
+  read 0, and neither is firing. #448's rewrite of `market-refresh-security` had broken the skill's
+  YAML frontmatter, so its description vanished from the skill list. #451 fixed it, and CI now
+  parses every skill's frontmatter.
+- **The same verification found three alerts that had fired since at least 10-16**, unread by the
+  check-ins of 10-17 and 10-18 (CLAUDE.md, 2026-10-20):
+  - a false certificate alert (#452);
+  - price targets, stalled for three weeks by finviz refusing openbb-api's outdated client
+    (openbb-mcp-docker#5) behind a control answered by http-cache (#454);
+  - India's filing walk, stalled for two weeks by a stamp that matched no row (#453).
+
 ## Open questions
 
 Closed by the 2026-10-10 measurements:
