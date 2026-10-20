@@ -3014,11 +3014,10 @@ never re-asked); no Yahoo statement row has a currency; `muffin-metrics` fails 3
         for a company NSE listed nothing for. muffin-deployment#453 adds a walk cursor on the
         security, deployed with #454 at 12:31 UTC. The 12:43 run stamped the six on the security,
         and the queue fell 295 → 289. Its head is now IRB, SCHNEIDER, AIIL, CGCL, ABSLAMC and
-        NAVA, which hold NSE filer rows.
-  - [ ] **check 2026-10-21:**
-        - both backlog alerts have cleared (their samples need to see the movement);
-        - `in-filings` maps the companies now at its head (`mapped > 0`);
-        - `pending_price_targets` keeps falling.
+        NAVA, which hold NSE filer rows. The 12:58 run mapped all six and wrote 125 filings,
+        India's first in two weeks (queue 283).
+  - [ ] **check 2026-10-21:** both backlog alerts have cleared (their samples need to see the
+        movement), and `pending_price_targets` and `pending_in_history` keep falling.
   - [ ] [The cache serves a failing provider's last answer for as long as it fails](docs/deferred/2026-10-20-the-cache-serves-a-failing-provider-s-last-answer-for-ever.md):
         decide per location.
 
