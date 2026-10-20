@@ -5367,6 +5367,15 @@ alerts. Two were real stalls, three weeks and two weeks old; the third was a gua
 - **A SKILL'S FRONTMATTER CAN BREAK WITH EVERY CHECK GREEN.** #448 put `": "` in a plain YAML
   scalar, and `market-refresh-security` lost its description in the agent's skill list. CI now
   parses every skill's frontmatter (#451).
+- **AN ALERT CANNOT SEE A RESOURCE THAT FAILS ON THE SAME SUBJECT AND REPORTS `ok`.** Closing out
+  Phase 4, the identical-report sweep (above) found two:
+  - `earnings-history` has asked for the window ending 2016-06-30 every hour since 2026-09-06;
+  - `security-segments` has failed on one 2014 10-Q every five minutes since 2026-09-30, 5,504 runs.
+
+  Both report `ok: true` with `failed: 1`, so `resource_health.last_worked` counts them as working.
+  Their queues sit under the backlog alerts' deliberate floors (100 and 500), or have no view at
+  all. The alert is a decision:
+  `docs/deferred/2026-10-20-a-resource-can-repeat-the-same-failure-for-weeks.md`.
 
 ## Running an OpenSandbox server locally
 

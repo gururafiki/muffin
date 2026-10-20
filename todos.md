@@ -3029,12 +3029,33 @@ never re-asked); no Yahoo statement row has a currency; `muffin-metrics` fails 3
         movement), and `pending_price_targets` and `pending_in_history` keep falling.
   - [ ] [The cache serves a failing provider's last answer for as long as it fails](docs/deferred/2026-10-20-the-cache-serves-a-failing-provider-s-last-answer-for-ever.md):
         decide per location.
+  - [ ] [A resource can repeat the same failure for weeks, and no alert sees it](docs/deferred/2026-10-20-a-resource-can-repeat-the-same-failure-for-weeks.md):
+        decide the alert (a `stuck` column on `resource_health` recommended). Found while closing
+        out Phase 4: `earnings-history` has asked for the window ending 2016-06-30 hourly since
+        2026-09-06, and `security-segments` has failed on TNDM's 2014 10-Q every five minutes since
+        2026-09-30. Both report `ok: true`, and their queues are under the backlog alerts' floors
+        or have no view.
 
 ### Phases 5-8 — the remaining family cutovers — not started
 
 SEC (with the fiscal-period dimension and the statement key), regulators, macro and events (with
 news), derived and serving (with Wikidata), then retirement of the edge function. **Each gets its
 own planning session**, per the phased-work convention.
+
+**Left for them by Phase 4** (read these in the planning session):
+- Phase 5 (SEC):
+  - [the statement key and fiscal periods](docs/deferred/2026-10-10-the-statement-key-and-fiscal-periods.md);
+  - [a fiscal-year change reads as a repeated year](docs/deferred/2026-10-10-a-fiscal-year-change-reads-as-a-repeated-year.md);
+  - `security-segments` stuck on one filing ([note](docs/deferred/2026-10-20-a-resource-can-repeat-the-same-failure-for-weeks.md)).
+- Phase 6 (regulators, events):
+  - [the price-target lane trusted a cached control](docs/deferred/2026-10-20-the-price-target-lane-trusted-a-cached-control.md),
+    which notes that Yahoo's `upgradeDowngradeHistory` already holds the data;
+  - [the historical segment backlog is rising](docs/deferred/2026-10-04-the-historical-segment-backlog-is-rising.md);
+  - `earnings-history` stuck at 2016-06-30 ([note](docs/deferred/2026-10-20-a-resource-can-repeat-the-same-failure-for-weeks.md)).
+- Phases 5–6, each keyed provider: redact its credential in the adapter, then scan its raw files
+  ([note](docs/deferred/2026-09-16-raw-request-credentials.md)).
+- Every phase: scheduled check-ins live only in the session that made them, so recreate them from
+  the dated lines above when a new session starts.
 
 ## Other P2
 - [ ] Add new tab to donate to Ukraine with links to different funds
