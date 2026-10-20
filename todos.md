@@ -1635,10 +1635,14 @@ cut over one at a time.
   families left behind: ten negative caches and markers on `security`, `currency.history_missing_at`,
   `security_price` (5.3 GB), `market.prices`, the `exchange_*` sweep tables —
   docs/deferred/2026-09-30-the-retired-families-leave-columns-behind.md
-- [ ] at Phase 4 step 7 (the company lane's first live run) — redact API keys from raw document
+- [x] at Phase 4 step 7 (the company lane's first live run) — redact API keys from raw document
   URLs. Checked 2026-10-16: Yahoo's crumb is redacted by its adapter (muffin-ingest#107), and none of
-  37,503 stored raw URLs holds a credential; scan `raw_yahoo_summary` once it exists —
+  37,503 stored raw URLs holds a credential. **Scanned 2026-10-20:** all 5,176 `raw_yahoo_summary`
+  URLs carry `crumb=redacted`, and none of 62,959 stored URLs holds a credential —
   docs/deferred/2026-09-16-raw-request-credentials.md
+- [ ] at the first Phase 5–6 keyed provider's raw asset (Alpha Vantage `apikey`, Tiingo `token`,
+  FRED `api_key`, DART `crtfc_key`) — redact in its adapter with the summary's test, then scan its
+  raw files the same way (same note).
 - [x] 2026-09-19 — FX spot writes the day's own rates with no hand-run: 41 rates for every weekday
   through 09-18 across two scheduled nights (was 0 rows). Note CLOSED —
   docs/deferred/2026-09-16-http-cache-serves-stale-to-daily-lanes.md
@@ -2498,7 +2502,7 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
                         2000-01-03), and `price_bar` starts on the same days: 0 bars inside the raw
                         range missing from raw, 0 before it, `retracted` 223 and 113. The one raw row
                         not published is today's unfinished bar.
-                  - [ ] **Decided 2026-10-06: own the Yahoo fetch** (spec first). Nothing reads the currency of the line we price, and the ratio
+                  - [x] **Decided 2026-10-06: own the Yahoo fetch** (spec first). Nothing reads the currency of the line we price, and the ratio
                         view serves `security.currency_code` (an N-PORT holding or reporting
                         currency) as the quote currency. Served P/Es measured 2026-10-05: Kuwait
                         1,000× (fils as dinars), Tel Aviv 100× (agorot as shekels), Lenovo 7.85×,
@@ -2506,11 +2510,13 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
                         #99 will reload get local prices under a USD label (Tencent among them).
                         Yahoo states it in `meta.currency`, which the openbb adapter drops —
                         [note](docs/deferred/2026-10-05-a-price-bar-s-currency-is-not-its-quote-currency.md).
-                        - [ ] **Spec written 2026-10-06, five decisions open**:
+                        - [x] **Spec written 2026-10-06, five decisions open**:
                               [spec](docs/specs/2026-10-06-the-price-lane-reads-the-quote-currency.md).
                               Measured: chart closes equal the stored ones to the cent, and owning
                               the fetch costs no requests. Yahoo's own label is wrong before a unit
                               change (`AMRM.TA` 96.6× on 05-18), and 32 subunit-sized breaks exist.
+                              **Decided 2026-10-10 (Phase 4 decision 5) and built as Phase 4's
+                              Stage 0**, tracked under Phase 4 step 3.
                   - [ ] The 37,123 bars BEFORE their raw history's first date are kept: some are
                         real history the provider stopped returning (AREN), some may be another
                         listing's. Re-measure after the reload —
@@ -2885,7 +2891,7 @@ never re-asked); no Yahoo statement row has a currency; `muffin-metrics` fails 3
   - [ ] check 2027-04-01 — stage 2 re-reads every stored statements document on every visit; measure
         the largest file and a run's peak memory —
         [note](docs/deferred/2026-10-13-stage-2-re-reads-every-statements-document.md).
-- [ ] 7. Roll; live tiny subset; parity against the edge tables.
+- [x] 7. Roll; live tiny subset; parity against the edge tables.
   - [x] **Rolled 2026-10-17 14:29 UTC.** muffin-ingest#110 (the company lane) and #112 (the
     security bumps, lxml 6 confirmed by the user 2026-10-14) merged 2026-10-16 19:29. The roll moved
     all three services `5a67c1…` → `df0ed5…`, pinned. Dependabot's #48, #96, #97, #108 and #109 are
