@@ -1642,7 +1642,7 @@ cut over one at a time.
   docs/deferred/2026-09-16-raw-request-credentials.md
 - [ ] at the first Phase 5–6 keyed provider's raw asset (Alpha Vantage `apikey`, Tiingo `token`,
   FRED `api_key`, DART `crtfc_key`) — redact in its adapter with the summary's test, then scan its
-  raw files the same way (same note).
+  raw files with `muffin-dagster-operations/scripts/scan_raw_urls.py` (same note).
 - [x] 2026-09-19 — FX spot writes the day's own rates with no hand-run: 41 rates for every weekday
   through 09-18 across two scheduled nights (was 0 rows). Note CLOSED —
   docs/deferred/2026-09-16-http-cache-serves-stale-to-daily-lanes.md
@@ -2988,6 +2988,9 @@ never re-asked); no Yahoo statement row has a currency; `muffin-metrics` fails 3
   - Step 10's three clean days run from the 19:41 UTC deploy: the handlers can go on or after
     2026-10-21 20:00 UTC.
 - [ ] 10. Delete the handlers after 3 clean days; contract with drop dates.
+  - [ ] **check 2026-10-22**, together with Tiingo's parity (step 9) and London's labels and P/E
+        charts (step 3). The three clean days run from the 2026-10-18 19:41 UTC deploy, so the
+        handlers can go on or after 2026-10-21 20:00 UTC.
 - [ ] 11. Promotion waves (Phase 3 Stage 4) with the Yahoo-family cap; venues opted in with the
       user.
 - [x] 12. Grafana, docs, skills.

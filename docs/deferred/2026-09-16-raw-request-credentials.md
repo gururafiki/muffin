@@ -53,7 +53,9 @@ peak; names and counts printed only):
   `api_key`, `token`, `crtfc_key`, `key` or `access_token` parameter.
 
 So Yahoo's half is done. What remains is the second half of "Still to do" above: each Phase 5–6 keyed
-provider redacts in its adapter, with the same test, and its raw files get the same scan.
+provider redacts in its adapter, with the same test, and its raw files get the same scan. The scan
+is now a script, `muffin-dagster-operations/scripts/scan_raw_urls.py` (muffin-deployment#456), and
+`dagster-ingestion-best-practices`' raw layer points at it (muffin-ingest#117).
 
 ## What to do
 
