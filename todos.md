@@ -3040,10 +3040,13 @@ never re-asked); no Yahoo statement row has a currency; `muffin-metrics` fails 3
         - P/E: COST 51.44 and PEP 17.23 on TTM, GEF-B 16.42 on its fiscal year.
         - **And a new alert, `muffin-dagster-run-failed`: the metric derivation had stopped**
           (next item).
-  - [ ] [An unknown currency stalled the metric derivation for every company](docs/deferred/2026-10-24-an-unknown-currency-stalled-the-metrics.md):
+  - [x] [An unknown currency stalled the metric derivation for every company](docs/deferred/2026-10-24-an-unknown-currency-stalled-the-metrics.md):
         Yahoo's `TRL`, from 2026-10-21 03:47 UTC; 161,001 statements underived by 10-24.
         muffin-deployment#459 (derivation withholds an unknown code) and muffin-ingest#123
-        (`TRL`→TRY), then replay stage 2 for the three companies.
+        (`TRL`→TRY), then replay stage 2 for the companies. **Done 2026-10-24:** #459 live at the
+        20:00 deploy, the 20:17 run drained 161,001 statements and 7,674 TTMs to 0, #123 rolled
+        at 20:28, the replay corrected four companies, and the 20:31 and 20:47 runs succeeded.
+        0 underived, 0 unknown codes, Aksigorta's 2022 revenue in TRY.
   - [ ] [The cache serves a failing provider's last answer for as long as it fails](docs/deferred/2026-10-20-the-cache-serves-a-failing-provider-s-last-answer-for-ever.md):
         decide per location.
   - [x] [A resource can repeat the same failure for weeks, and no alert sees it](docs/deferred/2026-10-20-a-resource-can-repeat-the-same-failure-for-weeks.md).
@@ -3061,8 +3064,8 @@ taken 2026-10-20..24. Five edge resources move (`security-statements`' SEC half,
 segments move to Phase 6. The provider joins `security_statement`'s key, and **every ingested row
 names its provider** is now a guideline for every family.
 
-- [ ] 0a–0c. The `TRL` stall (line in Phase 4 above): muffin-deployment#459, muffin-ingest#123, then
-      the stage-2 replay.
+- [x] 0a–0c. The `TRL` stall (line in Phase 4 above): muffin-deployment#459, muffin-ingest#123, then
+      the stage-2 replay. **Done 2026-10-24.**
 - [x] 1. Spec, this section, the guideline in memory and `dagster-ingestion-best-practices`.
       **Done 2026-10-24.**
 - [ ] 2a. Expand: fiscal tables and labels, the label function, `filing_form` columns and seeds,
