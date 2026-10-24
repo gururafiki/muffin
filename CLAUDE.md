@@ -5409,6 +5409,29 @@ Fixed in muffin-deployment#460.
 
   **Read the node before diagnosing a slow deploy as a stuck one.**
 
+### The company family's handlers leave (2026-10-24)
+
+muffin-deployment#461, Phase 4 step 10: ten handlers, `fundamentals.ts`, `check.ts` and eight
+`pending_*` views.
+
+- **A DROPPED VIEW TAKES ITS GUARDS WITH IT, AND THEY LIVE IN FOUR PLACES.** `pending_industry`
+  was read by a `data_defect` arm (found through `pg_depend`), by market-verify check 7b, by
+  `tests/backlogs-are-satisfiable.sql`, and by three skills' example commands. Only the first can
+  block the `drop`; the other three would have failed later or, for the skills, sent a reader to a
+  404. Grep the workflows, the tests and `.agents/skills` as well as the catalogue.
+- **A NEGATIVE-CACHE COLUMN WITH NO WRITER LOOKS EXACTLY LIKE A LIVE ONE.** I re-pointed three skill
+  checks from `industry_missing_at` to `statements_missing_at`, writing that "the edge still sets
+  it". Nothing has written it since #446 made `security-statements` SEC-only; the SEC half marks
+  `statement_currency_missing_at`. A check on a frozen column passes for ever. Before pointing a
+  check at a column, grep the handlers for a write, or run the column query in
+  `docs/deferred/2026-09-30-the-retired-families-leave-columns-behind.md`.
+- **The extractor numbers bundle files in dependency order**, so dropping eight views renamed 49
+  files after 0077. Compare an old and new bundle by object name (strip the `NNNN-` prefix) to see
+  the real change.
+- **A contract migration can be dry-run on production**: `begin`, `set local lock_timeout = '5s'`,
+  the migration, the proving queries, `rollback`. It found that `pending_management` never had a
+  `backlog_negative_cache` row, which a fixture database could not have said.
+
 ## Running an OpenSandbox server locally
 
 - **`docker run -d -p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock opensandbox/server:latest`.**

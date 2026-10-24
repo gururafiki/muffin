@@ -29,6 +29,32 @@ lanes have run long enough to trust.
 | `market.exchange_listing`, `exchange_cursor`, `exchange_sweep_*` | `exchange-listings` | check | `venue_listing` replaced them (Phase 3, step 5) |
 | `tracked_fund.last_report_date` | `fund-holdings` | `sample_universe` | re-derive from `fund_holding_current` first |
 
+### Added 2026-10-24: the Yahoo company family (Phase 4)
+
+Its ten handlers and eight `pending_*` views left in muffin-deployment#461. These columns have had
+no writer since the family retired on 2026-10-18 (#445, and #446 for the yfinance half of
+`security-statements`). Measured on production 2026-10-24 inside the rolled-back migration, no view
+reads any of them, and the only function that names them is `clear_symbol_caches`.
+
+| Object | Written by (retired) | Still read by | Before dropping |
+|---|---|---|---|
+| `security.industry_missing_at` | `security-industries` | `clear_symbol_caches` | remove it there and from the classification |
+| `security.profile_missing_at` | `security-profiles` | `clear_symbol_caches` | as above |
+| `security.provider_country_missing_at` | `security-profiles` | `clear_symbol_caches` | as above |
+| `security.profile_detail_missing_at` | `security-profile-detail` | `clear_symbol_caches` | as above |
+| `security.fundamentals_missing_at` | `security-fundamentals` | `clear_symbol_caches` | as above |
+| `security.statements_missing_at` | `security-statements` (yfinance half) | `clear_symbol_caches` | as above |
+| `security.quarters_missing_at` | `security-quarters` | `clear_symbol_caches` | as above |
+| `security.dividends_missing_at` | `security-dividends` | `clear_symbol_caches` | as above |
+| `security.share_stats_missing_at` | `security-share-stats` | `clear_symbol_caches` | as above |
+| `security.estimates_missing_at` | `security-share-stats` | `clear_symbol_caches` | as above |
+| `security.management_fetched_at` | `security-management` | nothing | — |
+
+The company lane writes the tables these handlers used to write (`security_profile`,
+`security_officer`, `security_fundamentals`, `security_share_stats`, `security_estimate`), so the
+tables stay. The edge still writes `statement_currency_missing_at` and `xbrl_missing_at` until
+Phase 5 retires the SEC family. Those two join this list at that phase's contract step.
+
 The four price columns are classified `symbol_keyed = false` in `market.symbol_cache_classification`,
 so `clear_symbol_caches` no longer clears them. `tests/negative-caches-are-classified.sql` requires
 every `%_missing_at` column to be classified, so each drop also removes its row there.

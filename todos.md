@@ -2991,6 +2991,12 @@ never re-asked); no Yahoo statement row has a currency; `muffin-metrics` fails 3
   - [ ] **check 2026-10-22**, together with Tiingo's parity (step 9) and London's labels and P/E
         charts (step 3). The three clean days run from the 2026-10-18 19:41 UTC deploy, so the
         handlers can go on or after 2026-10-21 20:00 UTC.
+  - [ ] **muffin-deployment#461, opened 2026-10-24:** the ten handlers, `fundamentals.ts`,
+        `check.ts`, the eight `pending_*` views, `data_defect`'s `queued_but_already_done` arm and
+        market-verify 7b. The node replay passes 107 tests, and a rolled-back dry run on production
+        dropped all eight. After it deploys, check that the ten 410s still answer and the views are
+        gone. The columns they leave are listed in
+        [the retired-columns note](docs/deferred/2026-09-30-the-retired-families-leave-columns-behind.md).
 - [ ] 11. Promotion waves (Phase 3 Stage 4) with the Yahoo-family cap; venues opted in with the
       user.
 - [x] 12. Grafana, docs, skills.
