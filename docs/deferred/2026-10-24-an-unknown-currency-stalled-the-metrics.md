@@ -67,5 +67,5 @@ which reads the firing alerts first: `muffin-dagster-run-failed` was firing.
   - Aksigorta's annual revenue reads 7,227,436,471 / 12,629,198,332 / 18,669,869,486 /
     20,022,804,825 TRY for 2022–2025.
 - **The scheduled runs after it:** `ad77355b` (20:31, 23 s) and `0cef3906` (20:47, 7 s) both
-  succeeded. Read at 22:55: 0 underived statements, 0 unknown currency codes, and Aksigorta's 2022
+  succeeded. Read at 20:50 UTC: 0 underived statements, 0 unknown currency codes, and Aksigorta's 2022
   revenue metric at 7,227,436,471 TRY. Every "done when" above holds.
