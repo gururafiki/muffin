@@ -5378,6 +5378,37 @@ alerts. Two were real stalls, three weeks and two weeks old; the third was a gua
   `market-diagnose` carries the sweep:
   `docs/deferred/2026-10-20-a-resource-can-repeat-the-same-failure-for-weeks.md`.
 
+### Two deploys that never reached their migrations (2026-10-24)
+
+The fix for the `TRL` stall (muffin-deployment#459) was deployed twice and applied neither time.
+Fixed in muffin-deployment#460.
+
+- **A PER-ITEM ANSIBLE LOOP OVER A SET THAT GROWS IS A DEPLOY THAT GROWS WITH IT.**
+  - The compute-log prune was an `ansible.builtin.find` plus one `file` task per path, each its own
+    ~2.3 s SSH round trip.
+  - Steps write ~4,400 compute logs a day, and 2026-10-21 was the first day any were 30 days old.
+  - Each of the two deploys spent its whole hour in that loop (~1,300 and ~1,500 deletes).
+  - The task's own comment said "a deploy-time `find -delete`"; the code did something else. It is
+    one `find … -delete` now: 913 files in 0.46 s.
+  - **Loop only over a fixed list in the playbook.** Anything the node accumulates is one command.
+- **THE ANSIBLE PROVIDER KILLS THE PLAYBOOK AT 60 MINUTES, AND THE JOB THEN DOES NOT FAIL.**
+  - `ansible_playbook` has a 60-minute create timeout and runs `ansible-playbook` through
+    `exec.CommandContext`.
+  - Both runs stopped at exactly 60 minutes and then sat at "Still creating..." until cancelled, 30
+    and 18 minutes later. The likeliest cause, unverified, is forked workers holding the output
+    pipe open.
+  - The deploy job had no `timeout-minutes`, so it would have waited for GitHub's six hours. It now
+    has 75.
+- **I TREATED THE FIRST RUN AS AN SSH HANG; FOR ITS FIRST HOUR IT WAS WORKING.** I checked for new
+  logins, saw none after the first few minutes, and later cancelled it. Ansible multiplexes every task over one ControlMaster connection, so
+  per-task logins do not exist. The node's journal answers directly:
+  - `journalctl _COMM=sudo | grep BECOME-SUCCESS` lists every module the play ran, with its time
+    and `AnsiballZ_<module>` name, so counting them per ten minutes shows where the hour went;
+  - `journalctl -u ssh` shows the runner's connection closing "disconnected by user" exactly 60 s
+    (ControlPersist) after the last module.
+
+  **Read the node before diagnosing a slow deploy as a stuck one.**
+
 ## Running an OpenSandbox server locally
 
 - **`docker run -d -p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock opensandbox/server:latest`.**

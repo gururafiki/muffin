@@ -22,10 +22,13 @@ which reads the firing alerts first: `muffin-dagster-run-failed` was firing.
 
 ## The fix
 
-- **0a, muffin-deployment#459** (deployed 2026-10-24): `derive_security_metrics` withholds a code
+- **0a, muffin-deployment#459** (merged 2026-10-24): `derive_security_metrics` withholds a code
   `market.currency` does not hold, and the requeue trigger also fires on a currency change.
   Rolled back on production's rows, three pages of 2,000 derived 42,289 metric rows where every
   live run had failed.
+  **Not yet live.** Two deploys on 2026-10-24 (17:00 and 18:33 UTC) spent their hour in the
+  compute-log prune loop. The Ansible provider killed each one at 60 minutes, before the
+  migrations. muffin-deployment#460 makes the prune one command; the next deploy carries both.
 - **0b, muffin-ingest#123**: `price_chart.YAHOO_REPORTING_CURRENCY = {"TRL": "TRY"}`, applied to
   the statements and to `financialCurrency`, with unknown codes withheld and counted.
 - **0c**: replay `yahoo_statement` from raw for the three companies, with no Yahoo call. The rows
