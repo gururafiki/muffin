@@ -65,3 +65,15 @@ second, and do not grow with the table.
   test are invisible to the matview until it is refreshed). One of them,
   `the-gate-must-see-the-effective-country.sql`, would have kept passing on an empty view, since it
   asserts that no row disagrees. Both now refresh, and that one gained a floor.
+
+## Re-measured 2026-10-21, mid-rotation
+
+As anon through Cloudflare, best of three, with no backup running:
+- AAPL 210 ms, MSFT 135 ms, 7203.T 78 ms, VOD.L 350 ms.
+- `income` holds 101,317 rows, against 80,619 on 10-18 (+26%).
+- `check_anon_read_latency.py`: all 23 probes ok; the statements probe 125 ms, the slowest probe
+  661 ms (the weekly chart).
+
+Every read is well inside the 2,000 ms budget and none has grown with the table, so no separate
+check is scheduled. market-verify times this read every night.
+

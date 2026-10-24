@@ -3025,8 +3025,25 @@ never re-asked); no Yahoo statement row has a currency; `muffin-metrics` fails 3
         and the queue fell 295 → 289. Its head is now IRB, SCHNEIDER, AIIL, CGCL, ABSLAMC and
         NAVA, which hold NSE filer rows. The 12:58 run mapped all six and wrote 125 filings,
         India's first in two weeks (queue 283).
-  - [ ] **check 2026-10-21:** both backlog alerts have cleared (their samples need to see the
+  - [x] **check 2026-10-21:** both backlog alerts have cleared (their samples need to see the
         movement), and `pending_price_targets` and `pending_in_history` keep falling.
+        **Read 2026-10-21, parked in plan mode and recorded 10-24:**
+        - Both backlog alerts had cleared. `pending_in_history` was at 0 (283 on 10-20), and
+          `pending_price_targets` at 745 (3,145), falling about 120 an hour.
+        - Company lane, 10-19..10-21: 18/18 runs a day, 03:30–05:50. Counters summed to 1,762
+          (10-21: 1,720 answered, 2 absent, 4 not due, 36 not askable). `throttled`,
+          `crumb_rejected` and `summary_transport` were all 0. The derived runs waited up to
+          ~7,400 s for the `sql` pool.
+        - Statements read as anon: 78–350 ms, recorded in
+          [the note](docs/deferred/2026-10-18-the-statements-read-resolves-every-symbol.md). All 23
+          latency probes ok.
+        - P/E: COST 51.44 and PEP 17.23 on TTM, GEF-B 16.42 on its fiscal year.
+        - **And a new alert, `muffin-dagster-run-failed`: the metric derivation had stopped**
+          (next item).
+  - [ ] [An unknown currency stalled the metric derivation for every company](docs/deferred/2026-10-24-an-unknown-currency-stalled-the-metrics.md):
+        Yahoo's `TRL`, from 2026-10-21 03:47 UTC; 161,001 statements underived by 10-24.
+        muffin-deployment#459 (derivation withholds an unknown code) and muffin-ingest#123
+        (`TRL`→TRY), then replay stage 2 for the three companies.
   - [ ] [The cache serves a failing provider's last answer for as long as it fails](docs/deferred/2026-10-20-the-cache-serves-a-failing-provider-s-last-answer-for-ever.md):
         decide per location.
   - [x] [A resource can repeat the same failure for weeks, and no alert sees it](docs/deferred/2026-10-20-a-resource-can-repeat-the-same-failure-for-weeks.md).
@@ -3036,18 +3053,46 @@ never re-asked); no Yahoo statement row has a currency; `muffin-metrics` fails 3
         user): no alert**; each is fixed in its phase (listed under Phases 5-8), and
         `market-diagnose` carries the sweep that found them.
 
-### Phases 5-8 — the remaining family cutovers — not started
+### Phase 5 — the SEC family — PLANNED 2026-10-24
 
-SEC (with the fiscal-period dimension and the statement key), regulators, macro and events (with
-news), derived and serving (with Wikidata), then retirement of the edge function. **Each gets its
-own planning session**, per the phased-work convention.
+Spec: [docs/specs/2026-10-24-sec-family.md](docs/specs/2026-10-24-sec-family.md). Twelve decisions
+taken 2026-10-20..24. Five edge resources move (`security-statements`' SEC half, `-xbrl`,
+`-filings`, `-filing-history`, `-insider`), with the fiscal-period dimension and the statement key;
+segments move to Phase 6. The provider joins `security_statement`'s key, and **every ingested row
+names its provider** is now a guideline for every family.
+
+- [ ] 0a–0c. The `TRL` stall (line in Phase 4 above): muffin-deployment#459, muffin-ingest#123, then
+      the stage-2 replay.
+- [x] 1. Spec, this section, the guideline in memory and `dagster-ingestion-best-practices`.
+      **Done 2026-10-24.**
+- [ ] 2a. Expand: fiscal tables and labels, the label function, `filing_form` columns and seeds,
+      `disclosure_source_code`, insider columns, the 5-column unique index, FY→annual plus a CHECK,
+      derive and view changes as no-ops. Closes
+      [the statement key and fiscal periods](docs/deferred/2026-10-10-the-statement-key-and-fiscal-periods.md)
+      steps 2-3.
+- [ ] 2b. The key switch, in one window outside 03:30–06:00: `yahoo_statement` on the new conflict,
+      `security-statements` retired.
+- [ ] 3. Library (`providers/sec_edgar.py`, the facets, `Unchanged`), with fixtures and the
+      measurements under the spec's *Still to measure*.
+- [ ] 4. `defs/sec/` and `yahoo_fiscal_calendar`, lanes STOPPED except `new_sec_filers`.
+- [ ] 5. Local tiny subset. 6. Live tiny subset and parity, recorded in the spec.
+- [ ] 7. Schedules and `sec_filers_due` on. 8. Backfills: the CIK grid, every insider quarter since
+      2006, Form 4 days since 10-01, the label and derive drain.
+- [ ] 9. Retire the four edge resources. 10. Delete their handlers after 3 clean days.
+- [ ] 11. Contract with drop dates; `check_one_period_one_point` re-keyed on fiscal labels, which
+      closes [a fiscal-year change reads as a repeated year](docs/deferred/2026-10-10-a-fiscal-year-change-reads-as-a-repeated-year.md).
+- [ ] 12. Grafana, docs, skills.
+
+### Phases 6-8 — the remaining family cutovers — not started
+
+Regulators and segments, macro and events (with news), derived and serving (with Wikidata), then
+retirement of the edge function. **Each gets its own planning session**, per the phased-work
+convention.
 
 **Left for them by Phase 4** (read these in the planning session):
-- Phase 5 (SEC):
-  - [the statement key and fiscal periods](docs/deferred/2026-10-10-the-statement-key-and-fiscal-periods.md);
-  - [a fiscal-year change reads as a repeated year](docs/deferred/2026-10-10-a-fiscal-year-change-reads-as-a-repeated-year.md);
-  - `security-segments` stuck on one filing ([note](docs/deferred/2026-10-20-a-resource-can-repeat-the-same-failure-for-weeks.md)).
-- Phase 6 (regulators, events):
+- Phase 6 (regulators, segments, events):
+  - `security-segments` stuck on one filing ([note](docs/deferred/2026-10-20-a-resource-can-repeat-the-same-failure-for-weeks.md)),
+    moved from Phase 5 with segments (Phase 5 decision 1);
   - [the price-target lane trusted a cached control](docs/deferred/2026-10-20-the-price-target-lane-trusted-a-cached-control.md),
     which notes that Yahoo's `upgradeDowngradeHistory` already holds the data;
   - [the historical segment backlog is rising](docs/deferred/2026-10-04-the-historical-segment-backlog-is-rising.md);

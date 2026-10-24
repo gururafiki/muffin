@@ -1,6 +1,12 @@
 # A fiscal-year change reads as the same year reported twice
 
-Created 2026-10-10 · Due with Phase 5 (SEC and the fiscal-period model) · Status: open, tripwired
+Created 2026-10-10 · Due with Phase 5 (SEC and the fiscal-period model) · Status: decided 2026-10-24, tripwired
+
+**Decided 2026-10-24** ([the Phase 5 spec](../specs/2026-10-24-sec-family.md), decisions 7 and 11):
+a fiscal calendar per company, built from its own annual reports. When two calendars overlap, the
+newest one's period is canonical (Greif's recast year, Bristow's successor calendar), and the
+original stays stored, unlabelled and out of series. A fact on no canonical period (ESCO's
+2019-07-02 "annual") stays in raw only. The check is re-keyed on the labels at rollout step 11.
 
 ## Why it is deferred
 

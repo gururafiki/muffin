@@ -1,6 +1,11 @@
 # The statement key, precedence between SEC and Yahoo, and fiscal periods
 
-Created 2026-10-10 · Due with Phase 5 (the SEC family) · Status: open
+Created 2026-10-10 · Due with Phase 5 (the SEC family) · Status: decided 2026-10-24, building
+
+**Decided 2026-10-24** ([the Phase 5 spec](../specs/2026-10-24-sec-family.md), decisions 6 and 7):
+the provider joins the key, `(security_id, source_code, statement, period_ending, period_type)`,
+and serving views pick by `source_priority`. A `fiscal_calendar` and a `fiscal_period` table label
+statement and metric rows. Steps 2 and 3 below are rollout step 2a; the key switch is 2b.
 
 ## Why it is deferred
 
