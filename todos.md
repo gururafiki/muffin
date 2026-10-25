@@ -3093,7 +3093,11 @@ names its provider** is now a guideline for every family.
         keys, 57 securities), which the label pass would have hit; the fix is in #463. Moved to 2b:
         FY→annual and the `period_type` CHECK. Waiting: `metric_source_field` rows for `sec-xbrl`
         (until its statements exist). **Open for the user: where a filing's regulator lives**
-        (a column on `security_filing`, or on `data_source`). Next: merge, deploy, re-measure.
+        (a column on `security_filing`, or on `data_source`).
+      - **Deployed 2026-10-25 07:24 UTC** (run 40172109049): six versions in `schema_migrations`;
+        Dagster not restarted; 23 of 23 anon probes ok (slowest 855 ms, statements 362 ms); 1,357
+        filings now read annual or interim. Still to see: the next `derived_security_metrics` run
+        SUCCESS.
 - [ ] 2b. The key switch, in one window outside 03:30–06:00: `yahoo_statement` on the new conflict,
       `security-statements` retired.
 - [ ] 3. Library (`providers/sec_edgar.py`, the facets, `Unchanged`), with fixtures and the
