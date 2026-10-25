@@ -1,5 +1,7 @@
 # What the dead-symbol repair cannot reach
 
+Status: **decided 2026-10-25 (the user): options 2 and 3, and accept the Thai foreign boards as unpriceable.** Provider-verified spelling candidates (`/`→`-`, a share-class hyphen, the country's other venues such as `.V` and `.CN`), adopted only when Yahoo answers; and a dead home line priced from the primary listing abroad. TPEx comes first, under its own note.
+
 ## Why
 
 Stage 3b (muffin-ingest#100) went live on 2026-10-05. It lets the symbology ladder replace a symbol

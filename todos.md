@@ -346,7 +346,10 @@ change, unless noted. Free/paid marked where a provider is involved.
       `securityType2: 'Mutual Fund'`. `exchange_sweep_type.figi_field` now records which field a
       type uses. A typo there does NOT error — **OpenFIGI ignores an unknown filter key and returns
       the venue unfiltered**, which is how "Samsung Electronics" once returned 8,725 mostly options.
-- [ ] **Decide which newly-catalogued funds to TRACK.** Cataloguing makes ~6,664 US ETPs searchable
+- [ ] **Decided 2026-10-25 (the user):** track at least one fund per country, per sector, per (country, sector)
+      pair and per growth/value style where a US-registered fund exists:
+      [note](docs/deferred/2026-10-25-track-a-fund-per-country-sector-and-style.md), to be planned.
+      Was: **Decide which newly-catalogued funds to TRACK.** Cataloguing makes ~6,664 US ETPs searchable
       and promotable; it deliberately does NOT ingest their holdings. Tracking all of them would
       mean 6,664 N-PORT filings against SEC's ~10 req/s fair-access limit and would swamp every
       downstream backlog — and most are not US-registered so they file no N-PORT at all.
@@ -2441,6 +2444,9 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
                         order, and ~10 past the cap are never marked.
                         [Note](docs/deferred/2026-10-04-a-stale-arca-line-keeps-a-us-line-listed.md).
                         Decide before the 1 November refresh.
+                        **Decided 2026-10-25 (the user):** record who saw a line (`venue_seen_at`) before the 1 November
+                        refresh, then Nasdaq Trader's daily symbol files as a second source before
+                        promotion opens on the US.
             - [ ] **Docker Desktop's API stopped answering on this Mac on 2026-10-04** (backend up,
                   every call timed out for 10+ minutes), so the local Postgres harness could not
                   run. Restarting it is the user's call.
@@ -2551,11 +2557,14 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
                               unchanged: the stale arm first fires on 10-27.
                         - [ ] **2026-10-27, after 03:00 UTC:** count that tick's runs (~167
                               predicted) and check the pool is free before 06:00 UTC.
-                  - [ ] **Decide:** provider-verified spelling candidates (`ANDINA-B.SN`, `EU.V`,
+                  - [ ] **Decided 2026-10-25 (the user):** spelling candidates verified by Yahoo, and a dead home line
+                        priced from its primary listing abroad; the Thai foreign boards (15) are
+                        accepted as unpriceable. TPEx goes first. Was: provider-verified spelling candidates (`ANDINA-B.SN`, `EU.V`,
                         `DRUG.CN` answer), primary market abroad (Garmin `GRMN`, Coca-Cola HBC
                         `CCH.L`), Thai foreign boards (15) —
                         [note](docs/deferred/2026-10-05-what-the-dead-symbol-repair-cannot-reach.md).
-                  - [ ] **Decide:** 100 of the 101 dead `.TW` symbols are TPEx lines, which Yahoo
+                  - [ ] **Decided 2026-10-25 (the user):** a labelled-venue table, `market.exchange_label`
+                        (`TT` / `Taipei Stock Exchange` → `.TWO`), then a re-derive from raw. Was: 100 of the 101 dead `.TW` symbols are TPEx lines, which Yahoo
                         spells `.TWO`; OpenFIGI files both markets under `TT`, but its answer's
                         label (`TT (Taipei Stock Exchange)`) is already in raw and stage 2 strips
                         it. Options in
@@ -2566,7 +2575,11 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
                   **Gate passed:** `security_return` with a 30 s limit was cancelled after 104 s,
                   "Exceeded maximum runtime of 30 seconds", nothing materialised. The case for it is
                   venue walk `d89bb306`, which hung for 26.8 hours on 2026-09-21.
-      - [ ] Stage 4 — `promotion_wave`, paused until venues are opted in. **Decide with it:** whether
+      - [ ] Stage 4 — `promotion_wave`. **Decided 2026-10-25 (the user):** open tier 1 except the US (AU, CA, HK,
+            JP, JT, KS, LN, SW), at most 500 a week, checking each week that the price night and the
+            company lane stay in their windows with 0 throttled. The US waits for the Arca second
+            source, Taiwan for the TPEx table. New subjects with no symbol get the Yahoo rung.
+            Was: paused until venues are opted in. **Decide with it:** whether
             the Yahoo rung gets a condition for new NEEDS_SYMBOL subjects (17.0% hit rate over 704;
             one request each, on the price sweep's allowance). A wave is what adds such subjects;
             today almost none arrive.
@@ -2733,7 +2746,8 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
             - muffin-deployment#435 alerts below 25 days left.
       - [ ] **check 2026-10-30 — the new Cloudflare token expires 2026-10-30 18:50 UTC.** This is the
             user's credential decision: a token with no expiry date (recommended), or rotate and
-            deploy before then —
+            deploy before then. **Decided 2026-10-25 (the user):** let it expire and react then; land ready deploys
+            before 10-30 18:50 UTC —
             [note](docs/deferred/2026-10-17-the-cloudflare-token-expires-2026-10-30.md).
       - [x] ~~**2026-10-06 — every deploy fails: the Cloudflare token answers 401.**~~ Terraform's
             refresh gets `401 / code 10000 Authentication error` on all 10 Cloudflare resources,
@@ -2819,8 +2833,9 @@ never re-asked); no Yahoo statement row has a currency; `muffin-metrics` fails 3
         - [ ] check 2026-10-26: the first price night without the lane is clean (100 runs, counters
               summing, `throttled 0`).
   - [ ] [A listing Yahoo answers with one point keeps its openbb bar's label](docs/deferred/2026-10-25-a-listing-yahoo-answers-with-one-point-keeps-its-openbb-label.md):
-        five listings fail `a_bar_s_label_is_its_listing_s` every rotation (13 of 1,403). Needs a
-        decision: dead listing, retract, or relabel.
+        five listings fail `a_bar_s_label_is_its_listing_s` every rotation (13 of 1,403).
+        **Decided 2026-10-25 (the user):** mark them dead (they leave the rotation; the repair looks for a live line)
+        and relabel their stored bars with the currency Yahoo's document states.
   - Related notes: [subunits as data](docs/deferred/2026-10-10-subunits-are-data-not-a-dict.md),
     [chart bodies in http-cache](docs/deferred/2026-10-10-http-cache-keeps-every-yahoo-chart-for-a-year.md).
 - [x] 4. Validation from the node. **Done 2026-10-10**, recorded in the spec's *Validation*:
@@ -3003,7 +3018,9 @@ never re-asked); no Yahoo statement row has a currency; `muffin-metrics` fails 3
           past the cache.
   - [ ] Tiingo (`security-corporate-actions`) after its parity, once the price rotation covers its
         369 securities (about 10-22).
-        **Parity run 2026-10-25 over its 388 securities; decision needed:**
+        **Decided 2026-10-25 (the user):** retire it; Yahoo's rows replace Tiingo's on every day Yahoo's documents
+        state, the 133 rows only Tiingo holds stay until the contract, then returns re-derive.
+        **Parity run 2026-10-25 over its 388 securities:**
         [note](docs/deferred/2026-10-25-tiingo-dividends-are-not-split-adjusted.md). Yahoo's stored
         documents state 5,828 of Tiingo's 6,823 dividends on the same day and value, and 80 of 91
         splits. 732 differ only because Tiingo's dividends are not split-adjusted, which inflates
@@ -3024,7 +3041,7 @@ never re-asked); no Yahoo statement row has a currency; `muffin-metrics` fails 3
         resources answering 410 with their lane. The columns they leave are listed in
         [the retired-columns note](docs/deferred/2026-09-30-the-retired-families-leave-columns-behind.md).
 - [ ] 11. Promotion waves (Phase 3 Stage 4) with the Yahoo-family cap; venues opted in with the
-      user.
+      user. **Decided 2026-10-25 (the user):** tier 1 except the US, 500 a week (Phase 3 Stage 4 line).
 - [x] 12. Grafana, docs, skills.
   - [x] Docs and skills for steps 8–9: muffin-deployment#448 (2026-10-18). Its rewrite of
         `market-refresh-security` broke the skill's YAML frontmatter (`": "` in a plain scalar);
@@ -3080,7 +3097,9 @@ never re-asked); no Yahoo statement row has a currency; `muffin-metrics` fails 3
         at 20:28, the replay corrected four companies, and the 20:31 and 20:47 runs succeeded.
         0 underived, 0 unknown codes, Aksigorta's 2022 revenue in TRY.
   - [ ] [The cache serves a failing provider's last answer for as long as it fails](docs/deferred/2026-10-20-the-cache-serves-a-failing-provider-s-last-answer-for-ever.md):
-        decide per location.
+        decide per location. **Decided 2026-10-25 (the user):** keep stale-on-429/5xx; Dagster requests that need an
+        honest answer send bypass or no-store; list each location with its Dagster callers, then
+        close. Edge callers are out of scope.
   - [x] [A resource can repeat the same failure for weeks, and no alert sees it](docs/deferred/2026-10-20-a-resource-can-repeat-the-same-failure-for-weeks.md).
         Found while closing out Phase 4: `earnings-history` has asked for the window ending
         2016-06-30 hourly since 2026-09-06, and `security-segments` has failed on TNDM's 2014 10-Q
@@ -3110,8 +3129,10 @@ names its provider** is now a guideline for every family.
         CURRENT derivation fails a page holding an `FY` row and its yfinance `annual` twin (4,694
         keys, 57 securities), which the label pass would have hit; the fix is in #463. Moved to 2b:
         FY→annual and the `period_type` CHECK. Waiting: `metric_source_field` rows for `sec-xbrl`
-        (until its statements exist). **Open for the user: where a filing's regulator lives**
-        (a column on `security_filing`, or on `data_source`).
+        (until its statements exist). Where a filing's regulator lives: **Decided 2026-10-25 (the user):** a
+        `security_filing.disclosure_source_code` column written by the Dagster filings writers only
+        (`sec` from Phase 5's lane); no backfill and no trigger, and edge-written rows stay null
+        until their family moves. It lands with Phase 5 step 3/4.
       - **Deployed 2026-10-25 07:24 UTC** (run 40172109049): six versions in `schema_migrations`;
         Dagster not restarted; 23 of 23 anon probes ok (slowest 855 ms, statements 362 ms); 1,357
         filings now read annual or interim. Still to see: the next `derived_security_metrics` run

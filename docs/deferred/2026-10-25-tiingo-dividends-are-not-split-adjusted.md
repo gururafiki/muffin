@@ -1,6 +1,6 @@
 # Tiingo's dividends are not split-adjusted, and they inflate total returns
 
-Created 2026-10-25 · Status: **open, needs a decision** (Phase 4 decision 9, Tiingo's retirement)
+Created 2026-10-25 · Status: **decided 2026-10-25 (the user): retire, and Yahoo's rows replace Tiingo's** on every day Yahoo's documents state; the 133 rows only Tiingo holds stay until the contract (Phase 4 decision 9)
 
 ## What was found
 

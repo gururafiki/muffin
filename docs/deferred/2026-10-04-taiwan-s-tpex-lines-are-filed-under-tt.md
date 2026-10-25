@@ -1,5 +1,7 @@
 # Taiwan's TPEx lines are filed under `TT`, and we price them as `.TW`
 
+Status: **decided 2026-10-25 (the user): option 1, a labelled-venue control table** (`market.exchange_label`, one row `TT` / `Taipei Stock Exchange` → `.TWO`), read by the symbology ladder and the directory's stage 2, then a re-derive from raw with no provider call.
+
 ## Why
 
 Taiwan has two stock markets. The Taiwan Stock Exchange (TWSE, MIC `XTAI`) is spelled `.TW` on

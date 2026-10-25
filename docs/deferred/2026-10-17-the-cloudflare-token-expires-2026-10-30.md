@@ -1,5 +1,7 @@
 # The Cloudflare token expires 2026-10-30
 
+Status: **decided 2026-10-25 (the user): let it expire and react then.** Land the deploys that are ready before 10-30 18:50 UTC; after it, a Terraform refresh failing 401 / code 1000 means a new token, not a defect.
+
 ## Why
 
 The `CLOUDFLARE_API_TOKEN` set on 2026-10-16 reports `expires_on: 2026-10-30T18:50:47Z` at

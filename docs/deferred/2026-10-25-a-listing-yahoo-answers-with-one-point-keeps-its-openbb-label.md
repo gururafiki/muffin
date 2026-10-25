@@ -1,6 +1,6 @@
 # A listing Yahoo answers with one point keeps its openbb bar's label
 
-Created 2026-10-25 · Status: open, needs a decision
+Created 2026-10-25 · Status: **decided 2026-10-25 (the user): mark them dead, so they leave the rotation and the symbology repair looks for a live line; relabel their stored bars with the currency Yahoo's document states**
 
 ## What was found
 

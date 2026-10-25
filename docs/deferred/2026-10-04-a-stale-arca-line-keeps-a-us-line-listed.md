@@ -1,7 +1,7 @@
 # A stale NYSE Arca line keeps a delisted US line listed
 
-Created 2026-10-04 · Check by 2026-10-31, before the 1 November directory refresh · Status: open,
-needs a decision between the options below.
+Created 2026-10-04 · Check by 2026-10-31, before the 1 November directory refresh · Status: **decided
+2026-10-25 (the user): option 1 before the 1 November refresh, then option 2 before promotion opens on the US.**
 
 ## What happens
 

@@ -66,6 +66,7 @@ Found by the 2026-10-21 check-in and fixed first:
 | 10 | Insider depth | **Every quarter since 2006** (~82 requests). Rows and bytes are measured as the backfill runs, against the disk headroom. | Newest 8 quarters first and decide later; the last 10 years. |
 | 11 | Changed fiscal year | **The newest calendar wins.** The recast or successor period is canonical. The original stays stored, unlabelled and out of series. | The originally reported year; showing both. |
 | 12 | Retired `sec` rows | **Deleted after parity.** Frozen at retirement, then deleted at contract with a drop date once company facts cover their periods. Any period only they held is listed first. | Keeping them for ever as that provider's rows. |
+| 13 | A filing's regulator | **`security_filing.disclosure_source_code`, written by the Dagster writers only** (2026-10-25: the edge is neither kept working nor fixed). Rejected: on `data_source`; deciding in Phase 6. |
 | — | Form 4 attribution | Follows the edge: every equity of the issuer's CIK. | Only the class matching `issuerTradingSymbol`. |
 
 The guideline in decision 6 is recorded in `dagster-ingestion-best-practices`'
@@ -717,7 +718,7 @@ Where it departs from the DDL sketch, and why:
   `security_recent_filings`) and `security_filing.disclosure_source_code`. They are the second half
   of 2a and must land before 2b. The regulator column waits on a decision (below).
 
-**Open: where the regulator of a filing lives.** The DDL sketch adds
+**Decided 2026-10-25 (the user, decision 13): a column on `security_filing`, written by the Dagster filings writers only.** The user's rule: the edge does not need to keep working and is not fixed. So there is no backfill and no trigger: the SEC lane writes `sec` from step 3/4, its step-8 backfill rewrites every SEC filing, and the other regulators' rows fill when Phase 6 moves them. The question as it was put: The DDL sketch adds
 `security_filing.disclosure_source_code`, filled by a `one_shot`. The edge's `security-filings`,
 `cn-filings`, `in-filings` and `kr-filings` keep inserting rows until step 9 and Phase 6, and none
 of them would write it, so every row they add after the one-shot would have no regulator. The

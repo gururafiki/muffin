@@ -1,6 +1,6 @@
 # The cache serves a failing provider's last answer indefinitely
 
-Status: open. Needs a decision per cache location (latency against an honest error).
+Status: **decided 2026-10-25 (the user): option 3.** Keep serving stale on 429/5xx; every Dagster request that needs an honest answer sends the bypass or no-store headers; list each location with its Dagster callers and close. Edge callers are out of scope (they are being retired, and are not fixed).
 
 ## Why
 
