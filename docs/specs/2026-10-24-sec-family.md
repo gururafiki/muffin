@@ -66,7 +66,7 @@ Found by the 2026-10-21 check-in and fixed first:
 | 10 | Insider depth | **Every quarter since 2006** (~82 requests). Rows and bytes are measured as the backfill runs, against the disk headroom. | Newest 8 quarters first and decide later; the last 10 years. |
 | 11 | Changed fiscal year | **The newest calendar wins.** The recast or successor period is canonical. The original stays stored, unlabelled and out of series. | The originally reported year; showing both. |
 | 12 | Retired `sec` rows | **Deleted after parity.** Frozen at retirement, then deleted at contract with a drop date once company facts cover their periods. Any period only they held is listed first. | Keeping them for ever as that provider's rows. |
-| 13 | A filing's regulator | **`security_filing.disclosure_source_code`, written by the Dagster writers only** (2026-10-25: the edge is neither kept working nor fixed). Rejected: on `data_source`; deciding in Phase 6. |
+| 13 | A filing's regulator | **`security_filing.disclosure_source_code`, written by the Dagster writers only** (the user, 2026-10-25: the edge is neither kept working nor fixed) | on `data_source`, which ties the regulator to the writer; deciding in Phase 6, which needs a backfill then |
 | — | Form 4 attribution | Follows the edge: every equity of the issuer's CIK. | Only the class matching `issuerTradingSymbol`. |
 
 The guideline in decision 6 is recorded in `dagster-ingestion-best-practices`'
