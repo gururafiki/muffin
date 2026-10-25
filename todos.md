@@ -2807,12 +2807,17 @@ never re-asked); no Yahoo statement row has a currency; `muffin-metrics` fails 3
           about five nights.
         - Left: reading the charts in the app, with muffin-ui#137's render check —
           [note](docs/deferred/2026-10-10-the-ratio-view-reads-the-bar-s-label.md).
-  - [ ] Drop `raw_price_history` and its 1.6 GB on or after 2026-10-24:
+  - [x] Drop `raw_price_history` and its 1.6 GB on or after 2026-10-24:
         [note](docs/deferred/2026-10-10-the-openbb-price-raw-is-the-rollback.md).
         **Opened 2026-10-25:** muffin-ingest#125 deletes the lane (gate read on production: 14
         clean nights, 1,403 runs), and muffin-deployment#462 adds `drop-retired-raw`, which
         refuses until the roll. Next: merge and roll #125 outside the night windows, then run the
         action with `confirm=drop`.
+        **Done 2026-10-25 09:14 UTC:** #125 merged (f963624) and rolled (`37c12b81…` →
+        `730edfde…`, three services, nothing interrupted). The action reported 1.6 GB in 12,328
+        files and removed them; `/mnt/data` 77% → 75%. The 09:07 heartbeat after the roll succeeded.
+        - [ ] check 2026-10-26: the first price night without the lane is clean (100 runs, counters
+              summing, `throttled 0`).
   - [ ] [A listing Yahoo answers with one point keeps its openbb bar's label](docs/deferred/2026-10-25-a-listing-yahoo-answers-with-one-point-keeps-its-openbb-label.md):
         five listings fail `a_bar_s_label_is_its_listing_s` every rotation (13 of 1,403). Needs a
         decision: dead listing, retract, or relabel.

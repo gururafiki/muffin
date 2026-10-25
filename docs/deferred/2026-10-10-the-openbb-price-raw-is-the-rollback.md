@@ -1,6 +1,6 @@
 # The openbb price raw is the rollback, until it is dropped
 
-Created 2026-10-10 · Due on or after 2026-10-24 · Status: **in progress** (muffin-ingest#125, muffin-deployment#462)
+Created 2026-10-10 · Due on or after 2026-10-24 · Status: **removed 2026-10-25**; done once the 2026-10-26 price night reads clean (muffin-ingest#125, muffin-deployment#462)
 
 ## Why it is deferred
 
@@ -52,6 +52,18 @@ rollback a re-fetch of every history.
 - **Step 3, muffin-deployment#462.** `maintenance.yml -f action=drop-retired-raw`. It refuses while
   the running image still defines the asset, and it refused against today's image on the node.
   Order: merge and roll #125, then run the action with `confirm=drop`.
+- **Done 2026-10-25.**
+  - #125 merged as f963624. Its main build passed (image, checks, definitions).
+  - `roll-ingest` (run 40177102294, 08:33 UTC): pulled, gRPC SERVING, LOADED. All three services
+    moved `37c12b81…` → `730edfde…` and are pinned. No runs were in flight, so none were
+    interrupted.
+  - `drop-retired-raw`, dry run (40177638963): it asked the deployed image, which no longer
+    defines the asset, and reported `raw_price_history: 1.6G in 12328 files`.
+  - With `confirm=drop` (40179827081, 09:14 UTC): `removed`. `/mnt/data` went from 71 to 70 GB
+    used and from 23 to 24 GB free (77% → 75%); exactly 25,299,980,288 bytes free afterwards. The
+    directory is gone on the node.
+  - The 09:07 `ledger_heartbeat` after the roll succeeded in 5.6 s.
+  - Left: the first night without the lane, 2026-10-26.
 
 ## Done when
 
