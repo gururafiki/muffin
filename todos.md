@@ -2809,6 +2809,13 @@ never re-asked); no Yahoo statement row has a currency; `muffin-metrics` fails 3
           [note](docs/deferred/2026-10-10-the-ratio-view-reads-the-bar-s-label.md).
   - [ ] Drop `raw_price_history` and its 1.6 GB on or after 2026-10-24:
         [note](docs/deferred/2026-10-10-the-openbb-price-raw-is-the-rollback.md).
+        **Opened 2026-10-25:** muffin-ingest#125 deletes the lane (gate read on production: 14
+        clean nights, 1,403 runs), and muffin-deployment#462 adds `drop-retired-raw`, which
+        refuses until the roll. Next: merge and roll #125 outside the night windows, then run the
+        action with `confirm=drop`.
+  - [ ] [A listing Yahoo answers with one point keeps its openbb bar's label](docs/deferred/2026-10-25-a-listing-yahoo-answers-with-one-point-keeps-its-openbb-label.md):
+        five listings fail `a_bar_s_label_is_its_listing_s` every rotation (13 of 1,403). Needs a
+        decision: dead listing, retract, or relabel.
   - Related notes: [subunits as data](docs/deferred/2026-10-10-subunits-are-data-not-a-dict.md),
     [chart bodies in http-cache](docs/deferred/2026-10-10-http-cache-keeps-every-yahoo-chart-for-a-year.md).
 - [x] 4. Validation from the node. **Done 2026-10-10**, recorded in the spec's *Validation*:

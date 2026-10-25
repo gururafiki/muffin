@@ -1,6 +1,6 @@
 # The openbb price raw is the rollback, until it is dropped
 
-Created 2026-10-10 · Due on or after 2026-10-24 · Status: open
+Created 2026-10-10 · Due on or after 2026-10-24 · Status: **in progress** (muffin-ingest#125, muffin-deployment#462)
 
 ## Why it is deferred
 
@@ -32,6 +32,26 @@ rollback a re-fetch of every history.
    the indices lane uses them). Accept the snapshot diff, whose removal of a name is the point.
 3. Delete `/var/lib/muffin-ingest/raw/raw_price_history` on the node through a maintenance action,
    never by hand.
+
+## Progress, 2026-10-25
+
+- **Step 1, read on production.** Every scheduled `nightly_prices` night since the switch
+  succeeded: 14 nights, 1,403 runs. `no_security_is_far_behind_the_sweep` passed all 1,403
+  evaluations. `a_bar_s_label_is_its_listing_s` failed 13, each naming one of the same five stale
+  listings that Yahoo answers with a single point
+  ([note](2026-10-25-a-listing-yahoo-answers-with-one-point-keeps-its-openbb-label.md)).
+  `raw_price_chart` holds 12,328 partitions, as `raw_price_history` does.
+- **Step 2, muffin-ingest#125.**
+  - Deleted: the asset, its fetcher and collector, and the two helpers only it used
+    (`prices.asked_with_another_symbol`, `prices.dates_by_security`), with its tests and the
+    `price_history.json` fixture.
+  - Two guards those tests carried had no chart-lane equivalent, and moved to the chart lane:
+    `not_askable` summing to `requested`, and a range of one partition. Both were
+    mutation-proven there.
+  - The snapshot loses only `raw_price_history`'s block.
+- **Step 3, muffin-deployment#462.** `maintenance.yml -f action=drop-retired-raw`. It refuses while
+  the running image still defines the asset, and it refused against today's image on the node.
+  Order: merge and roll #125, then run the action with `confirm=drop`.
 
 ## Done when
 
