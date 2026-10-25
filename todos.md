@@ -2957,8 +2957,14 @@ never re-asked); no Yahoo statement row has a currency; `muffin-metrics` fails 3
           AAPL/NVDA/JACK unchanged.
         - The lane held the `sql` pool for 2 h 20 min (03:30–05:51), so the derived runs waited. Roll
           or deploy after about 06:00, not 05:30.
-  - [ ] **check 2026-10-25 — the first full rotation:**
-        [note](docs/deferred/2026-10-17-the-company-lane-s-first-rotation.md).
+  - [x] **check 2026-10-25 — the first full rotation:**
+        [note](docs/deferred/2026-10-17-the-company-lane-s-first-rotation.md). **Read 2026-10-25:**
+        146 of 146 runs SUCCESS, every day's counters summing, `throttled 0`; fundamentals median
+        age 3 d 4 h; all 11,921 caps carry a currency (Lenovo HKD); the rotation check passes (730
+        of 12,672 stale, 5.76%); no unknown statement currency, and the 3,625 Yahoo rows without
+        one were all written by the edge on or before 10-18. **COST's quarterly table still shows
+        two columns per quarter** (SEC's 12/12/12/16-week dates against Yahoo's month ends,
+        13–20 days apart); Phase 5 step 8's labels merge them. The http-cache note is closed.
   - [x] **The stock page's statements read resolved every symbol.** muffin-deployment#447,
         deployed 2026-10-18 20:23 UTC, moved the view onto `symbol_security` with the same rows.
         As anon it now takes 87–125 ms, against 0.65–0.85 s that morning:
@@ -2997,6 +3003,13 @@ never re-asked); no Yahoo statement row has a currency; `muffin-metrics` fails 3
           past the cache.
   - [ ] Tiingo (`security-corporate-actions`) after its parity, once the price rotation covers its
         369 securities (about 10-22).
+        **Parity run 2026-10-25 over its 388 securities; decision needed:**
+        [note](docs/deferred/2026-10-25-tiingo-dividends-are-not-split-adjusted.md). Yahoo's stored
+        documents state 5,828 of Tiingo's 6,823 dividends on the same day and value, and 80 of 91
+        splits. 732 differ only because Tiingo's dividends are not split-adjusted, which inflates
+        84 securities' total returns (AVGO 5y total +1,140.7% against price +527.2%). Meanwhile the
+        resource has written nothing since 10-20 and its queue is frozen at 1,035, which is the
+        firing `muffin-backlog-stalled` alert.
   - Step 10's three clean days run from the 19:41 UTC deploy: the handlers can go on or after
     2026-10-21 20:00 UTC.
 - [x] 10. Delete the handlers after 3 clean days. **Done 2026-10-24.** The contract (columns, drop
@@ -3111,6 +3124,8 @@ names its provider** is now a guideline for every family.
 - [ ] 5. Local tiny subset. 6. Live tiny subset and parity, recorded in the spec.
 - [ ] 7. Schedules and `sec_filers_due` on. 8. Backfills: the CIK grid, every insider quarter since
       2006, Form 4 days since 10-01, the label and derive drain.
+      - After the drain, read COST's quarterly table: one column per quarter (on 2026-10-25 SEC's
+        and Yahoo's dates for one quarter sat 13–20 days apart, so each showed twice).
 - [ ] 9. Retire the four edge resources. 10. Delete their handlers after 3 clean days.
 - [ ] 11. Contract with drop dates; `check_one_period_one_point` re-keyed on fiscal labels, which
       closes [a fiscal-year change reads as a repeated year](docs/deferred/2026-10-10-a-fiscal-year-change-reads-as-a-repeated-year.md).

@@ -1,7 +1,7 @@
 # http-cache keeps every Yahoo chart response for a year, and the price lane now sends it 2,500 a night
 
-Created 2026-10-10 · Due when Phase 4's company lane is built (step 5's nginx changes) · Status: **live
-2026-10-17; the first night stored no price-lane chart (2026-10-18); one rotation left to read**
+Created 2026-10-10 · Due when Phase 4's company lane is built (step 5's nginx changes) · Status: **done
+2026-10-25**: a week of price nights stored no price-lane chart (below)
 
 ## Why it is deferred
 
@@ -70,6 +70,20 @@ already evicted some entries. Read it again after one rotation (~2026-10-23).
 
 Read it again after the price lane's first full rotation (~2026-10-23). Until then, one night says
 the chart lane no longer grows the cache; it does not yet say the size panel shows a flat rotation.
+
+## After a full rotation, read 2026-10-25
+
+**Done.** Every cache entry written since 2026-10-18 03:00, classified by its own `KEY:` line:
+16,383 entries.
+- **Chart: 39**, all the FX lane's `range=5d` spot requests, rewritten in place. **None** of the
+  price lane's roughly 17,000 chart requests over seven nights was stored.
+- The rest: openbb-api 5,852; SEC 6,718 (`data.sec.gov` 3,392, `www.sec.gov` 2,734, full-text
+  search 592); NSE archives 2,835; Tiingo 496; CNINFO about 100.
+- `muffin_volume_bytes{volume="muffin_http-cache-data"}` reads **28.80 GB**, against 27.92 GB on
+  10-18: +0.88 GB in seven days, the ~0.13 GB a day the other providers already added. 480,947
+  files.
+- At that rate the zone reaches its 40 GB LRU in about 85 days. `/mnt/data` is at 75% (24 GB free)
+  after `raw_price_history` was dropped the same morning.
 
 ## Done when
 

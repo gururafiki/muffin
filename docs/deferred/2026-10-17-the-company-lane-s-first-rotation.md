@@ -108,6 +108,45 @@ Every check passed but two, and both were defects that are now fixed.
 - The http-cache size, after the chart lane's no-store header
   ([note](2026-10-10-http-cache-keeps-every-yahoo-chart-for-a-year.md)).
 
+## The first full rotation, read 2026-10-25
+
+Every check passed but one, which the Phase 5 fiscal labels already address.
+
+- **Runs:** 146 of 146 SUCCESS from 10-18 to 10-25. Every day ran 03:30 to about 05:50 except
+  10-25, the second rotation's first day, which ended at 04:45 because statements are now due only
+  after an earnings date or at 90 days.
+- **Counters,** one materialization per run and asset (a range run copies its metadata onto every
+  partition, 111,015 events). Every day sums to `requested`:
+
+  | day | requested | answered | not askable | absent | not due |
+  |---|---|---|---|---|---|
+  | 10-19 | 1,762 | 1,719 | 43 | 0 | 0 |
+  | 10-20 | 1,762 | 1,725 | 37 | 0 | 0 |
+  | 10-21 | 1,762 | 1,720 | 36 | 2 | 4 |
+  | 10-22 | 1,762 | 1,691 | 69 | 0 | 2 |
+  | 10-23 | 1,762 | 1,734 | 28 | 0 | 0 |
+  | 10-24 | 1,762 | 1,723 | 33 | 0 | 6 |
+  | 10-25 | 1,763 | 1,719 | 36 | 1 | 7 |
+
+  `throttled`, `crumb_rejected` and `summary_transport` were 0 every day.
+- **`security_fundamentals.as_of`:** median age **3 days 4 hours** over 11,949 rows. 18 are older
+  than 7 days; the oldest is 73 days.
+- **`market_cap_currency`:** all **11,921** equities with a cap carry its currency, 0 without.
+  Lenovo (`992.HK`, priced as `0992.HK` in HKD) holds 294,238,519,296 **HKD**.
+- **`no_company_is_far_behind_the_rotation`:** passes, with 730 of 12,672 equities more than 14
+  days stale (5.76%). 723 of them have no fundamentals at all.
+- **Statements carry a currency.** No row holds an unknown code, so the TRL fix holds. 3,625 Yahoo
+  rows have no currency (3,437 quarterly, 188 annual); every one was written on or before 10-18,
+  by the edge's resources before the family retired. None was written by the company lane.
+- **The quarterly table:** AAPL and NVDA show one column per quarter (smallest gap 91 days). **COST
+  does not**: SEC dates its 12/12/12/16-week quarters up to 20 days before Yahoo's month end
+  (2025-05-11 against 2025-05-31, 2026-02-15 against 2026-02-28, 2026-05-10 against 2026-05-31),
+  beyond the 7-day cluster, so each of those quarters shows twice. `security_metric_series` now
+  clusters by fiscal label (muffin-deployment#463, deployed 2026-10-25), so Phase 5 step 8's label
+  pass merges them; it is tracked there.
+- **http-cache:** see [its note](2026-10-10-http-cache-keeps-every-yahoo-chart-for-a-year.md), now
+  closed. The price lane stored no chart in a week.
+
 ## Done when
 
 The first full rotation has completed, with every day's counters summing and `throttled 0`, and the
