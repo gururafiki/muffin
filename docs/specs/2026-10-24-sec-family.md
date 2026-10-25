@@ -656,3 +656,71 @@ Plus the two Phase 4 notes this spec closes, updated with their "done when" evid
 ## As built
 
 Filled in as each stage lands.
+
+### Step 2a (expand), first half: muffin-deployment, 2026-10-25
+
+Five migrations, each in its own transaction so no lock is held longer than its own statement:
+
+| Migration | What is now true |
+|---|---|
+| `20261025100000_a_fiscal_period_has_a_home` | `fiscal_calendar` and `fiscal_period`, with the partial unique index (one canonical period per security, year and period), RLS and grants. Empty. |
+| `20261025100100_a_statement_carries_its_fiscal_period` | `fiscal_year`/`fiscal_period` on `security_statement` and `security_metric`; `label_fiscal_periods(uuid[])`; the requeue trigger fires on a label change; both derivations carry labels; every `do update` carries `is distinct from`; the `derived_at` marking joins on `source_code`. |
+| `20261025100200_a_statement_is_unique_per_provider` | `security_statement_provider_key`, the 5-column unique index 2b swaps in as the key. |
+| `20261025100300_a_filing_form_says_what_kind_it_is` | `filing_form` gains `kind`, `is_amendment`, `is_transition`, `kept`, `refreshes_facts`; 19 SEC forms seeded; `ingest_rw` can no longer write it. |
+| `20261025100400_an_insider_trade_names_its_filing` | `insider_trade` gains the accession, line and CIK columns with a partial unique index; `insider_transaction_code` with SEC's 20 codes; the `sec-form345` source. |
+
+Where it departs from the DDL sketch, and why:
+
+- **The FY→annual conversion and the `period_type` CHECK move to 2b.** Measured 2026-10-25: the
+  2,259 `FY` rows are all `sec`, written 2026-08-20/21 for 59 securities. 1,496 have no annual twin,
+  763 collide only with a yfinance annual row, and **none** collides with a `sec` annual row. So
+  under the 5-column key the conversion needs no delete at all, and before it every one of the 763
+  would collide. The live edge writer already writes `annual`.
+- **The fiscal-period CHECKs are `NOT VALID`.** Every existing row is null, which the check admits,
+  and validating would scan `security_metric` (2.8 GB) while the migration holds `add column`'s
+  ACCESS EXCLUSIVE lock, blocking the app's metric and ratio reads. A NOT VALID check is still
+  enforced on every write.
+- **The `sec-xbrl` rows of `metric_source_field` are deferred** until `sec-xbrl` statement rows
+  exist. `check_derived_metrics.py` takes its sources from that table, so rows added now would pull
+  the edge's directly written `sec-xbrl` metrics into its sample, with no statements to compare them
+  against.
+- **`insider_trade.transaction_code` has no foreign key** to the code table. A code the table lacks
+  would fail the whole insert, the shape of the `TRL` stall; the lane counts unknown codes instead.
+- **The codes come from Form 4's General Instruction 8** (SEC 1474 (03-26),
+  `https://www.sec.gov/files/form4.pdf`, read 2026-10-25), not edgartools: its table lacks K, L, V
+  and W and describes I wrongly. The group names are shortened from SEC's headings.
+- **`derived_security_metrics`' `metrics_written` now counts changed rows**, not rows sent, because
+  of the `is distinct from` guards. The drain loop reads the backlog counts, so it is unaffected.
+- **The derivation keeps one statement per metric key in a page** (not in the sketch; found while
+  validating). Re-deriving AAPL, MSFT and 7203.T in a rolled-back transaction on production, the
+  CURRENT function failed the whole page: `ON CONFLICT DO UPDATE command cannot affect row a second
+  time`. The `FY` rows (`sec`) and their yfinance `annual` twins map to the same `annual` metric, on
+  4,694 keys across 57 securities, and AAPL's FY2023 short-term debt even disagrees between them
+  (5,985,000,000 against 15,807,000,000). It is latent while the twins are never underived together,
+  and step 8's label pass re-queues a security's statements all at once, so it would have stalled the
+  derivation the way `TRL` did. The page now keeps the highest source priority, then the newest
+  `as_of`. Guard: `tests/two-statements-for-one-metric-are-one-metric.sql`.
+
+**Measured on production, rolled back, 2026-10-25 05:30–06:00 UTC:**
+- per migration: 67 ms, 29 ms, **8,075 ms** (the index build, 23 MB, under a SHARE lock that holds
+  writes, not reads), 216 ms, 225 ms;
+- re-deriving AAPL, MSFT and 7203.T (127 statements, the `FY` twins left out so the current function
+  can complete) with the current and the new function: **the same 5,889 metric rows**, except three
+  7203.T `total_debt` rows the new function labels JPY where the current one left the currency
+  empty (its free-cash-flow and total-debt updates never set it). The current function rewrote 582
+  rows; the new one wrote 25.
+- Re-deriving at all changes stored metrics: 7203.T gains `goodwill` and `long_lived_assets`, AAPL
+  `depreciation`, and AAPL's FY2014 `total_debt` moves from 35,295,000,000 to 28,987,000,000, under
+  either function. Those statements were derived before the metric mappings existed and never
+  re-queued. Step 8's label pass re-derives every statement, which settles it.
+- **Not yet in this half:** the view changes (`security_statement_current`, `security_metric_series`,
+  `security_recent_filings`) and `security_filing.disclosure_source_code`. They are the second half
+  of 2a and must land before 2b. The regulator column waits on a decision (below).
+
+**Open: where the regulator of a filing lives.** The DDL sketch adds
+`security_filing.disclosure_source_code`, filled by a `one_shot`. The edge's `security-filings`,
+`cn-filings`, `in-filings` and `kr-filings` keep inserting rows until step 9 and Phase 6, and none
+of them would write it, so every row they add after the one-shot would have no regulator. The
+alternative is a column on `data_source` (each writer names its regulator: `sec-submissions` and
+`sec-filings` → `sec`, `cninfo` → `cninfo`, `nse` → `nse`, `dart` → `dart`), so the regulator is a
+join, with no backfill and no writer change. Nothing in Phase 5 needs it before the views do.

@@ -5432,6 +5432,43 @@ muffin-deployment#461, Phase 4 step 10: ten handlers, `fundamentals.ts`, `check.
   the migration, the proving queries, `rollback`. It found that `pending_management` never had a
   `backlog_negative_cache` row, which a fixture database could not have said.
 
+### Phase 5 step 2a, and a stall that was waiting for the label pass (2026-10-25)
+
+muffin-deployment#463. Spec: [docs/specs/2026-10-24-sec-family.md](docs/specs/2026-10-24-sec-family.md), *As built*.
+
+- **TWO ROWS OF ONE PAGE FOR ONE UPSERT KEY FAIL THE WHOLE PAGE, AND THE DERIVATION HAD IT.**
+  `derive_security_metrics` maps a statement's `FY` and `annual` period types to one `annual`
+  metric. The 2,259 `FY` rows (`sec`) have yfinance `annual` twins on 4,694 metric keys across 57
+  securities. A page holding both raises `ON CONFLICT DO UPDATE command cannot affect row a second
+  time`, which fails that page and every page after it, the TRL stall's shape. It is latent only
+  because the twins are never underived together, and the step-8 label pass re-queues every
+  statement of a security at once. Found by re-deriving three companies with the CURRENT function
+  in a rolled-back transaction as a control for the new one: the control failed before it compared
+  anything. This file's own rule ("the same conflict key twice fails the whole upsert") had never
+  been applied to a derivation, only to writers fed by a provider. The page now keeps one statement
+  per key, by priority then `as_of`.
+- **A CONTROL RUN IS WHAT SEPARATES "MY CHANGE DID THIS" FROM "RE-DERIVING DOES THIS".** The new
+  function's re-derivation changed 40 stored metrics (7203.T gained `goodwill`, AAPL's FY2014
+  `total_debt` moved 35.3 bn → 29.0 bn), which read as a regression. The same re-derivation with the
+  current function changed them identically: those statements were derived before the mappings
+  existed and never re-queued. Old and new agreed on all 5,889 rows except three currencies the old
+  one left empty. Diff the two runs' results, not each run against what is stored.
+- **A `do update` GUARDED BY `is distinct from` ALSO HIDES THE ABOVE.** The new function got through
+  the same page because the twins' values were equal, so the first update changed nothing and the
+  second found no modified row. A guard that removes a failure by accident is not a fix. The fixture
+  gives the twins different values.
+- **zsh's `echo` TURNS `\t` INTO A TAB**, so `echo '\timing on'` writes a psql script that fails on
+  its first line ("syntax error at or near iming"). Write psql scripts with a heredoc or Python, not
+  `echo`.
+- **A REPLAY OVER `ssh 'bash -s'` DIES WITH THE CONNECTION, AND IT DROPPED THREE TIMES IN AN HOUR.**
+  One drop happened while pulling the image, which a prune had removed. Run it detached on the node
+  (`setsid nohup bash run.sh > out.log 2>&1 < /dev/null &`, with a final marker line), then poll
+  for the marker with short `ssh` calls. The polling survives a drop; a long session does not.
+- **A DRY RUN OF AN INDEX BUILD TIMES IT FOR THE DEPLOY.** `security_statement_provider_key` took
+  8,075 ms under a SHARE lock (it holds writes, not reads), so it has its own migration. In the file
+  that adds columns, it would have held ACCESS EXCLUSIVE, which blocks the app's statement reads,
+  for those 8 seconds.
+
 ## Running an OpenSandbox server locally
 
 - **`docker run -d -p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock opensandbox/server:latest`.**

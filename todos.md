@@ -3087,6 +3087,13 @@ names its provider** is now a guideline for every family.
       derive and view changes as no-ops. Closes
       [the statement key and fiscal periods](docs/deferred/2026-10-10-the-statement-key-and-fiscal-periods.md)
       steps 2-3.
+      - 2026-10-25: built as muffin-deployment#463 (six migrations), replayed on the node with 38
+        mutations, and validated on production, rolled back. Spec *As built*. It found that the
+        CURRENT derivation fails a page holding an `FY` row and its yfinance `annual` twin (4,694
+        keys, 57 securities), which the label pass would have hit; the fix is in #463. Moved to 2b:
+        FY→annual and the `period_type` CHECK. Waiting: `metric_source_field` rows for `sec-xbrl`
+        (until its statements exist). **Open for the user: where a filing's regulator lives**
+        (a column on `security_filing`, or on `data_source`). Next: merge, deploy, re-measure.
 - [ ] 2b. The key switch, in one window outside 03:30–06:00: `yahoo_statement` on the new conflict,
       `security-statements` retired.
 - [ ] 3. Library (`providers/sec_edgar.py`, the facets, `Unchanged`), with fixtures and the
