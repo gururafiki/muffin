@@ -5469,6 +5469,18 @@ muffin-deployment#463. Spec: [docs/specs/2026-10-24-sec-family.md](docs/specs/20
   that adds columns, it would have held ACCESS EXCLUSIVE, which blocks the app's statement reads,
   for those 8 seconds.
 
+- **TWO PROVIDERS' DIVIDENDS ARE IN DIFFERENT UNITS, AND A TOTAL RETURN MIXED THEM.** Tiingo states a
+  dividend as paid; Yahoo split-adjusts it, like its closes. `security_return` reinvests
+  `(close + dividend) / previous close` over Yahoo's split-adjusted closes, and for 84 securities the
+  dividend came from Tiingo: AVGO's 5y total return was served as **+1,140.7% against a price return
+  of +527.2%**, from a 2021 dividend of 3.60 counted against a 46.46 close that Yahoo states as 0.36.
+  Found from the firing `muffin-backlog-stalled` alert (Tiingo's queue was frozen) and the parity
+  check its retirement was waiting on. **The table could not show it**: `security_corporate_action`
+  has no provider in its key and the Yahoo writer never replaces a Tiingo row, so on a day both
+  state, only Tiingo's exists. The comparison had to read Yahoo's raw documents. This is the case
+  for the guideline that the provider joins the key where two providers state one fact.
+  [Note](docs/deferred/2026-10-25-tiingo-dividends-are-not-split-adjusted.md).
+
 ## Running an OpenSandbox server locally
 
 - **`docker run -d -p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock opensandbox/server:latest`.**
