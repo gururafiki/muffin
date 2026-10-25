@@ -2994,15 +2994,16 @@ never re-asked); no Yahoo statement row has a currency; `muffin-metrics` fails 3
         369 securities (about 10-22).
   - Step 10's three clean days run from the 19:41 UTC deploy: the handlers can go on or after
     2026-10-21 20:00 UTC.
-- [ ] 10. Delete the handlers after 3 clean days; contract with drop dates.
-  - [ ] **check 2026-10-22**, together with Tiingo's parity (step 9) and London's labels and P/E
-        charts (step 3). The three clean days run from the 2026-10-18 19:41 UTC deploy, so the
-        handlers can go on or after 2026-10-21 20:00 UTC.
-  - [ ] **muffin-deployment#461, opened 2026-10-24:** the ten handlers, `fundamentals.ts`,
-        `check.ts`, the eight `pending_*` views, `data_defect`'s `queued_but_already_done` arm and
-        market-verify 7b. The node replay passes 107 tests, and a rolled-back dry run on production
-        dropped all eight. After it deploys, check that the ten 410s still answer and the views are
-        gone. The columns they leave are listed in
+- [x] 10. Delete the handlers after 3 clean days. **Done 2026-10-24.** The contract (columns, drop
+      dates) is the retired-columns note's, below.
+  - [x] **check 2026-10-22**: the three clean days ran from the 2026-10-18 19:41 UTC deploy. Tiingo's
+        parity and London's P/E charts are their own lines (steps 9 and 3).
+  - [x] **muffin-deployment#461, deployed 2026-10-24 21:07 UTC** (run 40131941111, 12 minutes):
+        the ten handlers, `fundamentals.ts`, `check.ts`, the eight `pending_*` views,
+        `data_defect`'s `queued_but_already_done` arm and market-verify 7b. Verified after the
+        deploy: migration `20261024200000` applied, 0 of the eight views left, their
+        `backlog_negative_cache` rows gone, `data_defect` serving its 8 arms to anon, and all ten
+        resources answering 410 with their lane. The columns they leave are listed in
         [the retired-columns note](docs/deferred/2026-09-30-the-retired-families-leave-columns-behind.md).
 - [ ] 11. Promotion waves (Phase 3 Stage 4) with the Yahoo-family cap; venues opted in with the
       user.
