@@ -2595,7 +2595,13 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
             Tubacex as British and Bertrandt as Swiss in a rolled-back wave (9,036 candidates). And
             **Yahoo verifies each line** (decided by the user 2026-10-26: the directory offers delisted
             codes, buyback lines and Activision on SIX). Spec § "4: weekly waves Yahoo verifies".
-            - [ ] deploy #469, roll #132, unpause, live wave of five (`limit: 5`), read it, leave unpaused.
+            - [x] deploy #469 (19:00), roll #132 (20:00), unpause, live wave of five (`c1a8654d` →
+                  `4eb5e801`): 6 requests, control priced, 2 promoted (EBRAINS 6599.T, &DO 3457.T,
+                  filed JP with three identifiers), check passed (5 nights, 18 company runs a day).
+            - [ ] **Re-paused 2026-10-26 20:10:** the three Korean candidates are KOSDAQ (Yahoo `.KQ`)
+                  asked as `.KS`, and recorded absent. The KS composite holds both markets with no
+                  label; Canada's CT/CN both spell `.TO` (TSX Venture is `.V`). Decide how the probe
+                  finds the spelling, then delete the three wrong `promotion_probe` rows and unpause.
             - [ ] **2026-11-02 after 06:17 UTC:** the first scheduled wave: promoted ≤ 500, outcomes,
                   `control_priced`, and `promotion_stays_within_the_sweep`. Then each Monday: the
                   price night's `throttled 0` and the company lane's end time.

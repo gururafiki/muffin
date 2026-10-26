@@ -5552,6 +5552,15 @@ minus the US, 500 a week) and 2026-10-26 (Yahoo verifies each line).
   as a superuser and then as `ingest_rw` in one transaction failed with `must be owner of table
   wave`. Data-modifying CTEs do it in one statement and need no table: each runs to completion
   whether the outer query reads it or not, and foreign keys are checked at the end of the statement.
+- **ONE DIRECTORY CODE CAN HOLD TWO OF YAHOO'S SPELLINGS, AND THE PROBE THEN RECORDS A WRONG NAME AS
+  AN ABSENCE.** The first live wave of five (2026-10-26 20:01) priced both Japanese lines and
+  refused all three Korean ones. They are KOSDAQ companies, which Yahoo spells `.KQ`, and the KS
+  composite the directory sweeps files KOSPI and KOSDAQ alike under `.KS`. OpenFIGI's filter pages
+  carry a bare `KS` on all 2,815 lines, with no label as Taipei's have. Canada's two venues (CT, CN)
+  both spell `.TO`, while Yahoo spells TSX Venture `.V`. The policy was re-paused at 20:10, before
+  any Monday wave, because the 90-day record would have kept most Korean candidates out on a
+  spelling. **Probe the spelling before recording an absence**: this file's "a wrong name is not
+  a missing security", met again by a lane built the same day.
 - **A POOL HELD FOR A WHOLE RUN DECIDES HOW MANY RUNS A LANE NEEDS.** One job holding the probe and
   the wave would hold `sql` through ~25 minutes of paced Yahoo requests. So the probe is scheduled
   on the `yfinance` pool, and stage 2 follows it by `eager()` in a run of its own on `sql`.
@@ -5565,6 +5574,15 @@ minus the US, 500 a week) and 2026-10-26 (Yahoo verifies each line).
   The parity note had counted them as their own category ("within 5 days"), and the implementation
   read only the same-day one. **Check each category of a parity table against what the change
   actually touches.**
+- **THE DAGSTER WEBSERVER'S HELD CONNECTIONS DIE SILENTLY AFTER 15 IDLE MINUTES.** It holds one
+  connection per storage (`pool_size 1`, recycled after 3,600 s), and Swarm's IPVS drops a TCP
+  connection idle for 900 s with no error on either side. So a GraphQL launch 15-60 minutes after
+  the last use fails with `server closed the connection unexpectedly`. Each failure retires one
+  stale connection, so a few retries succeed. Postgres logs nothing and the daemon is unaffected,
+  since it does not hold idle connections. Measured 2026-10-26: launches at 18:39 and 18:44
+  worked, and from 19:00 three failed in a row. **And a retry loop whose success test is a
+  pattern match launches every time the pattern is wrong**: three `security_return` runs went out
+  because the script prints `"runId": "…"` with a space. Count runs before retrying a launch.
 - **AN AskUserQuestion LEFT OPEN BLOCKS THE SESSION, AND A SESSION CHECK-IN FIRES ONLY WHEN IDLE.**
   A question asked at 01:20 UTC was answered 17 hours later. The 06:12 check-in never fired, and
   approved work that needed no answer waited too. Ask only after the work that does not depend on
