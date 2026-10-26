@@ -2598,10 +2598,22 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
             - [x] deploy #469 (19:00), roll #132 (20:00), unpause, live wave of five (`c1a8654d` →
                   `4eb5e801`): 6 requests, control priced, 2 promoted (EBRAINS 6599.T, &DO 3457.T,
                   filed JP with three identifiers), check passed (5 nights, 18 company runs a day).
-            - [ ] **Re-paused 2026-10-26 20:10:** the three Korean candidates are KOSDAQ (Yahoo `.KQ`)
-                  asked as `.KS`, and recorded absent. The KS composite holds both markets with no
-                  label; Canada's CT/CN both spell `.TO` (TSX Venture is `.V`). Decide how the probe
-                  finds the spelling, then delete the three wrong `promotion_probe` rows and unpause.
+            - [x] **Re-paused 2026-10-26 20:10, unpaused 22:10:** the three Korean candidates were
+                  KOSDAQ (Yahoo `.KQ`) asked as `.KS`. Decided (the user): probe each spelling.
+                  muffin-deployment#471 (`market.yahoo_spelling`, three-argument
+                  `promote_share_classes`, the three rows deleted; 6 mutations) deployed 22:03;
+                  muffin-ingest#133 rolled 22:08. Second live wave of five (`0ac5dc8b` →
+                  `7f07f4cb`): 9 requests, control priced, **4 promoted, 3 as `.KQ`** (3A Logics,
+                  3billion, 3S Korea) plus 4Cs HD (3726.T).
+            - [x] **The fifth was recorded wrongly, and the rule is fixed:** Yahoo answered 4by4's
+                  `389140.KS` with a `MUTUALFUND` shadow of its KOSDAQ line, and the probe moved on
+                  only after `absent`. Measured over 30 KR candidates: the wrong suffix was `absent`
+                  12 and a shadow 18 times, both directions. muffin-ingest#134 (move on after
+                  `absent` or `not_equity`; `promotion.conclude`; 4 mutations; rolled 22:35) and
+                  muffin-deployment#472 (withdraw the one `not_equity` row; deployed 22:33). Third
+                  live wave, of three (`5646f55f` → `607bd013`): 6 requests, **3 promoted, 2 as
+                  `.KQ`** (4by4 389140.KQ, A-Tech 071670.KQ, A-One Seimitsu 6156.T);
+                  `security_listing` followed with 6 listings. Policy left unpaused for 11-02.
             - [ ] **2026-11-02 after 06:17 UTC:** the first scheduled wave: promoted ≤ 500, outcomes,
                   `control_priced`, and `promotion_stays_within_the_sweep`. Then each Monday: the
                   price night's `throttled 0` and the company lane's end time.

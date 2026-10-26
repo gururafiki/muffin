@@ -5561,6 +5561,17 @@ minus the US, 500 a week) and 2026-10-26 (Yahoo verifies each line).
   any Monday wave, because the 90-day record would have kept most Korean candidates out on a
   spelling. **Probe the spelling before recording an absence**: this file's "a wrong name is not
   a missing security", met again by a lane built the same day.
+- **A WRONG SPELLING CAN BE ANSWERED WITH A SHADOW OF THE RIGHT LINE, NOT AN ERROR.** The fix above
+  asked the next spelling only after `absent`. The second live wave asked 4by4 Inc (KOSDAQ) as
+  `389140.KS`, and Yahoo returned the KOSDAQ line itself (19 closes, exchange KOE) typed
+  `MUTUALFUND`, so the walk stopped and recorded `not_equity` for 90 days. Measured over 30 Korean
+  candidates under both suffixes, the wrong suffix was `absent` 12 times and a shadow 18 times, in
+  both directions; the right one was `EQUITY` every time. The decision had said "until Yahoo prices
+  one", and I built "until Yahoo knows one". The measurement put the rule between them: move on
+  after `absent` or `not_equity`. Moving on after `stale` would promote a halted TSX Venture company
+  through its one-bar NEO copy (3 of 20 Canadian candidates have one). muffin-ingest#134,
+  muffin-deployment#472. **Build a decision as worded, and measure where the wording and the
+  provider disagree**: the first live run caught it only because it was five lines.
 - **A POOL HELD FOR A WHOLE RUN DECIDES HOW MANY RUNS A LANE NEEDS.** One job holding the probe and
   the wave would hold `sql` through ~25 minutes of paced Yahoo requests. So the probe is scheduled
   on the `yfinance` pool, and stage 2 follows it by `eager()` in a run of its own on `sql`.

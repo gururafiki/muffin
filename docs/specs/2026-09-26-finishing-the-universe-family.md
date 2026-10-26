@@ -312,6 +312,31 @@ were Japanese and Korean companies filed at home and priced on their own lines.
 by hand (`raw_promotion_probe` with `limit: 5`), read its verdicts and the five securities, then
 leave it unpaused for the Monday schedule.
 
+**Each spelling the country uses (2026-10-26, decided by the user).** The first live wave priced
+both Japanese lines and refused all three Korean ones: KOSDAQ companies, which Yahoo spells `.KQ`,
+filed by OpenFIGI under the KS composite with KOSPI and asked as `.KS`. The policy was re-paused.
+
+- `market.yahoo_spelling` lists each country's suffixes in the order asked: KR `.KS,.KQ`;
+  CA `.TO,.V,.CN,.NE`; one elsewhere.
+- The ticker is written as Yahoo writes it: Bloomberg's `/` becomes `-`, and Hong Kong is padded to
+  four digits.
+- The wave promotes each line under the spelling Yahoo priced.
+
+Shipped as muffin-deployment#471 and muffin-ingest#133. The second live wave of five promoted four,
+three of them as `.KQ`.
+
+**A wrong spelling is answered with a shadow, not only with "unknown" (same evening).** The second
+wave's fifth line was 4by4 Inc. Yahoo answered `389140.KS` with a copy of the KOSDAQ line typed
+`MUTUALFUND`, so the walk stopped there and recorded `not_equity`. Measured over 30 Korean
+candidates under both suffixes:
+- the wrong suffix was `absent` 12 times and a shadow 18 times, in both directions;
+- the right suffix was `EQUITY` every time.
+
+The probe therefore moves on after `absent` **or** `not_equity`, and nothing else (muffin-ingest#134).
+In Canada, NEO carries one-bar copies of TSX Venture lines (3 of 20 measured). Moving on after any
+non-priced answer would promote a halted TSX Venture company through that copy. muffin-deployment#472
+withdraws the one `not_equity` row recorded under the old rule.
+
 ## Risks and rollback
 
 - **The listing swap:** rollback recreates the view over `listing_legacy`.
