@@ -725,3 +725,42 @@ of them would write it, so every row they add after the one-shot would have no r
 alternative is a column on `data_source` (each writer names its regulator: `sec-submissions` and
 `sec-filings` → `sec`, `cninfo` → `cninfo`, `nse` → `nse`, `dart` → `dart`), so the regulator is a
 join, with no backfill and no writer change. Nothing in Phase 5 needs it before the views do.
+
+### Step 2a, second half: the views (muffin-deployment#463, same PR)
+
+`20261025110000_one_fiscal_period_is_served_once`:
+- `security_statement_current` serves one row per fiscal label (else per period end), chosen by
+  source priority, then the newest `as_of`;
+- `security_metric_series` keeps a fiscal label's dates in one cluster;
+- `security_recent_filings` takes its `kind` from `filing_form`.
+
+Deployed 2026-10-25 07:24 UTC. `derived_security_metrics` then ran 23 times SUCCESS under the new
+functions (07:47–18:47).
+
+### Step 2b: the key swap (muffin-deployment#466, muffin-ingest#128), 2026-10-25
+
+| Migration | What is now true |
+|---|---|
+| `20261025140000_a_statement_is_keyed_by_its_provider` | `security_statement_pkey` is the 5-column provider key (`add constraint … primary key using index` on the 2a index); the 2,259 `FY` rows are `annual`; `period_type` is checked to annual/quarter/half (NOT VALID); `security-statements` answers 410 and its cron row is off; `pending_statements` and its negative-cache pairing are gone. |
+| `20261025140100_every_statement_period_is_annual_quarter_or_half` | the CHECK is validated, in its own transaction (SHARE UPDATE EXCLUSIVE only). |
+
+- **Ingest:** `yahoo_statement` upserts on the provider key, and `only_replacing` is gone.
+- **Other changes in the same PR:**
+  - `check_derived_metrics.py` indexes statements by provider too;
+  - two test fixtures use the new conflict target;
+  - three tests stop writing `FY`/`Q4` statement rows;
+  - three tests that asserted only `pending_statements`' population were removed with it.
+- **Measured on production, rolled back:**
+  - the swap took 0.4 s of ACCESS EXCLUSIVE and the validation 11.3 s;
+  - on AAPL, MSFT, NVDA, 7203.T, SAP.DE, 005930.KS, VOD.L, COST, BRK-B and JPM, the 297 `FY` rows
+    come back as `annual` with identical data;
+  - 47 Yahoo annual rows that the app served **beside** a SEC year for the same period are now
+    served once (MSFT 14, SAP.DE 14, JPM 13, AAPL 3, COST 3).
+- **Deployed 2026-10-25 19:32 UTC** (run 40225521420, with #464 and #465). Ingest rolled 19:34
+  (`95fb3b…` → `95b1a6…`). Live: the PK reads the 5 columns, the CHECK is validated, no `FY` row
+  remains, and both retired resources answer 410.
+- **Departures from the plan:**
+  - `pending_statements` was dropped now rather than at contract, as Tiingo's view was: nothing can
+    reach the handler, and the view would only freeze under the stalled-backlog alert;
+  - the logic-check rotation guard had to be bounded to one statement (it read the new CHECK's
+    `in (...)` as disabled resources).

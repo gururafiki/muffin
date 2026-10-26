@@ -2447,6 +2447,13 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
                         **Decided 2026-10-25 (the user):** record who saw a line (`venue_seen_at`) before the 1 November
                         refresh, then Nasdaq Trader's daily symbol files as a second source before
                         promotion opens on the US.
+                        - [ ] **Option 1 built 2026-10-25:** muffin-deployment#465 (column, rule, trigger, fill)
+                              and muffin-ingest#127 (stage 2 stamps it). Rolled back on production: refiling
+                              Arca after the US walk clears 0 of the 51 marks, and judging again re-marks
+                              exactly those 51. **Check after the 1 November refresh** (05:41 UTC
+                              judgement): `cleared` and `marked` in `venue_listing_absence`, and the 30
+                              in-window Arca lines still marked.
+                        - [ ] Option 2 (Nasdaq Trader as a second source) before promotion opens on the US.
             - [ ] **Docker Desktop's API stopped answering on this Mac on 2026-10-04** (backend up,
                   every call timed out for 10+ minutes), so the local Postgres harness could not
                   run. Restarting it is the user's call.
@@ -2563,7 +2570,12 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
                         `DRUG.CN` answer), primary market abroad (Garmin `GRMN`, Coca-Cola HBC
                         `CCH.L`), Thai foreign boards (15) —
                         [note](docs/deferred/2026-10-05-what-the-dead-symbol-repair-cannot-reach.md).
-                  - [ ] **Decided 2026-10-25 (the user):** a labelled-venue table, `market.exchange_label`
+                  - [ ] **Built 2026-10-25/26:** muffin-deployment#467 (deployed) and muffin-ingest#129
+                        (rolled 2026-10-26 18:33). Re-filed from raw (`yhohgrfk`): 1,424 Taiwanese lines
+                        now `.TWO`, 1,097 `.TW`. 103 tracked securities held a dead `.TW` for a TPEx
+                        line; their symbology re-derive from raw is backfill `dwbfiwqw`.
+                        - [ ] count the 103 on `.TWO` after `dwbfiwqw`, and their first price night.
+                        **Decided 2026-10-25 (the user):** a labelled-venue table, `market.exchange_label`
                         (`TT` / `Taipei Stock Exchange` → `.TWO`), then a re-derive from raw. Was: 100 of the 101 dead `.TW` symbols are TPEx lines, which Yahoo
                         spells `.TWO`; OpenFIGI files both markets under `TT`, but its answer's
                         label (`TT (Taipei Stock Exchange)`) is already in raw and stage 2 strips
@@ -2575,7 +2587,20 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
                   **Gate passed:** `security_return` with a 30 s limit was cancelled after 104 s,
                   "Exceeded maximum runtime of 30 seconds", nothing materialised. The case for it is
                   venue walk `d89bb306`, which hung for 26.8 hours on 2026-09-21.
-      - [ ] Stage 4 — `promotion_wave`. **Decided 2026-10-25 (the user):** open tier 1 except the US (AU, CA, HK,
+      - [ ] Stage 4 — `promotion_wave`. **Built 2026-10-26:** muffin-deployment#469 (policy seeded
+            paused, eight venues, `promotion_candidate`, `promotion_probe`, `promote_share_classes(p_figis,
+            p_limit)`; 17 mutations caught) and muffin-ingest#132 (`promotion` family: weekly probe on
+            `yfinance` at Monday 06:17 UTC, `eager()` wave on `sql`; 9 + 5 mutations caught). The
+            candidate rule changed: **every line in one country**, because the first rule filed
+            Tubacex as British and Bertrandt as Swiss in a rolled-back wave (9,036 candidates). And
+            **Yahoo verifies each line** (decided by the user 2026-10-26: the directory offers delisted
+            codes, buyback lines and Activision on SIX). Spec § "4: weekly waves Yahoo verifies".
+            - [ ] deploy #469, roll #132, unpause, live wave of five (`limit: 5`), read it, leave unpaused.
+            - [ ] **2026-11-02 after 06:17 UTC:** the first scheduled wave: promoted ≤ 500, outcomes,
+                  `control_priced`, and `promotion_stays_within_the_sweep`. Then each Monday: the
+                  price night's `throttled 0` and the company lane's end time.
+            - [ ] the 3,330 classes with a line abroad (mostly London's) wait for a second rule.
+            **Decided 2026-10-25 (the user):** open tier 1 except the US (AU, CA, HK,
             JP, JT, KS, LN, SW), at most 500 a week, checking each week that the price night and the
             company lane stay in their windows with 0 throttled. The US waits for the Arca second
             source, Taiwan for the TPEx table. New subjects with no symbol get the Yahoo rung.
@@ -2830,12 +2855,15 @@ never re-asked); no Yahoo statement row has a currency; `muffin-metrics` fails 3
         **Done 2026-10-25 09:14 UTC:** #125 merged (f963624) and rolled (`37c12b81…` →
         `730edfde…`, three services, nothing interrupted). The action reported 1.6 GB in 12,328
         files and removed them; `/mnt/data` 77% → 75%. The 09:07 heartbeat after the roll succeeded.
-        - [ ] check 2026-10-26: the first price night without the lane is clean (100 runs, counters
-              summing, `throttled 0`).
+        - [x] check 2026-10-26: the first price night without the lane is clean: 100 of 100
+              runs, 00:00–02:12; 2,500 requested = 2,434 answered + 3 empty + 1 absent + 62 not
+              askable; `throttled 0`, `unasked 0`. Company lane 18 of 18 by 04:45. No alert fired.
   - [ ] [A listing Yahoo answers with one point keeps its openbb bar's label](docs/deferred/2026-10-25-a-listing-yahoo-answers-with-one-point-keeps-its-openbb-label.md):
         five listings fail `a_bar_s_label_is_its_listing_s` every rotation (13 of 1,403).
         **Decided 2026-10-25 (the user):** mark them dead (they leave the rotation; the repair looks for a live line)
         and relabel their stored bars with the currency Yahoo's document states.
+        **Built:** muffin-deployment#468 (5,311 bars relabelled, deployed 2026-10-25) and
+        muffin-ingest#130 (`quote_only` is a miss, rolled 2026-10-26 18:33).
   - Related notes: [subunits as data](docs/deferred/2026-10-10-subunits-are-data-not-a-dict.md),
     [chart bodies in http-cache](docs/deferred/2026-10-10-http-cache-keeps-every-yahoo-chart-for-a-year.md).
 - [x] 4. Validation from the node. **Done 2026-10-10**, recorded in the spec's *Validation*:
@@ -3018,6 +3046,19 @@ never re-asked); no Yahoo statement row has a currency; `muffin-metrics` fails 3
           past the cache.
   - [ ] Tiingo (`security-corporate-actions`) after its parity, once the price rotation covers its
         369 securities (about 10-22).
+        **2026-10-26:** `hckjldag` finished 381 of 388 (3 runs killed by the roll); the 7 rerun as
+        `aqvkgrom`, SUCCESS. AVGO 5y total +585.1% against price +527.2% (was +1,140.7%). But 142
+        Tiingo dividends in 42 securities sit a few days from Yahoo's statement of the same
+        dividend (the note's "within 5 days" category; the writer replaced same-day rows only), so
+        returns reinvested both: deleted once by muffin-deployment#470, leaving 121 dividends and
+        11 "splits" until the contract.
+        - [ ] after #470 deploys: materialise `security_return`, then re-check the 42.
+        **Built 2026-10-25:** muffin-deployment#464 (410, cron off, `pending_corporate_actions`
+        dropped, which clears `muffin-backlog-stalled`) and muffin-ingest#126 (Yahoo's rows replace
+        Tiingo's on the days Yahoo states; rolled 18:51 UTC). Stage-2 backfill `hckjldag` over the
+        388 partitions (282 runs). Done when no stored dividend disagrees with Yahoo's documents on a
+        day they cover and AVGO's 5y total return is near price plus dividends; the 133 Tiingo-only
+        rows and the handler go at the contract.
         **Decided 2026-10-25 (the user):** retire it; Yahoo's rows replace Tiingo's on every day Yahoo's documents
         state, the 133 rows only Tiingo holds stay until the contract, then returns re-derive.
         **Parity run 2026-10-25 over its 388 securities:**
@@ -3096,10 +3137,14 @@ never re-asked); no Yahoo statement row has a currency; `muffin-metrics` fails 3
         20:00 deploy, the 20:17 run drained 161,001 statements and 7,674 TTMs to 0, #123 rolled
         at 20:28, the replay corrected four companies, and the 20:31 and 20:47 runs succeeded.
         0 underived, 0 unknown codes, Aksigorta's 2022 revenue in TRY.
-  - [ ] [The cache serves a failing provider's last answer for as long as it fails](docs/deferred/2026-10-20-the-cache-serves-a-failing-provider-s-last-answer-for-ever.md):
+  - [ ] [muffin-ingest's Dependabot PRs wait unmerged, behind 107 open alerts](docs/deferred/2026-10-26-muffin-ingest-s-dependabot-prs-wait-unmerged.md)
+        (2026-10-26): 12 critical, all Pillow via `pdfplumber` (Phase 6's PDF parser). The fixes are
+        open PRs #116–#122; Pillow 13 is a major version.
+  - [x] [The cache serves a failing provider's last answer for as long as it fails](docs/deferred/2026-10-20-the-cache-serves-a-failing-provider-s-last-answer-for-ever.md):
         decide per location. **Decided 2026-10-25 (the user):** keep stale-on-429/5xx; Dagster requests that need an
         honest answer send bypass or no-store; list each location with its Dagster callers, then
-        close. Edge callers are out of scope.
+        close. Edge callers are out of scope. **Closed 2026-10-26:** the Yahoo rung and the daily
+        fund map bypass (muffin-ingest#131, rolled 18:33 UTC); the note lists every location.
   - [x] [A resource can repeat the same failure for weeks, and no alert sees it](docs/deferred/2026-10-20-a-resource-can-repeat-the-same-failure-for-weeks.md).
         Found while closing out Phase 4: `earnings-history` has asked for the window ending
         2016-06-30 hourly since 2026-09-06, and `security-segments` has failed on TNDM's 2014 10-Q
@@ -3119,7 +3164,7 @@ names its provider** is now a guideline for every family.
       the stage-2 replay. **Done 2026-10-24.**
 - [x] 1. Spec, this section, the guideline in memory and `dagster-ingestion-best-practices`.
       **Done 2026-10-24.**
-- [ ] 2a. Expand: fiscal tables and labels, the label function, `filing_form` columns and seeds,
+- [x] 2a. Expand: fiscal tables and labels, the label function, `filing_form` columns and seeds,
       `disclosure_source_code`, insider columns, the 5-column unique index, FY→annual plus a CHECK,
       derive and view changes as no-ops. Closes
       [the statement key and fiscal periods](docs/deferred/2026-10-10-the-statement-key-and-fiscal-periods.md)
@@ -3135,10 +3180,16 @@ names its provider** is now a guideline for every family.
         until their family moves. It lands with Phase 5 step 3/4.
       - **Deployed 2026-10-25 07:24 UTC** (run 40172109049): six versions in `schema_migrations`;
         Dagster not restarted; 23 of 23 anon probes ok (slowest 855 ms, statements 362 ms); 1,357
-        filings now read annual or interim. Still to see: the next `derived_security_metrics` run
-        SUCCESS.
+        filings now read annual or interim. **The derivation under it: 23 runs SUCCESS from 07:47 to
+        18:47 UTC.**
 - [ ] 2b. The key switch, in one window outside 03:30–06:00: `yahoo_statement` on the new conflict,
       `security-statements` retired.
+      - **Built 2026-10-25:** muffin-deployment#466 (key swap, FY→annual, CHECK validated in its own
+        file, `security-statements` 410 and `pending_statements` dropped, `check_derived_metrics`
+        keyed by provider, four skills) and muffin-ingest#128 (the provider key, no guard). Rolled
+        back on production: swap 0.4 s, validate 11.3 s; on ten symbols the 297 `FY` rows come back
+        as `annual` with identical data, and 47 Yahoo annual rows served beside a SEC year are now
+        served once. Deployed with #464/#465 (run 40225521420), then the ingest roll.
 - [ ] 3. Library (`providers/sec_edgar.py`, the facets, `Unchanged`), with fixtures and the
       measurements under the spec's *Still to measure*.
 - [ ] 4. `defs/sec/` and `yahoo_fiscal_calendar`, lanes STOPPED except `new_sec_filers`.

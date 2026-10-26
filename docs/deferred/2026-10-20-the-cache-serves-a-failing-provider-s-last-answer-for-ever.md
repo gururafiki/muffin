@@ -1,6 +1,6 @@
 # The cache serves a failing provider's last answer indefinitely
 
-Status: **decided 2026-10-25 (the user): option 3.** Keep serving stale on 429/5xx; every Dagster request that needs an honest answer sends the bypass or no-store headers; list each location with its Dagster callers and close. Edge callers are out of scope (they are being retired, and are not fixed).
+Status: **closed 2026-10-26.** Decided 2026-10-25 (the user): option 3. muffin-ingest#131 rolled 2026-10-26 18:33 UTC. Keep serving stale on 429/5xx; every Dagster request that needs an honest answer sends the bypass or no-store headers; list each location with its Dagster callers and close. Edge callers are out of scope (they are being retired, and are not fixed).
 
 ## Why
 
@@ -57,6 +57,28 @@ the two edge controls reach the provider.
 
 A provider's 4xx reaches a repeating caller within one TTL of the first failure, on every location
 a live lane depends on, or the locations where it does not are listed with the reason.
+
+## Each location and its Dagster callers (2026-10-25)
+
+Edge and agent callers are out of scope by the decision. Settings are `stack/proxy/nginx.conf` on
+2026-10-25.
+
+| Location (TTL) | Dagster caller | URL repeats? | Fresh answer needed? | Treatment |
+|---|---|---|---|---|
+| `/sec/` (30d) | `documents.py` (filing documents), `sec_nport.primary_doc` | no: one accession, immutable | no | cached; a filed document never changes |
+| `/sec/` (30d) | `sec_nport.fund_directory` (`company_tickers_mf.json`) | yes, daily | yes: a fund SEC listed in the last month could not resolve for up to 30 days | **bypass**, muffin-ingest#131 |
+| `/sec-fts/` (7d) | `sec_nport.search_index` (`new_nport_filings`) | only within a day: the window is `today − 310` to `today` | no: a filing published after the day's first search is found the next day | cached, listed |
+| `/sec-data/` (7d) | none yet (Phase 5's lane sends bypass and no-store, decision 2) | — | — | — |
+| `/openfigi/` (90d) | `openfigi.filter` (directory) | yes, monthly | yes | **bypass** since 2026-10-04 |
+| `/openfigi/` (90d) | `openfigi.mapping` (symbology rungs) | rarely: the key is the batch body, and a re-ask's batch is a different set of subjects | yes, for a re-ask | cached; an error wearing a 200 is retried past the cache |
+| `/yahoo/v1/finance/search` (30d) | `yahoo_search.search` (Yahoo rung) | yes: the same ISIN, re-asked after 30 days, the TTL | yes | **bypass**, muffin-ingest#131 |
+| `/yahoo/v8/finance/chart` (1h, no background update) | price lane, FX lane | price: never (no-store); FX: within the hour | FX: yes | price no-store; FX synchronous on expiry since the stale-body fix |
+| `/yahoo/v10/finance/quoteSummary`, `/yahoo/ws/fundamentals-timeseries`, `/yahoo/v1/test/getcrumb` | company lane, session | — | yes | `proxy_cache off` |
+| `/nse/`, `/nse-archives/` | `documents.py` (archives) | archives: no, immutable | no | `/nse/` uncached; archives cached |
+| `/dart/`, `/cninfo*/`, `/wikidata/`, `/alphavantage/`, `/tiingo/`, `/openbb/`, `/mcp/` | none | — | — | edge or agent only, out of scope |
+
+Calls muffin-ingest makes through openbb in-process (indices, sector groups, analyst targets) go
+straight to the provider and never reach http-cache.
 
 ## Context
 

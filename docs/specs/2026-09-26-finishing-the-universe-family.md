@@ -279,6 +279,39 @@ primary markets abroad, and Thai foreign boards
 ([note](../deferred/2026-10-05-what-the-dead-symbol-repair-cannot-reach.md)). Tonight's 03:00 re-ask
 covers 255 subjects (counted with #100's own query).
 
+### 4: weekly waves Yahoo verifies (built 2026-10-26)
+
+muffin-deployment#469 and muffin-ingest#132. Decided by the user on 2026-10-25 (tier 1 minus the US,
+at most 500 a week, checked weekly against the price night and the company lane) and on 2026-10-26
+(Yahoo verifies each line). The low-level design above changed in three places, each because a
+rolled-back wave on production showed what it would have minted.
+
+- **The home is "every line of the class in one country with an enabled venue"**, not "one enabled
+  country and no US line". The first rule filed Tubacex and Miquel y Costas as British (London's
+  international order book) and Bertrandt, CEWE and AcadeMedia as Swiss (SIX), because their home
+  venues are not enabled. 9,036 candidates: KS 2,386, JT 2,378, HK 1,584, AU 998, LN 634, CN 592,
+  SW 313, JP 151. The 3,330 dropped are classes with a line abroad, mostly London's.
+- **Yahoo decides what is a company.** The directory offers delisted Bloomberg codes, temporary
+  buyback and new-share lines, certificates and stale lines (Activision on SIX). The probe asks
+  Yahoo's chart for 30 days of daily bars about ~2x the wave's places, with `AAPL` as a control
+  asked first, and a line is promoted only with a completed bar within 10 days. Bloomberg's delisted
+  codes are skipped before asking.
+- **What Yahoo said is kept for 90 days** (`market.promotion_probe`), so a junk line is not re-asked
+  at the head of every week. An absence is recorded only when the control priced.
+
+Lane: `raw_promotion_probe` (weekly partitions keyed by the Monday, `end_offset=1`, the `yfinance`
+pool, schedule `weekly_promotion_wave` at Monday 06:17 UTC) → `promotion_wave` (`eager()`, the
+`sql` pool, its own run) → `market.promote_share_classes(priced lines, capacity)`. Capacity is
+`SWEEP_SLICE × max_pass_nights − len(grid)`. `security_listing` lists the wave as an upstream.
+
+**Measured rolled back on production:** the candidate view 0.48 s (its first form took over 180 s,
+on a planner estimate of 120 classes against ~12,500), a wave of five 0.72 s, and the first five
+were Japanese and Korean companies filed at home and priced on their own lines.
+
+**Rollout:** the policy is seeded paused. Deploy #469, roll #132, unpause, run a live wave of five
+by hand (`raw_promotion_probe` with `limit: 5`), read its verdicts and the five securities, then
+leave it unpaused for the Monday schedule.
+
 ## Risks and rollback
 
 - **The listing swap:** rollback recreates the view over `listing_legacy`.

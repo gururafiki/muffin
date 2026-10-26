@@ -5481,6 +5481,95 @@ muffin-deployment#463. Spec: [docs/specs/2026-10-24-sec-family.md](docs/specs/20
   for the guideline that the provider joins the key where two providers state one fact.
   [Note](docs/deferred/2026-10-25-tiingo-dividends-are-not-split-adjusted.md).
 
+### Tiingo retires, Arca stops vouching, and the statement key carries the provider (2026-10-25 evening)
+
+muffin-deployment#464 (Tiingo), #465 (Arca), #466 (Phase 5 step 2b); muffin-ingest#126, #127, #128.
+
+- **THE FIRST REPLAY PASS RE-CREATES A VIEW YOUR MIGRATION DROPS, SO TESTS THAT READ IT PASS THERE.**
+  The bundle step re-applies the stale `schemas/` files, and the dropped view is one of them. Two
+  tests reading `pending_statements` passed on the first pass and failed only on the second, after
+  the regenerated bundle was copied back. When a migration drops an object, grep `tests/` for it
+  before trusting a first pass, and always run the second.
+- **A GUARD THAT PARSES SQL MUST STOP AT THE STATEMENT'S END.** logic-check's rotation guard matched
+  `update market.cron_resource set enabled = false` lazily up to the next `in (` in the FILE.
+  Written `resource = '<x>'`, it reached the CHECK `period_type in ('annual', 'quarter', 'half')`
+  and reported three disabled resources with no job. Same family as "a guard anchored on the first
+  match in the file". Bounded by `;` now, and still names an orphan written either way.
+- **A FIXTURE THAT ALWAYS PROCESSES KEYS IN ONE ORDER CANNOT REACH THE OTHER BRANCH.** The venue
+  writer's merge had one branch per order of two pages, and the test's alias key (`US.arca`) always
+  sorts before `US.common`, so a mutation deleting the other branch passed. Rewritten so one
+  assignment serves both orders, which the mutation then fails. When code branches on arrival order,
+  check which orders the fixture can produce.
+- **A SPLIT VOCABULARY HAD THE APP SERVING TWO ROWS FOR ONE YEAR.** `security_statement_current`
+  chooses one row per period type and period. SEC's `FY` and yfinance's `annual` were different period types,
+  so for 47 year-statements on ten probe symbols (MSFT 14, SAP.DE 14, JPM 13) the app served SEC's
+  and Yahoo's rows side by side. Converting `FY` to `annual` under the provider key serves them once,
+  by priority. Read the rows a change removes, not the count: 344 before against 297 after looked
+  like lost data and was a duplicate going away.
+- **`add constraint … primary key using index` IS A CATALOGUE CHANGE ONLY WHEN EVERY COLUMN IS ALREADY
+  NOT NULL.** Measured on production, rolled back: 0.4 s for the swap, against 11.3 s to validate the
+  new CHECK. The validate therefore has its own file, where it holds only SHARE UPDATE EXCLUSIVE.
+- **AN ALIAS SIGHTING AND A VENUE SIGHTING ARE DIFFERENT EVIDENCE, AND ONE TIMESTAMP COULD NOT HOLD
+  BOTH.** D4 judged the capped US window on `last_seen_at`, which NYSE Arca's pages stamp too, so a
+  line Arca keeps for a dead company was vouched for whenever Arca happened to be filed last.
+  `venue_seen_at` records only the line's own venue. A mark now clears only on a venue sighting
+  newer than the mark, so neither an alias page nor a replay of an older page can undo it. Proven on
+  production's 51 marked lines with the real 10-04 walk facts, in the order that used to clear them.
+
+### Promotion waves: the directory names lines, Yahoo decides which are companies (2026-10-26)
+
+muffin-deployment#469, muffin-ingest#132. Phase 3 Stage 4, decided by the user 2026-10-25 (tier 1
+minus the US, 500 a week) and 2026-10-26 (Yahoo verifies each line).
+
+- **"ONE ENABLED COUNTRY" IS NOT A HOME, BECAUSE A LINE IN A COUNTRY NOBODY ENABLED IS INVISIBLE TO
+  IT.** The first candidate rule took a share class with lines in exactly one promotion-enabled
+  country and no US line. A rolled-back wave of five on production would have minted Tubacex and
+  Miquel y Costas (Spanish) as British, from London's international order book, and Bertrandt, CEWE
+  and AcadeMedia (German and Swedish) as Swiss, from SIX. Their home venues were not enabled, so the
+  rule never saw them. The directory carries no issuer country, so the home is unambiguous only when
+  **every** line of the class is in one country: 9,036 candidates of 12,545. The 3,330 it drops are
+  classes with a line abroad, mostly London's. **Run the wave on production rows, rolled back,
+  before trusting a candidate rule.** The fixture passed both rules.
+- **A DIRECTORY LINE IS NOT A COMPANY.** The stricter rule's samples still held delisted lines under
+  Bloomberg codes (`7785752Z`, `2186126D`: the number plus a letter, 180 of 9,215), temporary lines
+  (`ABB LTD-BUY BACK`, `ACCELLERON N 2 LINIE`, `-NEW`, `EX OPTION`), Czech certificates on London's
+  international board, and Activision on SIX two years after Microsoft bought it. Patterns catch
+  some of them, but no pattern catches a stale line. Yahoo's chart does, so the wave asks it about
+  each line (about twice the wave) and promotes only lines with a completed bar within 10 days.
+- **A WEEKLY PROBE THAT MARKS NOTHING RE-ASKS THE SAME JUNK AT THE HEAD OF THE QUEUE FOR EVER.**
+  This was the eighth instance of the head-of-line stall, designed out before it shipped.
+  `market.promotion_probe` records what Yahoo said about each line, and a line it did not price is
+  not a candidate for 90 days. An absence is recorded only when a control symbol, asked first,
+  priced in the same run. A gateway page (`unreadable`) is never recorded.
+- **THE PLANNER'S ESTIMATE OF A FILTERED GROUP-BY CAN BE OFF BY 100x, AND THEN A JOIN BACK TO THE
+  ROWS IS A NESTED LOOP OVER ALL OF THEM.** The candidate view first aggregated the lines per class
+  (`bool_or`, `count(distinct …) filter`) and joined the classes back to the lines. The planner
+  estimated 120 classes past the filter where there were ~12,500, and scanned 115,141 lines once per
+  class: over 180 s, cancelled. Window aggregates over the share class read the lines once, in
+  0.48 s. A window cannot count distinct values, so "one country" is `min(country) = max(country)`.
+- **A TEMP TABLE IN A FUNCTION BELONGS TO THE ROLE THAT CREATED IT.** The wave staged its rows in
+  `create temp table … on commit drop` and dropped any left over at the start. A guard calling it
+  as a superuser and then as `ingest_rw` in one transaction failed with `must be owner of table
+  wave`. Data-modifying CTEs do it in one statement and need no table: each runs to completion
+  whether the outer query reads it or not, and foreign keys are checked at the end of the statement.
+- **A POOL HELD FOR A WHOLE RUN DECIDES HOW MANY RUNS A LANE NEEDS.** One job holding the probe and
+  the wave would hold `sql` through ~25 minutes of paced Yahoo requests. So the probe is scheduled
+  on the `yfinance` pool, and stage 2 follows it by `eager()` in a run of its own on `sql`.
+- **A SCHEDULE AT THE START OF A WEEK NEEDS `end_offset=1`.** Without it a weekly partition exists
+  only once its week has ended. Dagster 1.13's `get_last_partition_key()` takes no time argument:
+  wrap the call in `dg.partition_loading_context(effective_dt=…)`.
+- **A REPLACEMENT KEYED ON A DATE MISSES THE SAME FACT ON A NEARBY DATE.** Yahoo's corporate actions
+  replaced Tiingo's only where the ex-date matched, because the table is keyed on it. 142 Tiingo
+  dividends in 42 securities sat a few days from Yahoo's statement of the same dividend (AT&T:
+  Tiingo 0.2775 on 10-12, Yahoo 0.2780 on 10-09), so total returns reinvested both (muffin-deployment#470).
+  The parity note had counted them as their own category ("within 5 days"), and the implementation
+  read only the same-day one. **Check each category of a parity table against what the change
+  actually touches.**
+- **AN AskUserQuestion LEFT OPEN BLOCKS THE SESSION, AND A SESSION CHECK-IN FIRES ONLY WHEN IDLE.**
+  A question asked at 01:20 UTC was answered 17 hours later. The 06:12 check-in never fired, and
+  approved work that needed no answer waited too. Ask only after the work that does not depend on
+  the answer is under way, or is done.
+
 ## Running an OpenSandbox server locally
 
 - **`docker run -d -p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock opensandbox/server:latest`.**
