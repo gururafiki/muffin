@@ -3175,7 +3175,10 @@ never re-asked); no Yahoo statement row has a currency; `muffin-metrics` fails 3
         (2026-10-27): the near-OOM alert fired 03:50-07:30, cleared by the kill (`exit 137` 12 h,
         3, 5 and 8 days ago). Quorum-queue WAL memory grows ~4 MB an hour toward a 512 MiB default
         rollover in a 512 MiB container, and the watermark is computed from the host's 24 GB.
-        Waiting on a decision (options in the note).
+        Decided 2026-10-27 (option 1, configure it): muffin-deployment#474 live at the 20:38
+        deploy. The watermark is computed from 512 MiB (0.2147 GB) and the WAL rolls at
+        32,000,000 bytes; 127.5 MiB (24.9%) at 20:43. **Check 2026-11-01:** memory flat under
+        60% of its limit for 5 days and no new `exit (137)`, then close the note.
   - [ ] [muffin-ingest's Dependabot PRs wait unmerged, behind 107 open alerts](docs/deferred/2026-10-26-muffin-ingest-s-dependabot-prs-wait-unmerged.md)
         (2026-10-26): 12 critical, all Pillow via `pdfplumber` (Phase 6's PDF parser). The fixes are
         open PRs #116–#122; Pillow 13 is a major version.

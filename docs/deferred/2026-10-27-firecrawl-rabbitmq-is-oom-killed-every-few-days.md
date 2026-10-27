@@ -1,6 +1,6 @@
 # Firecrawl's RabbitMQ is OOM-killed every two or three days
 
-Created 2026-10-27 · Status: open, waiting on a decision
+Created 2026-10-27 · Status: decided 2026-10-27 (option 1), live since 20:38 UTC; watching
 
 ## Why
 
@@ -8,11 +8,12 @@ The Grafana alert *A container is near its memory limit* (`muffin-container-near
 10 minutes) fired from 2026-10-27 03:50 to 07:30 UTC on `muffin_firecrawl-rabbitmq`. It cleared
 because the kernel killed the container. Measured 2026-10-27 on the node:
 
-- **Task history:** `non-zero exit (137)` 12 hours, 3, 5 and 8 days ago. Swarm restarts it each
-  time (`restart_policy: any`), so nothing stays down and nothing else reports it.
+- **Task history:** `non-zero exit (137)` at 10-19 14:39, 10-22 03:54, 10-24 17:08 and 10-27 07:15
+  UTC, every ~61 hours. Swarm restarts it each time (`restart_policy: any`), so nothing stays down
+  and nothing else reports it.
 - **The curve:** memory rises about 1% of the 512 MiB limit every 30 minutes, steadily, with no
   traffic pattern (Prometheus `muffin_service_memory_bytes`, 30 hours). It reached 99.4% before the
-  07:44 kill and stood at 40% (217 MB) at 20:00.
+  07:15 kill and stood at 40% (217 MB) at 20:00.
 - **What grows is `quorum_ets`:** `rabbitmq-diagnostics memory_breakdown` puts it first, at 70.8 MB
   (32%), 12 hours after the restart. All four queues (`extract.jobs`, `extract.dlq`,
   `nuq.queue_scrape.prefetch`, `nuq.queue_crawl_finished.prefetch`) are QUORUM queues, and all hold
@@ -56,3 +57,16 @@ that is 1.5 GiB of memory, against the container's 512 MiB.
 After the change ships, `muffin_service_memory_bytes` for `muffin_firecrawl-rabbitmq` stays flat
 under 60% of its limit for 5 days, with no new `exit (137)` in `docker service ps`, and
 `rabbitmq-diagnostics status` reports a watermark computed from 512 MiB.
+
+## Shipped
+
+muffin-deployment#474, deployed 2026-10-27 at 20:38 UTC (the stack deploy restarted the task, as
+an env change in the spec should). Read from the container at 20:43:
+
+- `RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS` carries both settings;
+- `application:get_env(ra, wal_max_size_bytes)` is `{ok,32000000}` and
+  `application:get_env(rabbit, total_memory_available_override_value)` is `{ok,536870912}`;
+- `Memory high watermark setting: 0.4 of available memory, computed to: 0.2147 gb`;
+- the same four quorum queues, all empty; 127.5 MiB of 512 MiB (24.9%).
+
+The 2026-10-27 07:15 kill was the last one; it is the fourth in eight days.
