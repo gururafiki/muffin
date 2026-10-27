@@ -2562,8 +2562,12 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
                               dead arm held the night's two deaths (`TFFIF/F.BK`, `BLA/F.BK`, Thai
                               foreign boards; OpenFIGI repeated both spellings). Re-run forecast
                               unchanged: the stale arm first fires on 10-27.
-                        - [ ] **2026-10-27, after 03:00 UTC:** count that tick's runs (~167
+                        - [x] **2026-10-27, after 03:00 UTC:** count that tick's runs (~167
                               predicted) and check the pool is free before 06:00 UTC.
+                              **Checked 2026-10-27:** 170 runs for 171 subjects, all SUCCESS,
+                              created 03:01 and finished by 04:30 (longest wait 5,148 s, longest
+                              run 35 s); 174 probes, 1 symbol repaired, `collapsed 0`. They
+                              interleaved with the company lane, which still ended at 05:49.
                   - [ ] **Decided 2026-10-25 (the user):** spelling candidates verified by Yahoo, and a dead home line
                         priced from its primary listing abroad; the Thai foreign boards (15) are
                         accepted as unpriceable. TPEx goes first. Was: provider-verified spelling candidates (`ANDINA-B.SN`, `EU.V`,
@@ -2575,6 +2579,12 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
                         now `.TWO`, 1,097 `.TW`. 103 tracked securities held a dead `.TW` for a TPEx
                         line; their symbology re-derive from raw is backfill `dwbfiwqw`.
                         - [ ] count the 103 on `.TWO` after `dwbfiwqw`, and their first price night.
+                              **2026-10-27:** all 103 are on `.TWO`. The 10-27 night reached 36 of
+                              them, and all 36 now hold histories (first bars 2007-12-27 to
+                              2021-05-25, 3,959 bars on average). The other 67 come with the
+                              rotation (~5 nights). No Taiwanese line has a bar for Monday 10-26 (443
+                              on 10-23), which looks like a holiday (unconfirmed). Check again
+                              2026-11-02: 103 of 103 with bars.
                         **Decided 2026-10-25 (the user):** a labelled-venue table, `market.exchange_label`
                         (`TT` / `Taipei Stock Exchange` → `.TWO`), then a re-derive from raw. Was: 100 of the 101 dead `.TW` symbols are TPEx lines, which Yahoo
                         spells `.TWO`; OpenFIGI files both markets under `TT`, but its answer's
@@ -2614,6 +2624,12 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
                   live wave, of three (`5646f55f` → `607bd013`): 6 requests, **3 promoted, 2 as
                   `.KQ`** (4by4 389140.KQ, A-Tech 071670.KQ, A-One Seimitsu 6156.T);
                   `security_listing` followed with 6 listings. Policy left unpaused for 11-02.
+            - [ ] **2026-10-27:** policy unpaused; `promotion_probe` 9 `priced`, no `not_equity`. The
+                  nine are in the price grid (keys added 20:36-23:36 on 10-26) and have no bars yet.
+                  That is by design: `new_securities_need_history` adds keys and requests nothing,
+                  and the nightly rotation reaches them. Tonight's slice starts 1,468 keys before the
+                  grid's end, so the 2026-10-28 night includes all nine. Check 10-28: nine with
+                  bars, then `security_return`.
             - [ ] **2026-11-02 after 06:17 UTC:** the first scheduled wave: promoted ≤ 500, outcomes,
                   `control_priced`, and `promotion_stays_within_the_sweep`. Then each Monday: the
                   price night's `throttled 0` and the company lane's end time.
@@ -3155,6 +3171,11 @@ never re-asked); no Yahoo statement row has a currency; `muffin-metrics` fails 3
         20:00 deploy, the 20:17 run drained 161,001 statements and 7,674 TTMs to 0, #123 rolled
         at 20:28, the replay corrected four companies, and the 20:31 and 20:47 runs succeeded.
         0 underived, 0 unknown codes, Aksigorta's 2022 revenue in TRY.
+  - [ ] [Firecrawl's RabbitMQ is OOM-killed every two or three days](docs/deferred/2026-10-27-firecrawl-rabbitmq-is-oom-killed-every-few-days.md)
+        (2026-10-27): the near-OOM alert fired 03:50-07:30, cleared by the kill (`exit 137` 12 h,
+        3, 5 and 8 days ago). Quorum-queue WAL memory grows ~4 MB an hour toward a 512 MiB default
+        rollover in a 512 MiB container, and the watermark is computed from the host's 24 GB.
+        Waiting on a decision (options in the note).
   - [ ] [muffin-ingest's Dependabot PRs wait unmerged, behind 107 open alerts](docs/deferred/2026-10-26-muffin-ingest-s-dependabot-prs-wait-unmerged.md)
         (2026-10-26): 12 critical, all Pillow via `pdfplumber` (Phase 6's PDF parser). The fixes are
         open PRs #116–#122; Pillow 13 is a major version.
@@ -3169,6 +3190,18 @@ never re-asked); no Yahoo statement row has a currency; `muffin-metrics` fails 3
         every five minutes since 2026-09-30. Both report `ok: true`. **Decided 2026-10-20 (the
         user): no alert**; each is fixed in its phase (listed under Phases 5-8), and
         `market-diagnose` carries the sweep that found them.
+- [x] **Check-in 2026-10-27** (read 20:00 UTC; the session was busy at 06:37). Two alerts in 8 hours:
+      - *A container is near its memory limit*: `firecrawl-rabbitmq`, real, a note above.
+      - *A Dagster run failed*: `58b7e5e9`, my own `security_return` launch at 10-26 19:01, which hit
+        `START_TIMEOUT` during the webserver's dead connections. Nothing to do.
+
+      Lanes: `nightly_prices` 100 of 100 SUCCESS, ended 02:13. 2,500 requested = 2,476 answered + 5
+      dead + 4 empty + 15 not askable; `throttled 0`, `transport 0`, `unasked 0`. `yahoo_companies`
+      18 of 18, 03:30-05:49; 1,764 requested = 1,739 answered + 10 not due + 15 not askable;
+      `throttled 0`, `crumb_rejected 0`. `daily_fx`, `daily_indices`, the fund map and 22 hourly
+      heartbeats all SUCCESS. Stale-miss tick, TPEx and promotion are recorded at their items.
+      **Read run counters once per run:** a run's metadata is copied onto every partition's event, so
+      summing materializations multiplies them by the run's width.
 
 ### Phase 5 — the SEC family — PLANNED 2026-10-24
 
@@ -3212,8 +3245,8 @@ names its provider** is now a guideline for every family.
 - [ ] 3. Library (`providers/sec_edgar.py`, the facets, `Unchanged`), with fixtures and the
       measurements under the spec's *Still to measure*.
       - 2026-10-26: measured (spec *Measured 2026-10-26*); none changes a numbered decision.
-      - 2026-10-27: #135 (transport, daily index) and #138 (submissions) merged; #139 (the fiscal
-        calendar) open. Three calendar rules changed on measurement (spec *Step 3*): a regime labelled
+      - 2026-10-27: #135 (transport, daily index), #138 (submissions) and #139 (the fiscal
+        calendar, 20:10 UTC) merged. Three calendar rules changed on measurement (spec *Step 3*): a regime labelled
         from its newest year (Walmart's early tags), quarters by position (Greif), a stray report date
         dropped. Left: `sec_facts.py` (statement rows), `insider.py`, `writers.retract_unproduced`,
         `partitioned.Unchanged` plus zstd. `disclosure_source_code` lands with step 4's writer.
