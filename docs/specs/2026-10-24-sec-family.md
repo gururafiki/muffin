@@ -62,12 +62,20 @@ Found by the 2026-10-21 check-in and fixed first:
 | 6 | Statement key | **The provider joins the key**: `security_statement (security_id, source_code, statement, period_ending, period_type)`. Serving views pick by `source_priority`, and the Yahoo writer's `only_replacing` guard goes. **A general guideline (the user's words): "keep in the ingested data reference to provider where the data comes from."** `security_metric` keeps its key: it is a stage-3 derivation carrying the winner's `source_code`, and every input now survives in `security_statement`. | One row per period with a precedence rule: whichever provider loses is lost, and the next provider repeats the guard. |
 | 7 | Fiscal period | **A `fiscal_calendar` table and a `fiscal_period` table, plus `fiscal_year`/`fiscal_period` labels on statement and metric rows.** Labels come from the calendar, not from company facts' `fy`/`fp`. Measured 2026-10-24, those label the FILING: AAPL's year ending 2022-09-24 carries fy 2022, 2023 and 2024 across three 10-Ks. | Labels from `fy`/`fp`: they repeat years. Labels only, without a calendar: Yahoo rows and year-end changes cannot be labelled. |
 | 8 | `TRL` stall | Fixed right after this plan was approved (0a–0c). | — |
-| 9 | edgartools' role | **Transport for every SEC request, plus parsing of submissions (`extract_company_filings_table`) and Form 4 (`Form4.parse_xml`).** Company facts are read by our own reader over `xbrl_concept`, covering both us-gaap and ifrs-full. | edgartools' standardised statements: its concept map has no `ifrs-full` concept, and `EntityFactsParser` swallows every exception. |
+| 9 | edgartools' role | **Transport for every SEC request, plus parsing of submissions (`extract_company_filings_table`).** Form 4 is read by our own XML reader (**amended 2026-10-27**, the user, below). Company facts are read by our own reader over `xbrl_concept`, covering both us-gaap and ifrs-full. | edgartools' standardised statements: its concept map has no `ifrs-full` concept, and `EntityFactsParser` swallows every exception. |
 | 10 | Insider depth | **Every quarter since 2006** (~82 requests). Rows and bytes are measured as the backfill runs, against the disk headroom. | Newest 8 quarters first and decide later; the last 10 years. |
 | 11 | Changed fiscal year | **The newest calendar wins.** The recast or successor period is canonical. The original stays stored, unlabelled and out of series. | The originally reported year; showing both. |
 | 12 | Retired `sec` rows | **Deleted after parity.** Frozen at retirement, then deleted at contract with a drop date once company facts cover their periods. Any period only they held is listed first. | Keeping them for ever as that provider's rows. |
 | 13 | A filing's regulator | **`security_filing.disclosure_source_code`, written by the Dagster writers only** (the user, 2026-10-25: the edge is neither kept working nor fixed) | on `data_source`, which ties the regulator to the writer; deciding in Phase 6, which needs a backfill then |
 | — | Form 4 attribution | Follows the edge: every equity of the issuer's CIK. | Only the class matching `issuerTradingSymbol`. |
+
+**Decision 9, amended 2026-10-27 (the user).** `Form4.parse_xml` is not pure parsing: for every
+reporting owner it fetches `data.sec.gov/submissions/CIK<owner>.json` to decide whether to reverse
+the name, retries five times and raises if SEC does not answer. Stage 2 would have made a request per
+owner, outside the pool's pacing and the request counters. Its output also rewrote what the data set
+states: "Ternus John" became "John Ternus", an empty expiration date came back as the footnote marker
+"[F2]", and "See Remarks" titles were replaced by the remarks. Options put: our own XML reader
+(chosen), edgartools with its owner lookup stubbed, or edgartools as is.
 
 The guideline in decision 6 is recorded in `dagster-ingestion-best-practices`'
 [data-modelling.md](../../muffin-ingest/.agents/skills/dagster-ingestion-best-practices/references/data-modelling.md).
@@ -790,13 +798,17 @@ functions (07:47–18:47).
   - the logic-check rotation guard had to be bounded to one statement (it read the new CHECK's
     `in (...)` as disabled resources).
 
-### Step 3: the library (muffin-ingest#135, #138, #139), 2026-10-26..27
+### Step 3: the library (muffin-ingest#135, #138-#143), 2026-10-26..27
 
 | PR | What it adds |
 |---|---|
 | #135 (merged) | `providers/sec_edgar.py`, the only module importing `edgar`: configured before its first import, its cache swapped for an uncached manager, both cache headers on every request, 200/404 returned and 403/429/5xx raised. `facets/sec_index.py`: the daily form index, read right-anchored, and each day classified from the quarter listing alone. |
 | #138 (merged) | `facets/sec_filings.py`: filings from both submissions shapes through edgartools, `report_url`/`filing_detail_url` on SEC's origin, the profile, and former names one per name. |
-| #139 | `facets/fiscal.py`: the calendar (below). |
+| #139 (merged) | `facets/fiscal.py`: the calendar (below). |
+| #140 (merged) | `facets/sec_facts.py`: company facts to statement rows (below). |
+| #141 (merged) | `facets/insider.py`: the data set lane and the Form 4 lane, through one line rule. |
+| #142 (merged) | `writers.retract_unproduced`: delete within a scope what a whole answer no longer produces, without rewriting the rest. |
+| #143 (merged) | `partitioned.Unchanged` and per-asset Parquet compression. |
 
 What building it found:
 
@@ -836,3 +848,56 @@ What building it found:
   hosts no quarter, or Era's 2018 10-Qs would be relabelled into Bristow's April-March year.
 - **`security_filing.disclosure_source_code` (decision 13) is not built yet.** It lands with the
   writer in step 4, as decided.
+
+Company facts (#140), measured 2026-10-27 over 19 filers with their complete submissions history:
+
+- **A fact is placed by matching a canonical calendar period, not by a day band.** A duration
+  matches when its end is the period's end and its start is within `START_DAYS = 7` of the period's
+  start; an instant at a fiscal-year end is written as `annual` and as `quarter`. The plan's 80-100
+  days for a quarter would have refused Costco's 16-week fourth quarter (112 days); matched to the
+  calendar, Costco's four quarters sum to its year (166,761,000,000) with Q4 at 53,383,000,000.
+  Placed: 30,216 durations and 11,548 instants. Refused and counted: 10,654 year-to-date durations,
+  666 off the calendar (Google Inc's 2015 quarters, filed under another CIK; Novo Nordisk's monthly
+  6-K facts; ESCO's off-cycle comparatives).
+- **A quarterly filer gets no half-year rows**: its six-month figures are year-to-date sums of
+  quarters it already reports (`half_of_a_quarterly_filer`).
+- **Within a period:** highest `xbrl_concept.priority`, then the latest filed, then the concept name,
+  so a tie cannot depend on document order. A tie that disagrees is counted.
+- **`metric_source_field` holds 0 `sec-xbrl` rows.** They are seeded with the writer in step 4.
+- **`xbrl_concept` cannot read some lines in one taxonomy**, so parity in step 6 will show `sec`
+  (openbb) rows company facts do not replace: us-gaap has no concept for `gross_profit`,
+  `rd_expense` or `total_liabilities`, and `total_assets` only through `Segment*` concepts; ifrs-full
+  has none for `buyback`, `goodwill`, `long_lived_assets`, `sga_expense`, `shares_basic`,
+  `shares_diluted` or `stock_based_comp`. A missing line is an `xbrl_concept` row, and decision 12
+  lists the periods only `sec` held before deleting them.
+
+Insider (#141), measured 2026-10-27 on the 2006q1, 2016q1 and 2026q1 data sets and nine 2026q1
+Form 4s:
+
+- **A data set's file order is not document order; each line's surrogate key is.** About half of
+  2026q1's filings list their lines out of order; sorted by `NONDERIV_TRANS_SK`/`DERIV_TRANS_SK`, the
+  lines matched the filing's own XML in all ten tables of nine filings, and the shares owned after
+  each line step consistently only in that order.
+- **The data set lists a filing's owners in no stable order**, so the spec's "first owner in document
+  order" cannot be read from it. Both lanes take the **lowest owner CIK** (1.3% of filings name
+  several owners).
+- **The data set rounds shares and prices to two decimals** (3,647.903 in the XML, 3,647.9). The Form
+  4 lane keeps the filing's precision until the quarter's data set replaces its rows.
+- **The nine Form 4s reproduce the data set's 58 rows**, every field but the source, to its two
+  decimals, which is what makes the two lanes interchangeable for the retraction.
+- All three quarters are UTF-8 with no unreadable date; SEC added `AFF10B5ONE` to SUBMISSION after
+  2016, so columns are read by name. 2026q1 has 3 lines with no transaction code; they are withheld
+  and counted.
+- **Size, for decision 10:** 83,891 rows for 2006q1, 77,417 for 2016q1 and 122,993 for 2026q1 against
+  today's 3,726 issuers, so every quarter since 2006 is roughly 8 M rows, against 54,109 today. Read
+  time is 1.1-1.5 s and under 300 MB a quarter. The backfill runs newest first and is watched
+  against the disk headroom, as decided.
+
+The writer and the manager (#142, #143):
+
+- **`retract_unproduced`** carries the produced keys as one typed array per key column, so a large
+  filer is one statement (proven on Postgres with 70,000 keys); splitting a NOT EXISTS would delete
+  each chunk's complement.
+- **`Unchanged` is refused for a partition with no stored file**, where the spec said it would write
+  the empty marker: that marker means "collected, and there was nothing", which a never-collected
+  partition is not.

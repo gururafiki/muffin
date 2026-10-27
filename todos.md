@@ -3245,7 +3245,7 @@ names its provider** is now a guideline for every family.
         back on production: swap 0.4 s, validate 11.3 s; on ten symbols the 297 `FY` rows come back
         as `annual` with identical data, and 47 Yahoo annual rows served beside a SEC year are now
         served once. Deployed with #464/#465 (run 40225521420), then the ingest roll.
-- [ ] 3. Library (`providers/sec_edgar.py`, the facets, `Unchanged`), with fixtures and the
+- [x] 3. Library (`providers/sec_edgar.py`, the facets, `Unchanged`), with fixtures and the
       measurements under the spec's *Still to measure*.
       - 2026-10-26: measured (spec *Measured 2026-10-26*); none changes a numbered decision.
       - 2026-10-27: #135 (transport, daily index), #138 (submissions) and #139 (the fiscal
@@ -3253,6 +3253,13 @@ names its provider** is now a guideline for every family.
         from its newest year (Walmart's early tags), quarters by position (Greif), a stray report date
         dropped. Left: `sec_facts.py` (statement rows), `insider.py`, `writers.retract_unproduced`,
         `partitioned.Unchanged` plus zstd. `disclosure_source_code` lands with step 4's writer.
+      - 2026-10-27 evening: #140 (company facts to statement rows; placed by calendar period, not
+        day band, so Costco's 112-day Q4 counts), #141 (insider, both lanes), #142
+        (`retract_unproduced`) and #143 (`Unchanged`, zstd) merged: **the library step is done.** **Decision 9 amended by the user:** Form 4s
+        are read by our own XML reader, because edgartools' parser fetches each owner's submissions
+        from SEC inside stage 2 and rewrites names and values. Measured (spec *Step 3*): every insider
+        quarter since 2006 is ~8 M rows; `xbrl_concept` lacks several lines in one taxonomy, so parity
+        in step 6 will list `sec` rows company facts do not replace.
 - [ ] 4. `defs/sec/` and `yahoo_fiscal_calendar`, lanes STOPPED except `new_sec_filers`.
 - [ ] 5. Local tiny subset. 6. Live tiny subset and parity, recorded in the spec.
 - [ ] 7. Schedules and `sec_filers_due` on. 8. Backfills: the CIK grid, every insider quarter since
