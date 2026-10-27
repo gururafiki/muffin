@@ -3200,8 +3200,9 @@ names its provider** is now a guideline for every family.
         Dagster not restarted; 23 of 23 anon probes ok (slowest 855 ms, statements 362 ms); 1,357
         filings now read annual or interim. **The derivation under it: 23 runs SUCCESS from 07:47 to
         18:47 UTC.**
-- [ ] 2b. The key switch, in one window outside 03:30–06:00: `yahoo_statement` on the new conflict,
-      `security-statements` retired.
+- [x] 2b. The key switch, in one window outside 03:30–06:00: `yahoo_statement` on the new conflict,
+      `security-statements` retired. **Verified 2026-10-26:** no `FY` row remains (annual 200,909, quarter
+      156,482, half 3,095), and the first company night after it ran 18 of 18 runs SUCCESS.
       - **Built 2026-10-25:** muffin-deployment#466 (key swap, FY→annual, CHECK validated in its own
         file, `security-statements` 410 and `pending_statements` dropped, `check_derived_metrics`
         keyed by provider, four skills) and muffin-ingest#128 (the provider key, no guard). Rolled
@@ -3210,6 +3211,12 @@ names its provider** is now a guideline for every family.
         served once. Deployed with #464/#465 (run 40225521420), then the ingest roll.
 - [ ] 3. Library (`providers/sec_edgar.py`, the facets, `Unchanged`), with fixtures and the
       measurements under the spec's *Still to measure*.
+      - 2026-10-26: measured (spec *Measured 2026-10-26*); none changes a numbered decision.
+      - 2026-10-27: #135 (transport, daily index) and #138 (submissions) merged; #139 (the fiscal
+        calendar) open. Three calendar rules changed on measurement (spec *Step 3*): a regime labelled
+        from its newest year (Walmart's early tags), quarters by position (Greif), a stray report date
+        dropped. Left: `sec_facts.py` (statement rows), `insider.py`, `writers.retract_unproduced`,
+        `partitioned.Unchanged` plus zstd. `disclosure_source_code` lands with step 4's writer.
 - [ ] 4. `defs/sec/` and `yahoo_fiscal_calendar`, lanes STOPPED except `new_sec_filers`.
 - [ ] 5. Local tiny subset. 6. Live tiny subset and parity, recorded in the spec.
 - [ ] 7. Schedules and `sec_filers_due` on. 8. Backfills: the CIK grid, every insider quarter since

@@ -1876,6 +1876,14 @@ Things here that are easy to get wrong, all measured 2026-08-10:
   the mutated file to disk. Fifth form of "verify the mutation reached the thing under test", after
   `sed` mis-escaping, wrong indentation, a migration that never applied, and a fingerprint that
   returned an empty string.
+- **A PYTHON MUTATION THAT KEEPS THE FILE'S SIZE CAN OUTLIVE ITS RESTORE AS BYTECODE.** Python
+  trusts a `.pyc` whose recorded source SIZE and mtime IN WHOLE SECONDS match the file. Mutating `>`
+  to `<`, running the tests and restoring the file within one second leaves the mutated bytecode
+  valid, so every later run executes the mutation from the restored file. Measured 2026-10-27 on
+  `facets/fiscal.py`: the suite failed under every hash seed while the source was correct and the
+  import editable, and one earlier failure "did not reproduce" for the same reason. It also makes a
+  LATER mutation look caught. Run Python mutation harnesses with `PYTHONDONTWRITEBYTECODE=1` and
+  clear `__pycache__` first. Sixth form of "verify the mutation reached the thing under test".
 - **THE PostgREST ROLE'S STATEMENT TIMEOUT IS EIGHT SECONDS, and it is a THIRD limit distinct from
   the 90s worker budget and the 3s anon ceiling.** Measured 2026-08-21 on `derive_ttm`: 100
   securities 2.7s, 200 4.1s, **400 8.1s and cancelled**. The cost is SUB-LINEAR (a fixed ~1.2s plus

@@ -540,7 +540,32 @@ Re-keying `pending_segments` on `disclosure_source_code` is Phase 6.
 | Pace | ~500 requests at 5/s | `throttled 0`, no 403 |
 | Import cost | `import edgar` in the image | time and RSS; loading the definitions does not import edgar |
 
-Fixtures go to `libs/muffin-ingest-lib/tests/fixtures/sec/`, with a re-capture note. **Any finding
+Fixtures go to `libs/muffin-ingest-lib/tests/fixtures/sec/`, with a re-capture note.
+
+### Measured 2026-10-26 (rollout step 3)
+
+From the node, in a throwaway container from the production image, through http-cache with both
+cache headers. Harnesses in this session's scratchpad. None of these findings changes a numbered
+decision; four change a parameter or an example, and are marked **changes**.
+
+| Item | Measured |
+|---|---|
+| Transport | 82 requests, every one logged `BYPASS` by http-cache, nothing stored. `cache_mode` Disabled, 5 a second. Importing and configuring edgartools takes 3.2 s and ~150 MB of RSS, and writes only an empty `_tcache/` and a zero-byte locale marker under the scratch directory. |
+| Wire size | SEC gzips: AAPL's 3.79 MB company facts crossed as 272 KB. **Changes** the backfill estimate from ~13 GB to ~1 GB on the wire. |
+| Sizes (36 answered filers) | Company facts p50 3.16 MB, p95 4.89, max 8.00 (JPM). Main submissions p50 156 KB, max 4.67 MB (JPM: 26,479 recent filings and **71 older pages**); every other filer has 0–2 pages. |
+| Storage | One AAPL company facts body in Parquet: snappy 599 KB, **zstd 308 KB**. **Changes:** the SEC raw assets use zstd. |
+| No company facts | 3 of 20 random tracked filers, and Poste Italiane: company facts 404 (S3 `NoSuchKey`), submissions 200. |
+| Unknown CIK | 404 for both documents. |
+| Foreign private issuers | NVO, BUD, SAP, TSM, BHP and VOD file `ifrs-full`; **ASML files `us-gaap`**. Units: NVO DKK, SAP EUR, VOD EUR, TSM TWD and USD, BHP and BUD USD. |
+| Labels | Every accession's facts carry exactly one `(fy, fp, form)` (AAPL 72, GEF 64, VTOL 57, NVO 9, BHP 11 accessions): `fy`/`fp` label the FILING. AAPL's year ending 2022-09-24 is fy 2022 in its original 10-K and 2023, 2024 in later ones. So a period's label is the `fy` of **any fact in its original filing**, whatever concept: revenue changed concept at ASC 606, and a concept-bound rule found no label for most of Greif's years. |
+| January year ends | Walmart labels the year ending 2025-01-31 fiscal 2025, and Target the year ending 2025-02-01 fiscal 2024. COST labels each year by its end. Only the filing's `fy` gets all three right. |
+| Fiscal-year changes | **Changes an example.** Greif has no recast October–September year: its October years run to 2024, then a 10-KT covers November 2024–September 2025, and a 305-day fragment (18 facts) matches no canonical period. Mistras: May years to 2016-05-31, a 10-KT to 2016-12-31, then December. Bristow: Era's December years to 2019, the successor's March years 2021 and 2022, a 10-KT to 2022-12-31 (labelled fy 2022, like the March 2022 year, so `T` is what tells them apart), then December. Era's 2019 year overlaps the successor's April 2019–March 2020 year by nine months, which is the successor case decision 11 settles. ESCO's "2019-07-02 annual" is an acquisition-date INSTANT tagged FY in a 10-K: no canonical period ends then, so it is skipped. |
+| Half years | Duration classifies, `fp` does not: Vodafone's six-month results are `Q2` (2,122 facts), BHP's `H1`, BUD both. NVO and SAP file years only. |
+| Daily index | Published about 02:01 UTC the next day (`Last-Modified`). 3,100–3,600 lines a day. **Changes:** a day with no index (Columbus Day 2026-10-12, a Saturday, today before publication) answers **403** with S3's 263-byte `AccessDenied` XML, not 404, so it would read as SEC refusing us and stop the run. The quarter listing (`index.json`, one request, 10.7 KB) names exactly the days published: the lane asks it first and never requests a day it lacks. |
+| Form 4 | Tracked issuers filed 161–374 Form 4s a day (2026-10-19..23), one index line each. A complete-submission `.txt` is ~8 KB, and `Form4.parse_xml` reads its `<XML>` block. |
+| Insider data sets | Keyed by FILING date: 2016q1, 2025q4 and 2026q1 hold no filing outside their quarter. 8–14 MB each. Published ~7 days after the quarter (2025q4 on 2026-01-07, 2026q1 on 04-07), **but 2026q2 is still unpublished on 2026-10-26** (SEC's own page lists through 2026q1). **Changes:** the publication lag is not dependable, so `sec_days` starts on 2026-04-01, the first day no data set covers, and the Form 4 lane covers every day after the newest data set held (~33,000 files, under two hours at 5 a second). Alphabet's filings name only `GOOG` (77 in 2016q1): attributing by CIK, not symbol, is right. |
+| Production reads | 34 CIKs map to more than one equity (3,726 CIKs). Legacy `insider_trade.transaction_type` uses SEC's code descriptions, and `insider_transaction_code.name` matches all but 3 of 54,109 rows, so new rows read the same. `security_filing.report_type` by writer: `sec-submissions` 10-Q 140,629, 10-K 44,332, 20-F 4,695, 40-F 1,345; `sec-filings` adds 8-K, 6-K and amendments. |
+ **Any finding
 that changes a decision goes back to the user before it is built.**
 
 ## Dependencies and isolation
@@ -764,3 +789,50 @@ functions (07:47–18:47).
     reach the handler, and the view would only freeze under the stalled-backlog alert;
   - the logic-check rotation guard had to be bounded to one statement (it read the new CHECK's
     `in (...)` as disabled resources).
+
+### Step 3: the library (muffin-ingest#135, #138, #139), 2026-10-26..27
+
+| PR | What it adds |
+|---|---|
+| #135 (merged) | `providers/sec_edgar.py`, the only module importing `edgar`: configured before its first import, its cache swapped for an uncached manager, both cache headers on every request, 200/404 returned and 403/429/5xx raised. `facets/sec_index.py`: the daily form index, read right-anchored, and each day classified from the quarter listing alone. |
+| #138 (merged) | `facets/sec_filings.py`: filings from both submissions shapes through edgartools, `report_url`/`filing_detail_url` on SEC's origin, the profile, and former names one per name. |
+| #139 | `facets/fiscal.py`: the calendar (below). |
+
+What building it found:
+
+- **The `filings` extra could not import edgar.** edgartools 4.35.1 imports `pytz` without
+  declaring it, and pandas 3 no longer brings it, so the image had it only through yfinance in the
+  hub. The extra declares it, and the library CI job installs `filings` and runs `import edgar`. A
+  `find_spec` check passed while the import failed, and the SEC tests would have skipped.
+- **The links the app opens are written only by the resource step 9 retires.** `report_url` and
+  `filing_detail_url` are set on 138,692 `sec-filings` rows and on 0 of 191,001 `sec-submissions`
+  rows. Stage 2 builds both from the submissions document, byte-identical to openbb's for Apple.
+- **`set_identity` logs the identity at INFO**, so the provider sets `EDGAR_IDENTITY` before import
+  and never calls it.
+- **Three rules of the calendar algorithm changed** (none changes a numbered decision):
+  1. **A regime is labelled from its newest labelled year, counted by years elapsed**, not from each
+     year's own filing. Walmart's 10-Ks tag the years ending January 2010-2014 with offsets of −1,
+     −2, −2, −1 and −1 against the end year, and every year since 2015 by its end year, which is how
+     Walmart names them. Target is −1 throughout; Costco, Apple, Microsoft and JPMorgan are 0
+     throughout. Per-filing labels broke Walmart's sequence (2017 missing, 2016 twice).
+     Disagreements are counted.
+  2. **Quarters are numbered by position in the year, not by the filing's `fp`.** Greif's 10-Q
+     ending 2020-07-31 is tagged Q2 and is its third quarter.
+  3. **A lone annual report off both neighbours' anchor is a wrong date.** Walmart's 10-K for the
+     year ending 2009-01-31 carries a `reportDate` of 2009-04-01, the day it was filed.
+- **Step 1's "older ends come from facts" is a fallback, not the spine.** All 858 annual and
+  quarterly reports measured carry a `reportDate`, and stage 2 reads every older page. Facts add
+  only the years a registrant never filed itself. Each guard on them refuses a measured case:
+  - a year is 355-375 days, which refuses Greif's 304-day fragment on its new anchor;
+  - the year must be stated in an annual report, which refuses Bristow's March 2020, stated only in
+    an 8-K;
+  - the end must fall on an existing anchor, which refuses Walmart's December years.
+- **The current year is projected**, `is_observed = false`, so the 10-Qs filed before its 10-K have
+  a year. It lands on each company's actual rule: Apple's last Saturday of September, Costco's
+  Sunday nearest August 31, Target's Saturday nearest January 31. Whether a regime is 52/53-week is
+  judged on its last four year ends, because Apple's years ended on Fridays in the 1990s.
+- **A quarter inside a transition gets no label**: Greif's three 2025 10-Qs, Mistras's two, Bristow's
+  two. Giving them the transition's year would collide with the old regime's quarters. A recast year
+  hosts no quarter, or Era's 2018 10-Qs would be relabelled into Bristow's April-March year.
+- **`security_filing.disclosure_source_code` (decision 13) is not built yet.** It lands with the
+  writer in step 4, as decided.
