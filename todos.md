@@ -3261,6 +3261,10 @@ names its provider** is now a guideline for every family.
         quarter since 2006 is ~8 M rows; `xbrl_concept` lacks several lines in one taxonomy, so parity
         in step 6 will list `sec` rows company facts do not replace.
 - [ ] 4. `defs/sec/` and `yahoo_fiscal_calendar`, lanes STOPPED except `new_sec_filers`.
+      - 2026-10-28: the schema half is muffin-deployment#475 (`xbrl_fact_concept`, decision 14 by the
+        user on 2026-10-27; `sec-xbrl` rows in `metric_source_field`; `disclosure_source_code`;
+        `check_derived_metrics` sampled per source). Replayed on the node and rolled back on
+        production; deploy outside 00:00-02:15 and 03:30-06:00 UTC.
 - [ ] 5. Local tiny subset. 6. Live tiny subset and parity, recorded in the spec.
 - [ ] 7. Schedules and `sec_filers_due` on. 8. Backfills: the CIK grid, every insider quarter since
       2006, Form 4 days since 10-01, the label and derive drain.

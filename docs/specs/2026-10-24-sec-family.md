@@ -67,6 +67,7 @@ Found by the 2026-10-21 check-in and fixed first:
 | 11 | Changed fiscal year | **The newest calendar wins.** The recast or successor period is canonical. The original stays stored, unlabelled and out of series. | The originally reported year; showing both. |
 | 12 | Retired `sec` rows | **Deleted after parity.** Frozen at retirement, then deleted at contract with a drop date once company facts cover their periods. Any period only they held is listed first. | Keeping them for ever as that provider's rows. |
 | 13 | A filing's regulator | **`security_filing.disclosure_source_code`, written by the Dagster writers only** (the user, 2026-10-25: the edge is neither kept working nor fixed) | on `data_source`, which ties the regulator to the writer; deciding in Phase 6, which needs a backfill then |
+| 14 | Concepts the facts reader lacks | **A table only the new reader reads: `market.xbrl_fact_concept`** (the user, 2026-10-27), keyed with the taxonomy and holding only the additions; the edge's readers keep `xbrl_concept` until they retire. | Adding them to `xbrl_concept`: the edge's `security-xbrl` would write them for the universe and its segments parser would start reading segment-tagged `Assets`; leaving them out: US total assets, liabilities, gross profit and R&D would fall back to Yahoo's 4-5 years once `sec` rows go. |
 | — | Form 4 attribution | Follows the edge: every equity of the issuer's CIK. | Only the class matching `issuerTradingSymbol`. |
 
 **Decision 9, amended 2026-10-27 (the user).** `Form4.parse_xml` is not pure parsing: for every
@@ -76,6 +77,15 @@ owner, outside the pool's pacing and the request counters. Its output also rewro
 states: "Ternus John" became "John Ternus", an empty expiration date came back as the footnote marker
 "[F2]", and "See Remarks" titles were replaced by the remarks. Options put: our own XML reader
 (chosen), edgartools with its owner lookup stubbed, or edgartools as is.
+
+**Decision 14 (the user, 2026-10-27).** `xbrl_concept`'s key is `(metric_code, concept)` without
+the taxonomy, so us-gaap `Assets`, `Liabilities` and `GrossProfit` collide with the ifrs-full rows of
+the same names, and the edge kept the table narrow on purpose (anything added is written by
+`security-xbrl` for the whole universe). Measured: Apple's 18 years of total assets, total liabilities,
+gross profit and R&D exist only in the openbb `sec` rows; `sec-xbrl` holds total assets for 311
+securities, mostly IFRS. Seeded in muffin-deployment#475 with nine concepts, each checked against a
+filing; ifrs-full `NoncurrentAssets` left out because it means total non-current assets, not
+long-lived assets.
 
 The guideline in decision 6 is recorded in `dagster-ingestion-best-practices`'
 [data-modelling.md](../../muffin-ingest/.agents/skills/dagster-ingestion-best-practices/references/data-modelling.md).
