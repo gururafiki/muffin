@@ -3271,7 +3271,11 @@ names its provider** is now a guideline for every family.
         open. Gate: roll, then `new_sec_filers` adds ~3,420 keys and nothing asks SEC.
       - 2026-10-29: market-verify had been red since at least 10-23 (offset paging timed out);
         muffin-deployment#476 and #477 fixed it, green 21:40 UTC.
-- [ ] 5. Local tiny subset. 6. Live tiny subset and parity, recorded in the spec.
+- [x] 5. Local tiny subset. **Done 2026-10-29** on a database built from the migrations on the
+      node (spec *Step 5*): 14 filers, 72 requests, every lane; two defects fixed in muffin-ingest#148.
+- [ ] 6. Live tiny subset and parity, recorded in the spec.
+      - `new_sec_filers`' first tick was cut off by the 21:54 roll and left `STARTED`; with a 6-hour
+        interval the grid stays empty until ~03:54 UTC 2026-10-30. Check it filled (~3,420 keys).
 - [ ] 7. Schedules and `sec_filers_due` on. 8. Backfills: the CIK grid, every insider quarter since
       2006, Form 4 days since 10-01, the label and derive drain.
       - After the drain, read COST's quarterly table: one column per quarter (on 2026-10-25 SEC's

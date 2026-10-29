@@ -960,3 +960,37 @@ it by key, with a self-test in `quality.yml`. Behind the timeout the guard then 
 pairs against 113 known: Korean REITs' six-month fiscal years, SIG.AX's year-end change, ABF.L and
 off-calendar SEC comparatives, all step 11's case (#477 raises the constant and names them).
 market-verify passed on 2026-10-29 21:40 UTC, the first time since at least 10-23.
+
+### Step 5: a tiny subset on a database built from the migrations, 2026-10-29
+
+Run on the node because local Docker is wedged: a throwaway `postgres:17-alpine` built as CI builds
+it (legacy migrations twice, then every migration after the baseline), the lanes run from the
+production image as `ingest_rw` with its real grants, asking SEC directly. Fourteen filers chosen
+for the cases that decided a rule (AAPL, MSFT, COST, WMT, TGT, GEF, MG, VTOL, ESE, NVO, ASML, TSM,
+GOOG/GOOGL on one CIK, and CIK 99, which SEC does not know), index days 10-23..10-27, Form 4 days
+10-23, 10-26 and 10-27, and the 2026q1 data set. **72 requests in all; 18 MB of raw.**
+
+| Lane | Result |
+|---|---|
+| Index, 10-23..10-27 | 4 requests (the listing and three days); the weekend asked nothing |
+| Form 4, three days | 0, 15 and 9 filings named and answered; 118 rows; a repeat asked nothing |
+| Data sets | 2026q3 and 2026q2 not published (the run failed, claiming nothing); 2026q1: 13.9 MB, 367 tracked filings, 836 rows |
+| Filers, first visit | 41 requests; 13 answered and 1 absent per document (the 404 filed, SEC having answered the others); 13 older pages; 7,483 filings, 14 profiles, 13 former names, 18 calendar regimes (3 of 52/53 weeks, 3 year-end changes), 2,489 statements |
+| Filers, second visit | no request; 14 partitions unchanged |
+| Derivation | 2,489 statements to 17,992 metrics and 6,264 TTMs, drained in 3.7 s |
+
+Spot checks: Apple's annual revenue 416.16 / 391.04 / 383.29 / 394.33 bn for FY2025-2022; Costco's
+quarters on its 16/12-week calendar (Q1 FY2026 ends 2025-11-23, 67.31 bn); Novo in DKK; 144 rows
+under each Alphabet class. `statements_carry_a_known_currency`, `one_fiscal_period_one_point` and
+`no_filer_is_behind_its_filings` passed.
+
+Two defects, fixed in muffin-ingest#148:
+- **A `quarter` row at a year end with no fourth quarter.** Bristow's March years, stated under
+  Era's CIK, host no quarters, so the Q4 balance sheet there could never be labelled (the one
+  unlabelled row of 2,489). Annual-only filers keep the row: their calendars computed Q4 at every
+  year end (ASML 26/26, Novo 24/24, TSMC 26/26).
+- **A filer SEC does not know was re-parsed on every visit**, read as "a share class with no
+  profile".
+
+The first legacy pass alone failed on `security_statement_current` (`cannot change name of view
+column`): the legacy set must be applied twice, as the schema-change skill says.
