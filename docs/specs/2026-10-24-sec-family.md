@@ -911,3 +911,52 @@ The writer and the manager (#142, #143):
 - **`Unchanged` is refused for a partition with no stored file**, where the spec said it would write
   the empty marker: that marker means "collected, and there was nothing", which a never-collected
   partition is not.
+
+### Step 4: `defs/sec/` (muffin-ingest#145, #146, #147; muffin-deployment#475), 2026-10-28..29
+
+| PR | What it adds |
+|---|---|
+| muffin-deployment#475 (deployed 2026-10-29 19:45 UTC) | `market.xbrl_fact_concept` (decision 14), `sec-xbrl` rows in `metric_source_field`, `security_filing.disclosure_source_code`, `filing_form.fiscal_role`; `check_derived_metrics` sampled per source |
+| #145 (merged) | The insider lanes: `raw_sec_daily_index`, `raw_sec_form4` → `sec_form4_trade`, `raw_sec_insider_dataset` → `sec_insider_trade`; both schedules STOPPED |
+| #146 (merged) | The filer lane: `raw_sec_filer` (company facts, submissions) → `sec_filer_facts` (filings, profiles, former names, calendars, statements); `new_sec_filers` RUNNING, `sec_filers_due` STOPPED |
+| #147 | Filer checks; `yahoo_fiscal_calendar`; `derived_security_metrics` depends on `sec_statement` |
+
+Where the build departs from the design above (none changes a numbered decision):
+
+- **`sec_days` starts on 2026-04-01, not 10-01**, and the index looks back 10 days, not 90. The
+  newest insider data set held is 2026q1 (2026q2 was still unpublished on 10-26), so the Form 4
+  lane covers every day after it; a longer gap is an operator backfill.
+- **The data-set schedule is weekly** (`45 11 * * 1`), not daily. A 404 fails the run claiming
+  nothing, so a daily ask would leave a failed run a day for the months SEC takes to publish.
+- **A day with no index answers 403** (Columbus Day, a Saturday, a day before publication), which
+  reads as a refusal. The quarter listing is asked first, once per run, and a day is requested only
+  when the listing names it; a weekend asks nothing, and a holiday keeps the listing as evidence.
+- **The due sensor carries the filing day in the run's config** (`filed_submissions`,
+  `filed_companyfacts`), rather than stage 1 reading back through index days. A document is due
+  when it was fetched before the day its filer filed ended.
+- **A 200 that is not a company facts document is never filed**: with `merge_on: http_status` it
+  would replace the last good answer. Counted as `unreadable`.
+- **Statements compare `data` and `currency`, never `as_of`** (`writers.upsert(compare=...)`).
+  Company facts are a filer's whole history, re-read whenever it files; compared like a value,
+  `as_of` would rewrite every unchanged statement and the requeue trigger would re-derive them all.
+- **No calendar, no statements**: with an empty calendar every fact is refused as off the calendar,
+  and the retraction would then delete every statement the filer has. Both are skipped.
+- **A calendar is replaced only when it changed** (`lib/fiscal_tables.replace_calendars`), whole,
+  for both writers.
+- **`yahoo_fiscal_calendar` is not in the `yahoo_companies` job yet.** A label re-queues the
+  statement for derivation, so it joins the running rotation at step 7, not on the roll.
+- **`sec_family_covers_legacy` is not a check.** Parity is step 6's queries, recorded here.
+- **Statement lines come from `metric_source_field`**, which #475 seeded from `metric.category`;
+  the library's `STATEMENT_OF_CATEGORY` moved into its test.
+
+Verified after #475's deploy: three versions in `schema_migrations`; the Dagster containers not
+restarted (still 2026-10-26 22:35); every anon probe passed (slowest 668 ms); `check_derived_metrics`
+compared 100 `sec` and 100 `yfinance` values and 0 `sec-xbrl`, as expected until this lane writes.
+
+**market-verify had been red on every run from at least 2026-10-23**, on one error, and nobody had
+read it: `check_one_period_one_point` paged `security_metric` by offset and was cancelled at the
+8-second ceiling (the page at offset 70,000 took 12.3 s; by key, 6 ms). muffin-deployment#476 pages
+it by key, with a self-test in `quality.yml`. Behind the timeout the guard then counted 120 annual
+pairs against 113 known: Korean REITs' six-month fiscal years, SIG.AX's year-end change, ABF.L and
+off-calendar SEC comparatives, all step 11's case (#477 raises the constant and names them).
+market-verify passed on 2026-10-29 21:40 UTC, the first time since at least 10-23.

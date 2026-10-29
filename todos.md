@@ -3265,6 +3265,12 @@ names its provider** is now a guideline for every family.
         user on 2026-10-27; `sec-xbrl` rows in `metric_source_field`; `disclosure_source_code`;
         `check_derived_metrics` sampled per source). Replayed on the node and rolled back on
         production; deploy outside 00:00-02:15 and 03:30-06:00 UTC.
+      - 2026-10-29: #475 **deployed** 19:45 UTC (verified, spec *Step 4*). muffin-ingest #145 (the
+        insider lanes) and #146 (the filer lane) merged; #147 (filer checks, `yahoo_fiscal_calendar`
+        kept out of the running company job until step 7, the derivation reads `sec_statement`)
+        open. Gate: roll, then `new_sec_filers` adds ~3,420 keys and nothing asks SEC.
+      - 2026-10-29: market-verify had been red since at least 10-23 (offset paging timed out);
+        muffin-deployment#476 and #477 fixed it, green 21:40 UTC.
 - [ ] 5. Local tiny subset. 6. Live tiny subset and parity, recorded in the spec.
 - [ ] 7. Schedules and `sec_filers_due` on. 8. Backfills: the CIK grid, every insider quarter since
       2006, Form 4 days since 10-01, the label and derive drain.
