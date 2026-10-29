@@ -5607,6 +5607,38 @@ minus the US, 500 a week) and 2026-10-26 (Yahoo verifies each line).
   approved work that needed no answer waited too. Ask only after the work that does not depend on
   the answer is under way, or is done.
 
+### Phase 5 step 4, and a week of red market-verify (2026-10-29)
+
+muffin-ingest#145-#147, muffin-deployment#475-#477. Spec: `docs/specs/2026-10-24-sec-family.md`,
+*Step 4*.
+
+- **MARKET-VERIFY FAILED EVERY DAY FROM AT LEAST 2026-10-23 TO 10-29, AND NO CHECK-IN READ IT.**
+  - `check_one_period_one_point` paged `security_metric` by OFFSET. An offset page re-reads every
+    row before it, so the guard slowed as the table grew until a page crossed the 8 s ceiling:
+    measured, offset 70,000 took 12.3 s, and the same page from `security_id > x` took 6 ms.
+  - Grafana alerts when market-verify does not RUN, never when it FAILS, so the only signal was
+    the workflow's own red, and it was found because a deploy check happened to dispatch it.
+  - Behind the timeout, the guard's real assertion read 120 pairs against 113 known. All fiscal-
+    period cases (Korean REITs' six-month years, SIG.AX's year-end change), now named in #477.
+  - Third week-long red gate (09-05, 09-12, 10-23). **A check-in reads
+    `gh run list --workflow "Market data verify" --limit 7`, and a red gate is fixed the day it
+    goes red.**
+- **A COLUMN THAT RECORDS WHEN, NOT WHAT, MUST NOT DECIDE AN UPDATE.** Company facts are a filer's
+  whole history re-read whenever it files; an `as_of` compared like a value would rewrite every
+  unchanged statement on each re-read, and `security_statement`'s trigger re-queues a row for the
+  derivation whenever `as_of` moves. `writers.upsert(compare=[...])` names what decides.
+- **A RETRACTION OVER AN EMPTY ANSWER DELETES EVERYTHING, SO GUARD WHAT MAKES IT EMPTY.** With no
+  fiscal calendar, every company fact is refused as off the calendar, and `retract_unproduced`
+  would then delete every statement the filer has. No calendar means no statement write and no
+  retraction.
+- **A NEW ASSET IN A JOB THAT IS ALREADY RUNNING GOES LIVE ON THE ROLL.** `yahoo_fiscal_calendar`
+  labels statements, and a label re-queues derivation: in the `yahoo_companies` job it would have
+  re-derived ~180,000 statements a day before any tiny-subset run. It ships outside the job and
+  joins at step 7. "Ship STOPPED" also means "not in a running job".
+- **Project tests run without the provider extras, by design** (the `definitions` job proves the
+  code location loads without them). A stage-2 test that reaches edgartools stubs
+  `sec_edgar.filings_table` with its output shape; the library tests drive the real reader.
+
 ## Running an OpenSandbox server locally
 
 - **`docker run -d -p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock opensandbox/server:latest`.**
