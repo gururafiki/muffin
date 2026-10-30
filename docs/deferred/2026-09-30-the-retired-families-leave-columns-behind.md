@@ -1,6 +1,14 @@
 # The retired families leave columns and tables behind
 
-Created 2026-09-30 · **Drop on or after 2026-10-12** · Status: open, scheduled.
+Created 2026-09-30 · **Drop on or after 2026-10-12** · Status: open; the table half is
+muffin-deployment#479 (2026-10-30), waiting for a deploy.
+
+**2026-10-30: the tables first, for the disk.** `/mnt/data` reached 78% (alert at 80%) with
+Phase 5's backfills to land, so #479 drops `security_price`, `prices`, `exchange_listing` and
+`exchange_cursor` (5,332 MB, measured in a rolled-back transaction on production). The "`exchange_*`
+sweep tables" below means those two only: `exchange_label` and `exchange_sweep_*` are live
+Dagster control tables. Their last readers went with them: market-verify 7h, and the tests of
+legacy repairs 055 and 108. The columns remain for a second migration.
 
 ## What is left
 

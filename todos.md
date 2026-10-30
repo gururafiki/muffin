@@ -1635,6 +1635,9 @@ cut over one at a time.
   closed. New subjects are not asked automatically; that question moves to Stage 4, which is what
   adds them.
 - [ ] due 2026-10-12 (after Stage 1d) — drop the columns and tables the retired price and universe
+  families left behind. **2026-10-30: the tables are muffin-deployment#479** (5,332 MB; replayed,
+  rolled back on production), waiting for a deploy and so for a new Cloudflare token; the columns
+  follow in a second migration. Was:
   families left behind: ten negative caches and markers on `security`, `currency.history_missing_at`,
   `security_price` (5.3 GB), `market.prices`, the `exchange_*` sweep tables —
   docs/deferred/2026-09-30-the-retired-families-leave-columns-behind.md
