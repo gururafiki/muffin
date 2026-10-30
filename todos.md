@@ -3273,7 +3273,12 @@ names its provider** is now a guideline for every family.
         muffin-deployment#476 and #477 fixed it, green 21:40 UTC.
 - [x] 5. Local tiny subset. **Done 2026-10-29** on a database built from the migrations on the
       node (spec *Step 5*): 14 filers, 72 requests, every lane; two defects fixed in muffin-ingest#148.
-- [ ] 6. Live tiny subset and parity, recorded in the spec.
+- [x] 6. Live tiny subset and parity, recorded in the spec. **Done 2026-10-30** (spec *Step 6*): four
+      filers and three Form 4 days, seven runs, `throttled 0`; every `sec-xbrl` metric difference
+      explained (348 share-count currencies, 10 split-adjusted Apple EPS, 5 restatements), no filing
+      or metric lost, segment markers untouched, the edge's 13 insider rows all matched. The Yahoo
+      calendar ran by hand on five companies plus Apple: every Yahoo statement labelled, Apple's SEC
+      calendar untouched.
       - `new_sec_filers`' first tick was cut off by the 21:54 roll and left `STARTED`; with a 6-hour
         interval it would not run again until ~03:54. The grid was filled by hand at 22:20 with the
         sensor's own logic: **3,726 keys** (more than the ~3,420 estimated).
@@ -3289,6 +3294,10 @@ names its provider** is now a guideline for every family.
 - [ ] 9. Retire the four edge resources. 10. Delete their handlers after 3 clean days.
 - [ ] 11. Contract with drop dates; `check_one_period_one_point` re-keyed on fiscal labels, which
       closes [a fiscal-year change reads as a repeated year](docs/deferred/2026-10-10-a-fiscal-year-change-reads-as-a-repeated-year.md).
+      - List the edge's own `sec-xbrl` metrics still unlabelled after the step 8 drain: `security-xbrl`
+        wrote them straight into `security_metric` and only the derivation labels, so any period
+        the filer lane does not reproduce stays unlabelled (Vodafone's 55 quarterly balance-sheet
+        metrics, 2026-10-30). Decide per kind, as for the retired `sec` rows.
 - [ ] 12. Grafana, docs, skills.
 
 ### Phases 6-8 — the remaining family cutovers — not started

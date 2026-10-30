@@ -994,3 +994,63 @@ Two defects, fixed in muffin-ingest#148:
 
 The first legacy pass alone failed on `security_statement_current` (`cannot change name of view
 column`): the legacy set must be applied twice, as the schema-change skill says.
+
+### Step 6: a live tiny subset, and parity with the edge, 2026-10-29..30
+
+Rolled #148 at 22:19 UTC on 10-29 and ran, against production through http-cache:
+- the filer lane for four CIKs: Apple, Costco, Novo Nordisk, and Alphabet (two share classes);
+- the index and Form 4 lane for 10-26, 10-27 and 10-28.
+
+Seven runs, **33-80 s each, `throttled 0` throughout.** The derivation followed by itself at 22:23
+(eager on `sec_statement`) and drained. The parity snapshot was taken read-only just before the runs.
+
+| Lane | Result |
+|---|---|
+| Filers | 3 requests each, one older submissions page; 3,035 filings, 4 calendars (Apple and Costco 52/53-week), 823 statements, every one labelled; the three filer checks passed |
+| Index | one listing and one day per partition (0.69-0.99 MB) |
+| Form 4 | 200, 258 and 170 filings named and answered; 535, 585 and 404 trade rows over 276 securities; 2 amendments, 2 untracked filings |
+
+`every_business_day_has_an_index` failed, as it should: 10-19..10-25 were never asked, since the
+schedule stays off until step 7.
+
+**Parity, every difference explained:**
+- **`sec-xbrl` metrics:** 4,633 before, 5,847 after.
+  - 4,270 are the same and 0 were lost.
+  - 1,214 are new, mostly quarters: Apple 327, Costco 289, each Alphabet class 150, Novo 45.
+  - The 363 that differ:
+    - **348 share counts** gained a currency (null → USD). The derivation labels every line with
+      its statement's currency, which is the existing rule for Yahoo and the retired `sec` rows.
+    - **10 Apple EPS quarters** are now split-adjusted, as in Apple's newest filings: 13.93 → 1.99
+      for Q1 FY2013.
+    - **5 restatements**, read from the newest filing: Apple's FY2008 equity and 2015 long-term
+      debt (53.46 → 53.33 bn), and Costco's 2010-11 SG&A.
+- **Filings:** 540 before, 3,035 after, and none deleted. The segment markers (68 rows), report
+  types, dates and every `report_url` already set are unchanged. The 215 recent-event rows the edge's
+  `security-filings` wrote now read `sec-submissions`, with `is_xbrl` filled.
+- **Profiles, SIC and former names:** identical for all five securities.
+- **Insider:** for filings dated 10-26..10-28, the edge wrote 13 rows and the lane 1,524. All 13
+  have a matching lane row (same security, trade date, shares and price, per owner). The edge's rows
+  carry no accession, so they stay beside the lane's until step 9 re-points the summary.
+
+**The Yahoo calendar, on 10-30 at 17:51 UTC.** `yahoo_fiscal_calendar` ran by hand (not yet in the
+company job; step 7 adds it) on 005930.KS, 7203.T, NESN.SW, SAP.DE and VOD.L, plus AAPL:
+- Six runs, 6 s each.
+- Five calendars were written (`yfinance`, `observed`), with 9-13 periods each.
+- Apple was skipped (`calendar_from_sec=1`), and its SEC calendar was left as written on 10-29.
+- Every Yahoo statement of the five now carries a label, and no label repeats within a source and
+  statement kind. The calendar also labelled the retired `sec` rows of the three 20-F filers for the
+  years it covers: 12, 15 and 12 of 48, 30 and 27.
+- Relabelling cleared `derived_at` on exactly those 175 statements. The derivation is eager on
+  `yahoo_statement` and `sec_statement`, not on the calendar, so it ran only when launched. It then
+  drained them in one page: 934 metrics and 127 TTMs, all labelled.
+
+**Two things this leaves for later steps:**
+- **The edge's own `sec-xbrl` metrics are never labelled.** `security-xbrl` writes them straight
+  into `security_metric`, and only the derivation writes labels. Vodafone shows it: 55 quarterly
+  balance-sheet metrics, with no quarterly statement anywhere. They are replaced as the filer lane
+  derives each period (step 8). Whatever the lane does not reproduce stays unlabelled and is listed
+  at the contract (step 11).
+- **The `sec_filer` grid was filled by hand.** `new_sec_filers`' first tick was cut off by the roll
+  at 21:54 on 10-29 and left `STARTED`, so with a 6-hour interval the sensor would not have run
+  again until ~03:54. The grid was filled at 22:20 using the sensor's own logic: **3,726 keys**,
+  against ~3,420 estimated. The 03:54 tick then skipped, finding nothing new.
