@@ -1,5 +1,11 @@
 # The insider data-set schedule fails a run until SEC publishes, and asks only the newest quarter
 
+**Fixed in muffin-ingest#153 (2026-10-30), with a third defect found while fixing it:** the run
+key was the quarter alone, and Dagster launches a run key once per schedule, so an unpublished
+quarter would have been asked on one Monday and never again. The key now carries the tick's
+day. Closes when #153 is rolled and its first Monday (2026-11-02 11:45 UTC) asks 2026q2 and
+2026q3 without a failed run.
+
 Recorded 2026-10-30, Phase 5 step 7a. The `sec_insider_datasets` schedule stays STOPPED until this
 is fixed; every other SEC schedule is on.
 

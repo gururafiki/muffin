@@ -1743,6 +1743,8 @@ cut over one at a time.
         10-13's 41 rates (EUR 1.11602), `reread_offered` 123, `refilled` 0,
         `provider_skipped_days: none`; 10-12 kept the late fill (EUR 1.12047).
 - [ ] 2026-10-30 — the insider data-set schedule fails a run on every unpublished quarter and asks
+      only the newest (fix: muffin-ingest#153, which also gives each tick its own run key; rolls
+      after the Form 4 backfill). Was: fails a run on every unpublished quarter and asks
       only the newest: a quarter not published should end the run claiming nothing, and the
       schedule should ask every completed quarter not held
       ([note](docs/deferred/2026-10-30-the-insider-data-set-schedule-fails-until-sec-publishes.md)).
