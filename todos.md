@@ -3301,6 +3301,13 @@ names its provider** is now a guideline for every family.
         UTC 10-31** (one 50-filer chunk measured for time and memory, then the rest inside
         11:00-20:00), because `sec_filers_due`'s first tick makes every never-collected filer due:
         ~75 runs holding `sql` for ~5 hours from whenever it starts. **7b** then starts the sensor.
+      - 2026-10-30 evening: the insider summary counted the edge's rows and the lane's alike;
+        muffin-deployment#478 (deployed 18:42) counts an edge row only on a day the lane has not
+        collected, and #151 turned the index back on (18:48). The Form 4 backfill for 08-01..10-30
+        (`eonhkokd`) started 18:49. 04-01..07-31 runs in a later window. The insider data sets
+        wait for disk: `/mnt/data` at 78% (alert at 80%), so they follow the overdue contract
+        that drops `security_price` (5.3 GB), which needs a deploy and so a new Cloudflare token.
+        muffin-ingest#152 (an empty upsert reported `changed=-1`) merges after the backfill.
       - 2026-10-30: `sec_insider_datasets` stays STOPPED: it fails a run on every unpublished
         quarter ("A Dagster run failed" every Monday) and asks only the newest one.
         [Note](docs/deferred/2026-10-30-the-insider-data-set-schedule-fails-until-sec-publishes.md).

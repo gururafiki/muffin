@@ -5661,6 +5661,14 @@ muffin-ingest#148, #149. Spec: `docs/specs/2026-10-24-sec-family.md`, *Step 6* a
   for SAP, Toyota and Vodafone, even in the years their calendar covers, and Vodafone's 55
   quarterly balance-sheet metrics with no quarterly statement anywhere. They are replaced as the
   filer lane derives each period. Anything it does not reproduce is listed at the contract.
+- **A SECOND WRITER BESIDE THE FIRST NEEDS THE SERVING VIEW TO PICK BEFORE IT WRITES — the sectors'
+  lesson, met again.** The Form 4 lane writes `insider_trade` beside the edge, and
+  `security_insider_summary` counted every row, so step 6's three live days had already doubled
+  Park National's 90-day buys (20 for 10) in the app, and the backfill would have doubled 1,514
+  securities. The view now counts an edge row only on a filing day the lane has collected none
+  of, judged across ALL securities: openbb can date a filing the day before SEC's index does, so
+  a per-security test counts that filing twice (muffin-deployment#478). **Before a lane writes a
+  table another writer fills, read every view that counts it.**
 - **A RELABEL RE-QUEUES THE DERIVATION, BUT ONLY A DEPENDENCY RUNS IT.** The derivation is eager on
   `yahoo_statement` and `sec_statement`, not on the calendar, so labels written by hand sat
   underived (175 statements, exactly the relabelled rows) until the derivation was launched. In the

@@ -1076,3 +1076,30 @@ in 460 s.
   quarter, so 2026q2 would never be asked once 2026q3 is newest. The Form 4 lane covers both
   quarters meanwhile (`sec_days` starts 2026-04-01).
   [Note](../deferred/2026-10-30-the-insider-data-set-schedule-fails-until-sec-publishes.md).
+
+**The same evening: the insider summary had to pick first** (muffin-ingest#150, #151;
+muffin-deployment#478). Turning the index lane on put Form 4 rows in `insider_trade` beside the
+edge `security-insider` rows. `security_insider_summary` counted every row in its 90-day window, so
+a trade both writers recorded was counted twice. Buys, sells, net shares and trades doubled; the
+people counts did not.
+- **Measured:** the window held 34,811 edge rows over 1,514 securities, all of which the Form 4
+  backfill would have doubled. The edge still writes 4,000-10,000 rows a day.
+- **Already wrong in the app:** step 6 had doubled Park National (20 buys for 10) and UniFirst
+  (6 trades for 3).
+- **Sequence:** #150 stopped the index schedule (rolled 18:26 UTC). #478 then made the summary count
+  an edge row only on a filing day the lane has not collected, judged across all securities,
+  since openbb can date a filing the day before the lane's index does. It was replayed with three
+  mutations, rolled back on production (exactly Park National and UniFirst change), and deployed
+  at 18:42 UTC, eight minutes before the Cloudflare token expired. #151 turned the index schedule
+  back on (rolled 18:48). All 24 anon probes passed, the new insider card at 50 ms.
+
+**Step 8's order is set by the disk.** `/mnt/data` was at 78% (21 GB free; the alert fires at 80%).
+The space goes to http-cache (29.3 GB, capped at 40 GB) and Postgres (23 GB, of which the retired
+`security_price` is 5.3 GB, overdue for its 2026-10-12 contract).
+- The Form 4 backfill is small (~100,000 rows) and started at 18:49 UTC for the 90-day window,
+  08-01..10-30 (backfill `eonhkokd`, 88 days). Its first run collected all 86 index days in one
+  pass: 60 requests, 53.5 MB, 2 holidays.
+- The CIK grid is projected at about +4 GB and runs from 11:00 UTC on 10-31, measured on its first
+  chunk.
+- The insider data sets (~8 million rows, 3-4 GB) would cross 80%. They wait for the overdue
+  contract, which waits for a deploy, which waits for a new Cloudflare token.
