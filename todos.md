@@ -3275,7 +3275,13 @@ names its provider** is now a guideline for every family.
       node (spec *Step 5*): 14 filers, 72 requests, every lane; two defects fixed in muffin-ingest#148.
 - [ ] 6. Live tiny subset and parity, recorded in the spec.
       - `new_sec_filers`' first tick was cut off by the 21:54 roll and left `STARTED`; with a 6-hour
-        interval the grid stays empty until ~03:54 UTC 2026-10-30. Check it filled (~3,420 keys).
+        interval it would not run again until ~03:54. The grid was filled by hand at 22:20 with the
+        sensor's own logic: **3,726 keys** (more than the ~3,420 estimated).
+      - **Check-in 2026-10-30:** the sensor ticked at 03:54:07 and skipped (nothing new), and the cut-off
+        21:54 tick resolved. Every run since 23:30 succeeded: the price night (100 runs, 00:00-02:17),
+        FX and indices, 218 asset-job runs (derivation, symbology rungs), the company lane (18 runs,
+        03:30-06:09), 8 heartbeats. **market-verify's scheduled run at 10:19 UTC passed**, its first
+        scheduled pass since at least 10-23.
 - [ ] 7. Schedules and `sec_filers_due` on. 8. Backfills: the CIK grid, every insider quarter since
       2006, Form 4 days since 10-01, the label and derive drain.
       - After the drain, read COST's quarterly table: one column per quarter (on 2026-10-25 SEC's
