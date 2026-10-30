@@ -2628,12 +2628,15 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
                   live wave, of three (`5646f55f` → `607bd013`): 6 requests, **3 promoted, 2 as
                   `.KQ`** (4by4 389140.KQ, A-Tech 071670.KQ, A-One Seimitsu 6156.T);
                   `security_listing` followed with 6 listings. Policy left unpaused for 11-02.
-            - [ ] **2026-10-27:** policy unpaused; `promotion_probe` 9 `priced`, no `not_equity`. The
+            - [x] **2026-10-27:** policy unpaused; `promotion_probe` 9 `priced`, no `not_equity`. The
                   nine are in the price grid (keys added 20:36-23:36 on 10-26) and have no bars yet.
                   That is by design: `new_securities_need_history` adds keys and requests nothing,
                   and the nightly rotation reaches them. Tonight's slice starts 1,468 keys before the
                   grid's end, so the 2026-10-28 night includes all nine. Check 10-28: nine with
                   bars, then `security_return`.
+                  **Checked 2026-10-30 (late):** all nine hold histories through 10-27 (444 bars for
+                  3ALOGICS 177900.KQ to 6,100 for 3S Korea 060310.KQ) and 7-9 return periods each,
+                  fewer only where the listing is under five years old.
             - [ ] **2026-11-02 after 06:17 UTC:** the first scheduled wave: promoted ≤ 500, outcomes,
                   `control_priced`, and `promotion_stays_within_the_sweep`. Then each Monday: the
                   price night's `throttled 0` and the company lane's end time.
