@@ -5639,6 +5639,33 @@ muffin-ingest#145-#147, muffin-deployment#475-#477. Spec: `docs/specs/2026-10-24
   code location loads without them). A stage-2 test that reaches edgartools stubs
   `sec_edgar.filings_table` with its output shape; the library tests drive the real reader.
 
+### Phase 5 steps 6-7a: parity, and two things not to turn on yet (2026-10-30)
+
+muffin-ingest#148, #149. Spec: `docs/specs/2026-10-24-sec-family.md`, *Step 6* and *Step 7a*.
+
+- **A SENSOR THAT TREATS "NEVER COLLECTED" AS DUE TURNS ITS FIRST TICK INTO THE WHOLE BACKFILL, AT
+  WHATEVER TIME IT STARTS.** `sec_filers_due` counts every filer never collected as due on any day,
+  so starting it meant 3,722 keys in ~75 runs holding `sec` and `sql` for ~5 hours from the moment of
+  the roll. An evening roll would have run that into the 00:00 price night. The run windows protect
+  schedules, not a sensor's first tick. **Before starting a sensor, count what its first tick
+  requests**, and run that backlog yourself inside its window first.
+- **A RUN THAT FAILS BY DESIGN MEETS THE ALERT THAT TREATS EVERY FAILURE AS NEWS.** The insider
+  data-set lane fails its run on a 404 for an unpublished quarter, which is correct, and "A Dagster
+  run failed" fires on any failed run for six hours. SEC was four months late with 2026q2, so a
+  weekly schedule would have been red every Monday. **Before turning a schedule on, read the alerts
+  its expected outcomes will meet.** "Not published yet" should end the run claiming nothing, not
+  fail it ([note](docs/deferred/2026-10-30-the-insider-data-set-schedule-fails-until-sec-publishes.md)).
+- **A LABEL REACHES A METRIC ONLY THROUGH THE DERIVATION.** `label_fiscal_periods` labels statements,
+  and the derivation copies the labels into the metrics it writes. The edge's `security-xbrl` wrote
+  `sec-xbrl` metrics straight into `security_metric`, so those are never labelled: 658 annual ones
+  for SAP, Toyota and Vodafone, even in the years their calendar covers, and Vodafone's 55
+  quarterly balance-sheet metrics with no quarterly statement anywhere. They are replaced as the
+  filer lane derives each period. Anything it does not reproduce is listed at the contract.
+- **A RELABEL RE-QUEUES THE DERIVATION, BUT ONLY A DEPENDENCY RUNS IT.** The derivation is eager on
+  `yahoo_statement` and `sec_statement`, not on the calendar, so labels written by hand sat
+  underived (175 statements, exactly the relabelled rows) until the derivation was launched. In the
+  company job the calendar runs in the same run as `yahoo_statement`, which is what triggers it.
+
 ## Running an OpenSandbox server locally
 
 - **`docker run -d -p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock opensandbox/server:latest`.**

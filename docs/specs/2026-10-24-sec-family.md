@@ -1054,3 +1054,25 @@ company job; step 7 adds it) on 005930.KS, 7203.T, NESN.SW, SAP.DE and VOD.L, pl
   at 21:54 on 10-29 and left `STARTED`, so with a 6-hour interval the sensor would not have run
   again until ~03:54. The grid was filled at 22:20 using the sensor's own logic: **3,726 keys**,
   against ~3,420 estimated. The 03:54 tick then skipped, finding nothing new.
+
+### Step 7a: the daily index on, and the calendar in the company job (muffin-ingest#149), 2026-10-30
+
+Rolled at 18:14 UTC; nothing was in flight. `sec_daily_index` is RUNNING in code, and its dry run
+for 10-31 11:00 asks 7 days (10-21..10-30 less the three held). `yahoo_fiscal_calendar` runs last in
+each `yahoo_companies` run. The derivation waits for the run's `sql` slot, so it reads the labels.
+The first rotation relabels ~180,000 statements a day, and one derivation run has drained 161,001
+in 460 s.
+
+**Step 7 is split, and two things stay off:**
+- **`sec_filers_due` waits for the CIK grid.** On its first tick every filer never collected is
+  due, which is 3,722 keys in ~75 runs. At step 6's per-filer times (3.5 s stage 1, 4.5 s stage 2)
+  plus each run's fixed 25 s of checks, that holds `sec` and `sql` for ~5 hours from whenever it
+  starts. Started by an evening roll, it would have run into the 00:00 price night. So the grid runs
+  first as the step 8 backfill, by hand from 11:00 UTC on 10-31: one 50-filer chunk measured for
+  time and memory, then the rest inside 11:00-20:00. The sensor starts after it (7b).
+- **`sec_insider_datasets` waits for a fix.** A 404 for an unpublished quarter fails the run, and
+  "A Dagster run failed" alerts on any failed run for six hours. SEC had not published 2026q2 four
+  months on, so it would have fired every Monday on correct behaviour. It also asks only the newest
+  quarter, so 2026q2 would never be asked once 2026q3 is newest. The Form 4 lane covers both
+  quarters meanwhile (`sec_days` starts 2026-04-01).
+  [Note](../deferred/2026-10-30-the-insider-data-set-schedule-fails-until-sec-publishes.md).

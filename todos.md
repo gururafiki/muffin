@@ -3296,8 +3296,8 @@ names its provider** is now a guideline for every family.
         scheduled pass since at least 10-23.
 - [ ] 7. Schedules and `sec_filers_due` on. 8. Backfills: the CIK grid, every insider quarter since
       2006, Form 4 days since 04-01 (the `sec_days` grid's start), the label and derive drain.
-      - 2026-10-30: split in two. **7a** (muffin-ingest#149): `sec_daily_index` RUNNING and
-        `yahoo_fiscal_calendar` in the company job. **The CIK grid goes first, by hand, from 11:00
+      - 2026-10-30: split in two. **7a** (muffin-ingest#149, **rolled 18:14 UTC**): `sec_daily_index`
+        RUNNING and `yahoo_fiscal_calendar` in the company job; the 10-31 11:00 dry run asks 7 days. **The CIK grid goes first, by hand, from 11:00
         UTC 10-31** (one 50-filer chunk measured for time and memory, then the rest inside
         11:00-20:00), because `sec_filers_due`'s first tick makes every never-collected filer due:
         ~75 runs holding `sql` for ~5 hours from whenever it starts. **7b** then starts the sensor.
