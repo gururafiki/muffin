@@ -1,6 +1,6 @@
 # The insider data-set schedule fails a run until SEC publishes, and asks only the newest quarter
 
-**Fixed in muffin-ingest#153 (2026-10-30), with a third defect found while fixing it:** the run
+**Fixed in muffin-ingest#153 (2026-10-30, rolled 2026-10-31 09:52 UTC), with a third defect found while fixing it:** the run
 key was the quarter alone, and Dagster launches a run key once per schedule, so an unpublished
 quarter would have been asked on one Monday and never again. The key now carries the tick's
 day. Closes when #153 is rolled and its first Monday (2026-11-02 11:45 UTC) asks 2026q2 and

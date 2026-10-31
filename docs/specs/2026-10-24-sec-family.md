@@ -1103,3 +1103,35 @@ The space goes to http-cache (29.3 GB, capped at 40 GB) and Postgres (23 GB, of 
   chunk.
 - The insider data sets (~8 million rows, 3-4 GB) would cross 80%. They wait for the overdue
   contract, which waits for a deploy, which waits for a new Cloudflare token.
+
+### Step 8: the Form 4 backfill, and a day nothing asked again (muffin-ingest#154), 2026-10-30..31
+
+The backfill ended at 20:52 UTC: 89 runs, all SUCCESS, 87 days (08-01..10-26).
+
+| Counter | Sum |
+|---|---|
+| Form 4s named | 24,396 |
+| answered | 22,945 |
+| refused (503 ×6, 504 ×1) / unasked | 7 / 1,443 |
+| absent (a 404 the index named, 09-28) | 1 |
+| trades inserted | 55,863 (`collapsed` 0) |
+| raw bytes | 329 MB |
+
+- **The lane's rows** are 57,415 over 2,756 securities, against the edge's 70,028 over 1,633. The
+  summary covers 2,713 securities and reads in 53 ms.
+- **Seven days are short.** SEC answered 7 of 23,033 requests with a 5xx. The http-cache log shows
+  SEC's own 2,843-byte 503 after 7-10 s, and one nginx 504 at its 60 s timeout. The run stops on
+  its first refusal, as designed, so each day kept 30-642 Form 4s unasked. All seven filings
+  answered 200 when asked again at 01:40 UTC.
+- **Nothing would have asked again.** `form4_days_are_complete` saw each short day only while it
+  was among the newest seven, and the schedule re-asked only a missing index. Its run key was the
+  partition alone, which Dagster launches once per schedule, so not even a missing index was ever
+  asked twice: #153's defect, in the other schedule. #154 makes a lookback day due when its index
+  or trades never materialised, or when its newest Form 4 run's counters show filings neither
+  answered nor already held. The key carries the tick's day.
+- **Rolled 2026-10-31 09:52 UTC** with #152 (an empty upsert reports `changed=0`) and #153 (the
+  data-set schedule). The detector, run against production, named exactly the eight days with a
+  gap (the seven above and 09-28's 404), and backfill `hhmxozev` re-asks them.
+- **5xx still stops the run.** The decided rule ("a refusal stops the run") is kept: with the
+  re-ask, a transient 503 costs one day's delay. Treating a 5xx as a transport failure instead
+  would keep the run going, and is a decision for the user.

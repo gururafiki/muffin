@@ -5673,6 +5673,18 @@ muffin-ingest#148, #149. Spec: `docs/specs/2026-10-24-sec-family.md`, *Step 6* a
   `yahoo_statement` and `sec_statement`, not on the calendar, so labels written by hand sat
   underived (175 statements, exactly the relabelled rows) until the derivation was launched. In the
   company job the calendar runs in the same run as `yahoo_statement`, which is what triggers it.
+- **A RUN THAT STOPS ON A REFUSAL STILL MATERIALISES ITS PARTITION, SO SOMETHING MUST ASK AGAIN.**
+  The Form 4 backfill (2026-10-30) succeeded on all 89 runs and left seven days short. SEC answered
+  7 of 23,033 requests with a 503 or 504, each run stopped as designed, and 1,443 filings stayed
+  unasked. All seven answered 200 when asked again. The completeness check saw each day only while
+  it was among the newest seven, and the schedule re-asked only a missing index. **A
+  partition-scoped schedule must also read the partition's own counters**, here
+  `named > answered + held_already` (muffin-ingest#154).
+- **A SCHEDULE'S RUN KEY DECIDES WHETHER IT CAN EVER RETRY — TWICE IN ONE DAY.** Dagster launches a
+  run key once per schedule. `sec_daily_index` keyed on the day and `sec_insider_datasets` on the
+  quarter, so neither could ask a partition a second time, however it ended (#153, #154). **A
+  schedule that re-asks puts the tick's date in the key.** Sensors already advance theirs with the
+  cursor.
 
 ## Running an OpenSandbox server locally
 

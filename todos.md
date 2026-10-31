@@ -1743,8 +1743,9 @@ cut over one at a time.
         10-13's 41 rates (EUR 1.11602), `reread_offered` 123, `refilled` 0,
         `provider_skipped_days: none`; 10-12 kept the late fill (EUR 1.12047).
 - [ ] 2026-10-30 — the insider data-set schedule fails a run on every unpublished quarter and asks
-      only the newest (fix: muffin-ingest#153, which also gives each tick its own run key; rolls
-      after the Form 4 backfill). Was: fails a run on every unpublished quarter and asks
+      only the newest (fix: muffin-ingest#153, which also gives each tick its own run key; rolled
+      2026-10-31 09:52 UTC; closes after Monday 11-02 11:45 asks 2026q2 and 2026q3 with no failed
+      run). Was: fails a run on every unpublished quarter and asks
       only the newest: a quarter not published should end the run claiming nothing, and the
       schedule should ask every completed quarter not held
       ([note](docs/deferred/2026-10-30-the-insider-data-set-schedule-fails-until-sec-publishes.md)).
@@ -3313,6 +3314,19 @@ names its provider** is now a guideline for every family.
         wait for disk: `/mnt/data` at 78% (alert at 80%), so they follow the overdue contract
         that drops `security_price` (5.3 GB), which needs a deploy and so a new Cloudflare token.
         muffin-ingest#152 (an empty upsert reported `changed=-1`) merges after the backfill.
+      - **The Form 4 backfill ended 20:52 UTC:** 89 runs, all SUCCESS, 08-01..10-26 (87 days).
+        24,396 Form 4s named, 22,945 answered, **55,863 trades inserted**, `collapsed` 0. Lane rows
+        57,415 over 2,756 securities against the edge's 70,028 over 1,633; the summary covers 2,713
+        securities and reads in 53 ms. **Seven days are short**: SEC answered 7 of 23,033 requests
+        with a 503 or 504, each stopping its day (08-13, 08-17, 08-19, 09-22, 09-24, 09-25, 10-05;
+        1,443 unasked). All seven answered 200 when asked again. Nothing re-asks a short day, and
+        the schedule's run key never asked any day twice: muffin-ingest#154. The seven are re-run
+        by hand after the roll; 09-28 also holds one 404.
+      - **2026-10-31 09:52 UTC: #152, #153 and #154 rolled in one roll**, nothing in flight. The
+        three SEC instigators read `DECLARED_IN_CODE` (`sec_filers_due` stays STOPPED). Dry runs on
+        the deployed code: the 11:00 index tick asks only 10-30; Monday's data-set tick asks 2026q2
+        and 2026q3. `short_form4_days` named exactly the eight days above. Backfill `hhmxozev`
+        re-asks them (09:53).
       - 2026-10-30: `sec_insider_datasets` stays STOPPED: it fails a run on every unpublished
         quarter ("A Dagster run failed" every Monday) and asks only the newest one.
         [Note](docs/deferred/2026-10-30-the-insider-data-set-schedule-fails-until-sec-publishes.md).
