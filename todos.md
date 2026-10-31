@@ -1742,6 +1742,9 @@ cut over one at a time.
   - [x] check 2026-10-14 — the 00:00 `daily_fx` run, the first on the new code: SUCCESS (`d77e17da`),
         10-13's 41 rates (EUR 1.11602), `reread_offered` 123, `refilled` 0,
         `provider_skipped_days: none`; 10-12 kept the late fill (EUR 1.12047).
+- [ ] 2026-10-31 — the cache hit-ratio alert fires on a quiet day with the cache working; a
+      canary that asks one URL twice is recommended
+      ([note](docs/deferred/2026-10-31-the-cache-hit-ratio-alert-measures-the-traffic-mix.md)).
 - [ ] 2026-10-30 — the insider data-set schedule fails a run on every unpublished quarter and asks
       only the newest (fix: muffin-ingest#153, which also gives each tick its own run key; rolled
       2026-10-31 09:52 UTC; closes after Monday 11-02 11:45 asks 2026q2 and 2026q3 with no failed
@@ -3327,6 +3330,18 @@ names its provider** is now a guideline for every family.
         the deployed code: the 11:00 index tick asks only 10-30; Monday's data-set tick asks 2026q2
         and 2026q3. `short_form4_days` named exactly the eight days above. Backfill `hhmxozev`
         re-asks them (09:53).
+      - **`hhmxozev` ended 10:02: 8 of 8 SUCCESS.** Six days are whole (`named` = held + answered),
+        1,429 Form 4s answered and 3,384 trades inserted, `collapsed` 0. 09-25 and 09-28 each keep
+        one filing the index names and SEC answers 404; both are outside the lookback, so nothing
+        re-asks them.
+      - **The alerts that morning (10:00):** `muffin-disk-filling` (`/mnt/data` 80.5%: http-cache
+        29.0 GB, database 27.6 GB, raw 6.3 GB; +1.45 GB since 10-30) needs #479 and a cache
+        retention change, so a deploy and a new Cloudflare token. `muffin-backlog-flat` had fired
+        since 10-29 on two dropped backlogs' old samples: muffin-deployment#480, which also waits
+        for a deploy (it clears by itself at 11-01 19:04). `muffin-cache-hit-ratio-collapsed`
+        fires with the cache shown working:
+        [note](docs/deferred/2026-10-31-the-cache-hit-ratio-alert-measures-the-traffic-mix.md).
+        `muffin-dagster-run-failed` was the run the 10-30 18:48 roll killed and failed.
       - 2026-10-30: `sec_insider_datasets` stays STOPPED: it fails a run on every unpublished
         quarter ("A Dagster run failed" every Monday) and asks only the newest one.
         [Note](docs/deferred/2026-10-30-the-insider-data-set-schedule-fails-until-sec-publishes.md).
