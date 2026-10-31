@@ -5685,6 +5685,17 @@ muffin-ingest#148, #149. Spec: `docs/specs/2026-10-24-sec-family.md`, *Step 6* a
   quarter, so neither could ask a partition a second time, however it ended (#153, #154). **A
   schedule that re-asks puts the tick's date in the key.** Sensors already advance theirs with the
   cursor.
+- **A VIEW OVER SAMPLES OUTLIVES THE THING SAMPLED.** `backlog_drain` fits seven days of
+  `backlog_sample`, so ten `pending_*` views dropped on 10-24/10-25 stayed in it, and two read as
+  FLAT. "A non-empty backlog has been FLAT for a week" fired from 10-29 02:00 on queues nothing
+  drains, and the 10-30 check-in, which was meant to read firing alerts first, did not. A derived
+  view over samples must drop a subject that is no longer sampled (muffin-deployment#480). Step 9
+  retires four more backlogs, so this had to land first.
+- **A HIT RATIO MEASURES REPEAT TRAFFIC, AND THE REWORK REMOVED MOST OF IT.** On Saturday 10-31 the
+  cache hit-ratio alert fired while a repeated SEC request logged MISS then HIT. Lanes that ask once,
+  bypass, or are cache-off leave the ratio to whoever repeats a question within a TTL, and on a quiet
+  day nobody does ([note](docs/deferred/2026-10-31-the-cache-hit-ratio-alert-measures-the-traffic-mix.md)).
+  **Before trusting a ratio alert, test the thing it guards directly.**
 
 ## Running an OpenSandbox server locally
 
