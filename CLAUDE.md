@@ -172,6 +172,11 @@ Things here that are easy to get wrong, all measured 2026-08-23:
   Lua**, which reads the spilled temp file and can never overflow.
 - **`inactive=` EVICTS BY LAST ACCESS, NOT BY TTL, AND DEFAULTS TO 10 MINUTES.** A
   `proxy_cache_valid 30d` caches nothing without it, while looking perfectly correct.
+  **And a restart counts as an access.** The cache loader gives every entry on disk a fresh
+  `expire = now + inactive` (`ngx_http_file_cache_add`), and any config change restarts
+  http-cache. So shortening `inactive` frees nothing until that long has passed with no restart;
+  `max_size` is the bound that acts at once. Read 2026-11-01, when the cache was 29.45 GB on a
+  disk at 75% (`docs/deferred/2026-11-01-the-http-cache-is-bounded-only-by-a-40-gb-cap.md`).
 - **A LITERAL HOSTNAME IN `proxy_pass` IS RESOLVED AT STARTUP**, so http-cache would fail to boot
   whenever openbb-api is down, and would pin a provider's IP for the container's lifetime. Every
   upstream goes through a `set $up` variable plus `rewrite ... break`, which defers resolution to

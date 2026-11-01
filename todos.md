@@ -3371,8 +3371,12 @@ names its provider** is now a guideline for every family.
           so the rest runs: 500-filer batches from 13:00, stopping before a batch if the alert's
           own measure passes 79% or the clock passes 19:15 UTC.
         - **What it leaves:** ~1.5 GB of headroom, which background growth uses in about two days.
-          So the http-cache retention change (`inactive=365d`) is due within days. The insider
-          data sets (+~5 GB) cannot run until it lands.
+          The insider data sets (+~5 GB) cannot run until the cache is bounded.
+      - [ ] 2026-11-01 — [the http-cache is bounded only by a 40 GB cap](docs/deferred/2026-11-01-the-http-cache-is-bounded-only-by-a-40-gb-cap.md)
+            (a choice for the user). The cache is 29.45 GB, ~12 GB of it SEC archives written more
+            than 30 days ago. **Shortening `inactive` frees nothing soon**: the loader gives every
+            entry a fresh window at each restart. `max_size` 15g (recommended) frees ~14 GB at the
+            next deploy.
       - 2026-10-30: `sec_insider_datasets` stays STOPPED: it fails a run on every unpublished
         quarter ("A Dagster run failed" every Monday) and asks only the newest one.
         [Note](docs/deferred/2026-10-30-the-insider-data-set-schedule-fails-until-sec-publishes.md).
