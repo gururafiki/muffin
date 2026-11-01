@@ -1,6 +1,12 @@
 # Firecrawl's RabbitMQ is OOM-killed every two or three days
 
-Created 2026-10-27 · Status: decided 2026-10-27 (option 1), live since 20:38 UTC; watching
+Created 2026-10-27 · Status: **closed 2026-11-01.** Decided 2026-10-27 (option 1), live since 20:38 UTC.
+
+**Closed 2026-11-01 12:20 UTC.** From the 10-27 20:39 restart, memory held between 143 and 173 MiB
+(at most 34% of the 512 MiB limit), sampled every six hours by `muffin_service_memory_bytes`, with
+no upward trend. No task has failed since: the newest `exit (137)` is 10-27 07:15. That is 4 days
+15 hours without a kill, against one every ~61 hours before, when memory rose about 1% of the limit
+every 30 minutes.
 
 ## Why
 

@@ -129,3 +129,8 @@ digest. Pinning only the deploy would still differ from the roll's bare tag.
 A deploy leaves the ingest services' image digest unchanged, and only `roll-ingest` moves it. This
 is verified by two deploys that report the three services unchanged: one after an ingest merge, and
 one straight after a roll.
+
+- **Straight after a roll: seen twice.** The 10-17 14:35 deploy (roll at 14:29), and the 11-01 12:11
+  deploy (roll 10-31 09:52, nothing merged since). Both left the three containers' `StartedAt`
+  unchanged.
+- **After an ingest merge that was not rolled: not seen yet.** That case closes the note.

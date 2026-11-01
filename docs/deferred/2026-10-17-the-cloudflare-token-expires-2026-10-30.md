@@ -1,6 +1,10 @@
 # The Cloudflare token expires 2026-10-30
 
-Status: **decided 2026-10-25 (the user): let it expire and react then.** Land the deploys that are ready before 10-30 18:50 UTC; after it, a Terraform refresh failing 401 / code 1000 means a new token, not a defect.
+Status: **closed 2026-11-01.** A new account-owned token was set at 10:21 UTC on 10-31 (`gh secret
+set` from a file); `/accounts/{id}/tokens/verify` reports it active, expiring **2027-10-31 22:59 UTC**.
+It sees the `rafiki.guru` zone and the Access apps. The 11-01 12:11 deploy applied cleanly, and
+Traefik restarted onto the new hashed `cf_dns_api_token` secret. Before that:
+**decided 2026-10-25 (the user): let it expire and react then.** Land the deploys that are ready before 10-30 18:50 UTC; after it, a Terraform refresh failing 401 / code 1000 means a new token, not a defect.
 
 ## Why
 

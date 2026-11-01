@@ -1636,8 +1636,8 @@ cut over one at a time.
   adds them.
 - [ ] due 2026-10-12 (after Stage 1d) — drop the columns and tables the retired price and universe
   families left behind. **2026-10-30: the tables are muffin-deployment#479** (5,332 MB; replayed,
-  rolled back on production), waiting for a deploy and so for a new Cloudflare token; the columns
-  follow in a second migration. Was:
+  rolled back on production). **Deployed 2026-11-01 12:11 UTC**: the four tables are gone and
+  `/mnt/data` went from 80% to 74%. The columns follow in a second migration. Was:
   families left behind: ten negative caches and markers on `security`, `currency.history_missing_at`,
   `security_price` (5.3 GB), `market.prices`, the `exchange_*` sweep tables —
   docs/deferred/2026-09-30-the-retired-families-leave-columns-behind.md
@@ -2466,6 +2466,15 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
                               exactly those 51. **Check after the 1 November refresh** (05:41 UTC
                               judgement): `cleared` and `marked` in `venue_listing_absence`, and the 30
                               in-window Arca lines still marked.
+                              **Checked 2026-11-01:** the refresh walked all 237 queries 03:38-06:35
+                              (`US.arca` 06:19, then `US.common` 06:27, the same order as 10-04) and
+                              filed them by 07:08. The 06:49 judgement covered 162 windows: `marked`
+                              337, `cleared` 0. All 51 in-window marked US lines are still marked
+                              (Kirkland Lake, Whiting, Tufin, Paycor, Redfin, CureVac, CyberArk among
+                              them). Their `last_seen_at` moved to 11-01 from the Arca walk while
+                              `venue_seen_at` stays empty, which is the alias sighting that used to be
+                              able to clear a mark. The other 75 windows were filed after 06:49, so the
+                              11-02 judgement covers them; read it then.
                         - [ ] Option 2 (Nasdaq Trader as a second source) before promotion opens on the US.
             - [ ] **Docker Desktop's API stopped answering on this Mac on 2026-10-04** (backend up,
                   every call timed out for 10+ minutes), so the local Postgres harness could not
@@ -2819,7 +2828,9 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
             - muffin-deployment#434 names the secret by a hash of its value. All five certificates
               renewed, to 2027-01-14.
             - muffin-deployment#435 alerts below 25 days left.
-      - [ ] **check 2026-10-30 — the new Cloudflare token expires 2026-10-30 18:50 UTC.** This is the
+      - [x] **check 2026-10-30 — the new Cloudflare token expires 2026-10-30 18:50 UTC.** Done
+            2026-10-31: a new token, active until 2027-10-31, set as the GitHub secret; the 11-01
+            12:11 deploy applied with it. This is the
             user's credential decision: a token with no expiry date (recommended), or rotate and
             deploy before then. **Decided 2026-10-25 (the user):** let it expire and react then; land ready deploys
             before 10-30 18:50 UTC —
@@ -3187,7 +3198,7 @@ never re-asked); no Yahoo statement row has a currency; `muffin-metrics` fails 3
         20:00 deploy, the 20:17 run drained 161,001 statements and 7,674 TTMs to 0, #123 rolled
         at 20:28, the replay corrected four companies, and the 20:31 and 20:47 runs succeeded.
         0 underived, 0 unknown codes, Aksigorta's 2022 revenue in TRY.
-  - [ ] [Firecrawl's RabbitMQ is OOM-killed every two or three days](docs/deferred/2026-10-27-firecrawl-rabbitmq-is-oom-killed-every-few-days.md)
+  - [x] [Firecrawl's RabbitMQ is OOM-killed every two or three days](docs/deferred/2026-10-27-firecrawl-rabbitmq-is-oom-killed-every-few-days.md) — closed 2026-11-01: 143-173 MiB (≤34%) for 4 d 15 h, no `exit (137)` since the fix
         (2026-10-27): the near-OOM alert fired 03:50-07:30, cleared by the kill (`exit 137` 12 h,
         3, 5 and 8 days ago). Quorum-queue WAL memory grows ~4 MB an hour toward a 512 MiB default
         rollover in a 512 MiB container, and the watermark is computed from the host's 24 GB.
