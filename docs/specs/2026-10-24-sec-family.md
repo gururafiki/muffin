@@ -1134,7 +1134,7 @@ The backfill ended at 20:52 UTC: 89 runs, all SUCCESS, 87 days (08-01..10-26).
   gap (the seven above and 09-28's 404), and backfill `hhmxozev` re-asks them.
 - **5xx still stops the run.** The decided rule ("a refusal stops the run") is kept: with the
   re-ask, a transient 503 costs one day's delay. Treating a 5xx as a transport failure instead
-  would keep the run going, and is a decision for the user.
+  would keep the run going. **Decided 2026-11-01 (the user): keep stopping.**
 
 ### Step 8: the CIK grid, measured before it ran, 2026-11-01
 

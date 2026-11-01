@@ -1,6 +1,7 @@
 # The http-cache is bounded only by a 40 GB cap, on a disk that alerts at 80%
 
-Recorded 2026-11-01. Open: the bound is a choice (below).
+Recorded 2026-11-01. **Decided the same day** (below): the cap stays at 40 GB, and the room comes
+from elsewhere.
 
 ## Why
 
@@ -64,6 +65,28 @@ The working set the cache actually serves is small. HITs ran ~180-220 per six ho
 
 Whichever is chosen, it is one line in `stack/proxy/nginx.conf` plus a deploy. The config hash
 restarts http-cache, and the cache manager does the eviction.
+
+## Decided 2026-11-01 (the user)
+
+- **The cap stays at 40 GB, and `inactive` is left alone for now.**
+- **The cache stays on the block volume.** Moving it to the boot volume (57.6 GB free) was offered
+  and declined: anything an instance replacement would lose belongs on `/mnt/data`.
+- **The room comes from elsewhere** (muffin-deployment#482):
+  - **Clean the leaked volumes.** 152 anonymous volumes no container used held 11.1 GB: 84
+    throwaway Postgres databases from schema replays (`docker rm -f` without `-v`), 30 RabbitMQ data
+    directories (one per restart), 4 Redis dumps, 34 empty. `maintenance.yml prune-volumes` removes
+    them; the replay scripts now remove with `-v` (also muffin-ingest#157), and RabbitMQ gets one
+    named volume with a fixed hostname.
+  - **Grow the data volume 100 -> 105 GB**, the last of the free allowance. OCI's own limits for
+    this tenancy, read 2026-11-01: `total-free-storage-gb-regional` 200, 195 used, 5 available;
+    `total-storage-gb` 61,440 per availability domain. The compute limits (250 A1 cores, 100 E4) are
+    a Pay As You Go account's, so paid storage is available (~$0.0425 per GB-month Balanced);
+    unconfirmed on the billing page. Buying more was offered at 150, 200 and 300 GB and declined
+    for now.
+- **Projection after both:** ~64% after the CIK grid, ~69% once the insider history lands, then
+  ~2.5 GB a week (database 1.5, cache 0.6, raw 0.4, measured 10-25..11-01 on
+  `muffin_volume_bytes`). That reaches 80% in about a month, when buying storage is the next
+  decision.
 
 ## Done when
 

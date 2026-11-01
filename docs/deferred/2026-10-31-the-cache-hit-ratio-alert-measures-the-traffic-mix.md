@@ -1,6 +1,6 @@
 # The cache hit-ratio alert measures the traffic mix, not the cache
 
-Recorded 2026-10-31. Open: the fix is a choice (below).
+Recorded 2026-10-31. **Decided 2026-11-01 (the user): option 1, an hourly canary.** To build.
 
 ## Why
 

@@ -3376,12 +3376,28 @@ names its provider** is now a guideline for every family.
           so the rest runs: 500-filer batches from 13:00, stopping before a batch if the alert's
           own measure passes 79% or the clock passes 19:15 UTC.
         - **What it leaves:** ~1.5 GB of headroom, which background growth uses in about two days.
-          The insider data sets (+~5 GB) cannot run until the cache is bounded.
-      - [ ] 2026-11-01 — [the http-cache is bounded only by a 40 GB cap](docs/deferred/2026-11-01-the-http-cache-is-bounded-only-by-a-40-gb-cap.md)
-            (a choice for the user). The cache is 29.45 GB, ~12 GB of it SEC archives written more
-            than 30 days ago. **Shortening `inactive` frees nothing soon**: the loader gives every
-            entry a fresh window at each restart. `max_size` 15g (recommended) frees ~14 GB at the
-            next deploy.
+          The insider data sets (+~5 GB) cannot run until there is room.
+        - **The first 500-filer batch corrected the per-chunk figure.** `rluvwzhc` (13:00-13:27,
+          10 runs, all SUCCESS) moved the alert's measure 75.25% -> 76.44%, three times the
+          estimate. By component: raw +181 MB, database +233 MB, and Postgres WAL 304 -> 1,024 MB
+          (+720), which is bounded by `max_wal_size` and recycles from there. So the grid costs
+          ~0.83 MB a filer, ~2.6 GB for the remaining 3,126, and projects to ~79%. The driver's
+          79% stop still guards it, and the volume cleanup below takes ~11 points off.
+      - [ ] 2026-11-01 — [the http-cache is bounded only by a 40 GB cap](docs/deferred/2026-11-01-the-http-cache-is-bounded-only-by-a-40-gb-cap.md).
+            **Decided the same day (the user):** keep the 40 GB cap and `inactive` as they are, and
+            keep the cache, and anything a node replacement would lose, on the block volume. Room
+            comes from reclaiming 152 leaked anonymous volumes (11.1 GB: 84 throwaway Postgres
+            databases from schema replays, 30 RabbitMQ restarts, 4 Redis, 34 empty) and growing the
+            data volume to 105 GB, the last of the free 200 GB. Buying more was offered and declined
+            for now. muffin-deployment#482 (prune-volumes action, RabbitMQ named volume, rescan
+            before resize, 105 GB) and muffin-ingest#157 (throwaway Postgres removed with `-v`).
+            Next: merge, run `prune-volumes confirm=prune`, deploy (plan first). After both, ~64%
+            once the grid ends and ~69% once the insider history lands, then ~2.5 GB a week, so
+            80% in about a month.
+      - [ ] 2026-11-01 — the hit-ratio alert becomes an hourly canary (the user chose option 1 of
+            [the note](docs/deferred/2026-10-31-the-cache-hit-ratio-alert-measures-the-traffic-mix.md)).
+            To build in muffin-deployment.
+      - 2026-11-01 — a SEC 5xx keeps stopping the Form 4 run (the user; the spec's Step 8).
       - 2026-10-30: `sec_insider_datasets` stays STOPPED: it fails a run on every unpublished
         quarter ("A Dagster run failed" every Monday) and asks only the newest one.
         [Note](docs/deferred/2026-10-30-the-insider-data-set-schedule-fails-until-sec-publishes.md).
