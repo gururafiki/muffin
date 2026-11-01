@@ -1182,7 +1182,8 @@ from 2016-09-19 to 2016-04-12, and the refusal failed all 50 filers of the run.
   equal to their filing date (94 20-Fs over 30 securities, 118 10-Ks over 70, 21 40-Fs over 8),
   filed 1995-2020. Counting 10-Qs too, 215 grid filers are affected, and 192 of them had already
   been collected, spread over 32 of the 33 chunks done.
-- **Fix.** The calendar leaves out a report dated on its filing day (`report_dated_on_filing`). The
+- **Fix.** The calendar leaves out a report dated on its filing day (`report_dated_on_filing`,
+  renamed by #160 below). The
   years it would give still come from facts. `_canonical` drops and counts any period that ends
   before it starts (`inverted_period`), so one filer can no longer fail its run. Each guard is
   mutation-proven, and Equinor joins the fiscal fixture, built from production's stored raw.
@@ -1192,3 +1193,24 @@ from 2016-09-19 to 2016-04-12, and the refusal failed all 50 filers of the run.
   With it: one December regime, 17 reports dropped, 0 inverted periods, and every statement row
   labelled (FY2025 revenue $106.46bn). The 1,601 collected filers were replayed as backfill
   `hhwxeeer`, and the grid resumed with batch ad (`epqwgqnl`, 17:48).
+
+**The same defect within a fortnight of the filing (muffin-ingest#160, decided by the user).** The
+re-parse showed a second form: a report date a few days before the filing, such as a signing date.
+126 annual reports sit 1-14 days before their filing, and only 6 of them on a month end. Forward
+Air's held a February calendar beside its December one.
+
+- **Rule.** An annual or transition report dated 14 days or less before its filing, or after it,
+  names no year end. The counter is now `report_dated_near_filing`.
+- **Not for a 10-Q.** Measured before building: 91 month-end quarter ends were filed 8-14 days
+  after their quarter, and 1,647 at 15-21 days, so a 10-Q keeps the same-day rule.
+- **Replay.** The 2,601 collected filers were re-parsed as `cpwohusz` (53 runs, all SUCCESS):
+  23 more calendars replaced, 790 reports left out, 0 inverted periods, and no regime left ending
+  on a near-filing date
+  ([note](../deferred/2026-11-01-a-report-dated-days-before-its-filing-is-not-a-year-end.md)).
+
+**The derivation's TTM page (muffin-ingest#161).** The derivation failed twice at `ingest_rw`'s
+120 s timeout during the grid (14:17, 18:47). A `derive_ttm` call costs the rows it writes, not the
+securities it is given. A SEC filer brings decades of quarters, about 480 TTM rows each, so a page
+of 1,000 took a whole batch's re-queue in one statement (237,035 rows in 222 s when it succeeded).
+The page is now 100 securities, about 50,000 rows. The first derivation after the roll had only 67
+statements to derive, so the new page meets a real re-queue only with the remaining batches.

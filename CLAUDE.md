@@ -4498,6 +4498,9 @@ parity gate for retiring the edge `fund-holdings` found.
   and the deploy renders whatever pinned image the running spec holds. The running spec is the
   record, so there is no variable to keep in step. The roll half went live 2026-10-11 09:56 UTC; the
   rule above holds until two deploys are seen to leave the Dagster tasks alone.
+  **Done 2026-11-01, and the rule above is retired.** The deploy of muffin-deployment#483 ran after
+  muffin-ingest#157's image became `:latest` and left all three services on the digest the last
+  roll pinned. Only `roll-ingest` moves the ingest image, and only the roll kills runs.
 - **A migration touching `cron.job` must guard on `to_regclass('cron.job')`**, not with
   `exception when others`: the migration tests run on plain Postgres with no pg_cron, where even
   PLANNING a query that names it fails, and a swallow-everything handler would also hide a real

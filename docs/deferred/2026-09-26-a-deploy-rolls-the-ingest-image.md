@@ -1,7 +1,7 @@
 # A deploy rolls the ingest image, without the roll's care for in-flight runs
 
-Created 2026-09-26 · Status: **decided 2026-10-11 (the user): option 1, pin the digest** (Phase 4
-decision 19); built in muffin-deployment#431. The roll half is live (2026-10-11 09:56 UTC); the
+Created 2026-09-26 · Status: **done 2026-11-01** (see *Done when*). **Decided 2026-10-11 (the
+user): option 1, pin the digest** (Phase 4 decision 19); built in muffin-deployment#431. The roll half is live (2026-10-11 09:56 UTC); the
 deploy half ships with the next deploy. Wider than first written (2026-10-03, below). The operating
 rule below holds until two deploys are seen to leave Dagster alone.
 
@@ -133,4 +133,13 @@ one straight after a roll.
 - **Straight after a roll: seen twice.** The 10-17 14:35 deploy (roll at 14:29), and the 11-01 12:11
   deploy (roll 10-31 09:52, nothing merged since). Both left the three containers' `StartedAt`
   unchanged.
-- **After an ingest merge that was not rolled: not seen yet.** That case closes the note.
+- **After an ingest merge that was not rolled: seen 2026-11-01.** muffin-ingest#157 merged at
+  20:16 UTC and its image was pushed as `:latest` at 20:18:27 (`sha256:e3a9c506…`). The deploy of
+  muffin-deployment#483, dispatched 20:16:36, finished at 20:27:34. Afterwards all three services
+  still read `muffin-ingest:latest@sha256:f50680d4…`, the digest the 19:26 roll pinned, and their
+  containers still had `StartedAt` 19:26. The same deploy restarted http-cache, Grafana and
+  Prometheus onto their new configs, so the deploy did replace tasks, just not these.
+
+**Done 2026-11-01.** Only `roll-ingest` moves the ingest image. The operating rule above is retired:
+an ingest PR may merge whenever it is ready, and a deploy may run before its roll. The roll itself
+still kills in-flight runs, so the rule for the roll stands: roll with no long run in flight.

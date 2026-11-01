@@ -7,6 +7,11 @@ at 8-14 days, 1,647 at 15-21), so a 10-Q keeps the same-day rule. Forward Air jo
 fixture: one December calendar where a February one stood. The collected grid was re-parsed from
 disk the same evening (backfill `cpwohusz`).
 
+**Done 2026-11-01 20:10 UTC.** `cpwohusz` parsed all 2,601 collected filers in 53 runs, all
+SUCCESS, with no SEC request: 23 more calendars replaced, 790 reports left out under the window,
+0 inverted periods. The query in this note returns 0 securities and 0 regimes. The 1,126 filers
+not yet collected meet the rule on their first pass.
+
 **Found 2026-11-01**, checking the CIK grid's re-parse after muffin-ingest#159.
 
 ## Why
@@ -62,6 +67,22 @@ Measured after the re-parse:
 The user picks an option. For 1 or 2: the rule ships with a fixture that makes the old and new rules
 disagree, and stage 2 is re-parsed with `--op-config sec_filer_facts.reparse=true` over the grid,
 with no SEC request. Then the query in this note returns 0 regimes.
+
+## The query
+
+Regimes holding a year that ends on a report filed within 14 days of its date:
+
+```sql
+with near as (
+  select f.security_id, f.report_date from market.security_filing f
+  where f.report_type in ('10-K', '20-F', '40-F', '10-KT') and f.source_code = 'sec-submissions'
+    and f.filing_date - f.report_date <= 14),
+bad as (
+  select distinct p.security_id, p.regime from market.fiscal_period p join near n
+    on n.security_id = p.security_id and p.period_end = n.report_date
+   and p.fiscal_period in ('FY', 'T'))
+select count(distinct security_id) securities, count(*) regimes from bad;
+```
 
 ## Context
 

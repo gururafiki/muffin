@@ -1742,9 +1742,10 @@ cut over one at a time.
   - [x] check 2026-10-14 — the 00:00 `daily_fx` run, the first on the new code: SUCCESS (`d77e17da`),
         10-13's 41 rates (EUR 1.11602), `reread_offered` 123, `refilled` 0,
         `provider_skipped_days: none`; 10-12 kept the late fill (EUR 1.12047).
-- [ ] 2026-10-31 — the cache hit-ratio alert fires on a quiet day with the cache working; a
+- [x] 2026-10-31 — the cache hit-ratio alert fires on a quiet day with the cache working; a
       canary that asks one URL twice is recommended
       ([note](docs/deferred/2026-10-31-the-cache-hit-ratio-alert-measures-the-traffic-mix.md)).
+      **Done 2026-11-01:** the hourly canary replaced it (muffin-deployment#483, deployed 20:27 UTC).
 - [ ] 2026-10-30 — the insider data-set schedule fails a run on every unpublished quarter and asks
       only the newest (fix: muffin-ingest#153, which also gives each tick its own run key; rolled
       2026-10-31 09:52 UTC; closes after Monday 11-02 11:45 asks 2026q2 and 2026q3 with no failed
@@ -2484,8 +2485,11 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
             `will_be_requested()` could not see them and each tick requested a scattered subset:
             ~420 runs queued for 5,512 subjects (cancelled by hand, replaced by one 28-run
             backfill). #83 evaluates it with its rungs. Roll outside the 00:00 lanes.
-      - [ ] **2026-09-26 — a deploy rolls the ingest image implicitly** —
+      - [x] **2026-09-26 — a deploy rolls the ingest image implicitly** —
             [docs/deferred/2026-09-26-a-deploy-rolls-the-ingest-image.md](docs/deferred/2026-09-26-a-deploy-rolls-the-ingest-image.md).
+            **Done 2026-11-01:** the deploy of muffin-deployment#483 (20:16-20:27 UTC) ran after
+            muffin-ingest#157's image became `:latest` (`e3a9c506…`, 20:18) and left all three
+            services on the pinned `f50680d4…`, containers started 19:26. The merge rule is retired.
             **Decided 2026-10-11: pin the digest** (Phase 4 decision 19): muffin-deployment#431,
             merged. The roll half is live: the 2026-10-11 09:56 roll pinned all three services to
             `muffin-ingest:latest@sha256:b4cc…`. The deploy half (Ansible keeps the pinned image)
@@ -3397,11 +3401,22 @@ names its provider** is now a guideline for every family.
             126 annual reports sit 1-14 days before their filing. **Decided (the user): a 14-day
             window**, for annual and transition reports only, since 10-Qs are filed fast (91
             month-end quarter ends at 8-14 days). muffin-ingest#160, rolled 19:26 with #161.
+            **Re-parsed the same evening** (`cpwohusz`, 53 runs, all SUCCESS, no SEC request):
+            all 2,601 collected filers, 23 more calendars replaced, 790 annual and transition
+            reports left out under the window, 0 inverted periods. The note's query returns 0
+            regimes.
+      - **Where the grid stands, 20:15 UTC:** batches ad and ae (`epqwgqnl`, `ezxlghot`) ran 10 of
+        10 each on #159, so 2,601 of 3,726 filers are collected. Batches af, ag and ah (1,126) run
+        from 11:00 on 11-02, the first to meet #160 on their first pass.
       - 2026-11-01 — the derivation failed twice at the 120 s timeout (14:17, 18:47). A `derive_ttm`
         call's cost is the rows it writes: a page of 1,000 took a whole grid batch's re-queue in one
         statement (237,035 rows in 222 s when it succeeded). muffin-ingest#161 pages it at 100.
         Ruled out first: page size with nothing to write (1,000 SEC filers, 27 s, rolled back) and
         lock waits (no `security_metric` writer in either window).
+        **Not yet tested under load.** The first derivation after the roll (19:47, 57 s) found 67
+        statements and 3 TTM securities and drained each in one page: a re-parse rewrites only
+        what changed, so it queued little. Tomorrow's batches are the first real re-queue; read
+        `ttm_pages`, `ttm_written` and `ttm_stopped` on the derivations that follow them.
       - [ ] 2026-11-01 — [the http-cache is bounded only by a 40 GB cap](docs/deferred/2026-11-01-the-http-cache-is-bounded-only-by-a-40-gb-cap.md).
             **Decided the same day (the user):** keep the 40 GB cap and `inactive` as they are, and
             keep the cache, and anything a node replacement would lose, on the block volume. Room
@@ -3417,13 +3432,16 @@ names its provider** is now a guideline for every family.
             Dagster containers untouched (StartedAt 10-31 09:51 before and after). The grid's second
             batch ended at 62.9% by the alert's measure. Projection: ~65% once the grid ends, ~70%
             once the insider history lands, then ~2.5 GB a week, so 80% in about a month.
-            muffin-ingest#157 waits for the grid, since a merge builds an image.
-      - [ ] 2026-11-01 — the hit-ratio alert becomes an hourly canary (the user chose option 1 of
+            muffin-ingest#157 merged 20:16 without a roll (skill docs only).
+      - [x] 2026-11-01 — the hit-ratio alert becomes an hourly canary (the user chose option 1 of
             [the note](docs/deferred/2026-10-31-the-cache-hit-ratio-alert-measures-the-traffic-mix.md)).
             Built in muffin-deployment#483: http-cache's own `/canary`, asked twice hourly from cron,
             the second must be a HIT; `muffin-cache-canary-missed` replaces the ratio rule through
             `deleteRules`. Tested on the node (MISS, HIT, HIT; with `proxy_no_cache 1`, MISS, MISS).
             Deploys after the grid, because the config change restarts http-cache.
+            **Deployed 2026-11-01 20:27 UTC**, between grid batches. Run once by hand at 20:28:
+            `first="MISS",second="HIT"`; Grafana holds the new rule and not the old one; nothing
+            firing after the restart. Cron runs it hourly at :17.
       - 2026-11-01 — a SEC 5xx keeps stopping the Form 4 run (the user; the spec's Step 8).
       - 2026-10-30: `sec_insider_datasets` stays STOPPED: it fails a run on every unpublished
         quarter ("A Dagster run failed" every Monday) and asks only the newest one.

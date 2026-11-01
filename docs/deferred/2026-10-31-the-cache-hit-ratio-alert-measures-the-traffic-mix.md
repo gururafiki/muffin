@@ -1,6 +1,11 @@
 # The cache hit-ratio alert measures the traffic mix, not the cache
 
-Recorded 2026-10-31. **Decided 2026-11-01 (the user): option 1, an hourly canary.** To build.
+Recorded 2026-10-31. **Decided 2026-11-01 (the user): option 1, an hourly canary.** Built in
+muffin-deployment#483 and **done 2026-11-01**: deployed 20:27 UTC. Run once by hand on the node at
+20:28, the installed script recorded `first="MISS",second="HIT"` and http-cache logged both
+requests. Grafana's rule table holds `muffin-cache-canary-missed` and no longer
+`muffin-cache-hit-ratio-collapsed` (`deleteRules` worked), and no rule was firing after the
+restart. Cron runs it hourly at :17.
 
 ## Why
 
