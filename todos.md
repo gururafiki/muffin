@@ -3383,6 +3383,14 @@ names its provider** is now a guideline for every family.
           (+720), which is bounded by `max_wal_size` and recycles from there. So the grid costs
           ~0.83 MB a filer, ~2.6 GB for the remaining 3,126, and projects to ~79%. The driver's
           79% stop still guards it, and the volume cleanup below takes ~11 points off.
+        - **Batch ac failed one run on a calendar defect, fixed the same evening.** Equinor's 20-Fs
+          of 2003-2018 carry their filing dates as report dates. They made a March calendar and a
+          25-day year whose H2 ended before it started, and `fiscal_period_check` failed the run's 50
+          filers. 233 annual reports in ~100 securities carry such a date; counting 10-Qs, 215 grid
+          filers do. muffin-ingest#159 (rolled 17:42) leaves those reports out and never writes an
+          inverted period. The 1,601 collected filers were replayed with `reparse` (`hhwxeeer`, no
+          SEC request; muffin-deployment#485 lets `backfill` pass op config), and the grid resumed
+          at batch ad. The spec's Step 8 has the detail.
       - [ ] 2026-11-01 — [the http-cache is bounded only by a 40 GB cap](docs/deferred/2026-11-01-the-http-cache-is-bounded-only-by-a-40-gb-cap.md).
             **Decided the same day (the user):** keep the 40 GB cap and `inactive` as they are, and
             keep the cache, and anything a node replacement would lose, on the block volume. Room

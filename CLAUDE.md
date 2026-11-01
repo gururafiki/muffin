@@ -5734,6 +5734,32 @@ muffin-deployment#482, muffin-ingest#157. The decisions are in
   `echo 1 > /sys/class/block/<dev>/device/rescan`, so the `block_storage` role's `resizefs: true`
   alone would have done nothing.
 
+### The CIK grid (2026-11-01)
+
+muffin-ingest#159, muffin-deployment#484, #485. Detail in the SEC spec's *Step 8*.
+
+- **A REPORT DATE EQUAL TO THE FILING DATE IS NOT A PERIOD END.** SEC fills `reportDate` with the
+  filing date where the filer gave none. Seventeen of Equinor's 20-Fs of 2003-2018 carry one, so the
+  calendar built a March year beside its real December one. Two of them, 25 days apart, made a
+  25-day year whose computed H2 ended before it started, and `fiscal_period_check` failed all 50
+  filers in that run. 233 annual reports in ~100 securities carry such a date, and 215 grid filers
+  do counting 10-Qs. The rule already caught a LONE one (Walmart's 2009 10-K) as a stray, which is
+  why a run of them went unseen. **A pure builder must never emit a row the table's check refuses:**
+  one bad filer failing 49 good ones is the batching lesson again, met in a database constraint.
+- **A REPLAY OVER FILES ON DISK CAN SUCCEED AND WRITE NOTHING.** The SEC filer lane's stage 2 parses
+  only filers whose raw the same run fetched. A stage-2-only backfill therefore reported
+  `filers_unchanged=1` and changed nothing; `--op-config sec_filer_facts.reparse=true` is what makes
+  it a replay (`dagster_gql.py backfill` takes op config since #485). Read the counters before
+  believing a replay.
+- **A RUN COUNT IS NOT A WORK COUNT FOR A SENSOR THAT REQUESTS CHUNKS.** `sec_filers_due` asks one
+  run per 50-filer chunk holding a due filer, and its 30-day floor is hash-spread, so ~120 filers a
+  day land in ~60 chunks. Its first tick counted 74 runs mid-grid and will count about as many after
+  it. Count the due filers with the module's own rule (`dagster_gql.py sensor-dry-run` gives the
+  runs, the module gives the filers).
+- **A MONITOR EXPIRES AT 30 MINUTES, AND A BATCH THAT TAKES 45 SITS UNREAD.** Batch ac ended at
+  ~15:00 and was read at 17:27: its "done" line arrived after the watch expired. Re-arm on every
+  expiry while a driver is still running.
+
 ## Running an OpenSandbox server locally
 
 - **`docker run -d -p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock opensandbox/server:latest`.**

@@ -1168,3 +1168,27 @@ if the projection stayed under the disk alert's 80%. Two chunks were measured.
   batch the driver stops if the alert's own measure passes 79% or the clock passes 19:15 UTC.
 - **It leaves ~1.5 GB of headroom**, which background growth uses in about two days. The
   http-cache retention change is due now, and the insider data sets (+~5 GB) wait for it.
+
+**The third batch found a calendar defect (2026-11-01, muffin-ingest#159).** Batch ac (`vrlcqdvv`)
+failed one of its ten runs in stage 2. `fiscal_period_check` refused Equinor's FY2015 H2, which ran
+from 2016-09-19 to 2016-04-12, and the refusal failed all 50 filers of the run.
+
+- **Cause.** SEC fills a filing's `reportDate` with its filing date where the filer gave no period.
+  Seventeen of Equinor's 20-Fs of 2003-2018 carry one. Read as year ends, they formed a March
+  calendar beside its December one. Two of them, 25 days apart in 2016, became a 25-day year, and
+  its computed halves came out inverted. The stray rule caught only a lone such date (Walmart's
+  2009 10-K).
+- **Reach, measured in production.** 233 annual reports in about 100 securities carry a report date
+  equal to their filing date (94 20-Fs over 30 securities, 118 10-Ks over 70, 21 40-Fs over 8),
+  filed 1995-2020. Counting 10-Qs too, 215 grid filers are affected, and 192 of them had already
+  been collected, spread over 32 of the 33 chunks done.
+- **Fix.** The calendar leaves out a report dated on its filing day (`report_dated_on_filing`). The
+  years it would give still come from facts. `_canonical` drops and counts any period that ends
+  before it starts (`inverted_period`), so one filer can no longer fail its run. Each guard is
+  mutation-proven, and Equinor joins the fiscal fixture, built from production's stored raw.
+- **Replay, no SEC request.** A stage-2 run parses only filers whose raw it fetched itself, so the
+  replay needs `--op-config sec_filer_facts.reparse=true` (muffin-deployment#485 lets `backfill`
+  pass it). Without it, Equinor's replay succeeded with `filers_unchanged=1` and wrote nothing.
+  With it: one December regime, 17 reports dropped, 0 inverted periods, and every statement row
+  labelled (FY2025 revenue $106.46bn). The 1,601 collected filers were replayed as backfill
+  `hhwxeeer`, and the grid resumed with batch ad (`epqwgqnl`, 17:48).
