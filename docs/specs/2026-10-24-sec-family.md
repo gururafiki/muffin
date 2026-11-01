@@ -1135,3 +1135,36 @@ The backfill ended at 20:52 UTC: 89 runs, all SUCCESS, 87 days (08-01..10-26).
 - **5xx still stops the run.** The decided rule ("a refusal stops the run") is kept: with the
   re-ask, a transient 503 costs one day's delay. Treating a 5xx as a transport failure instead
   would keep the run going, and is a decision for the user.
+
+### Step 8: the CIK grid, measured before it ran, 2026-11-01
+
+The grid waited for disk. The contract (muffin-deployment#479, dropping `security_price`, `prices`,
+`exchange_listing` and `exchange_cursor`) deployed at 12:11 UTC and took `/mnt/data` from 80% to
+75.3%. The rule was to run one 50-filer chunk, project the whole grid from it, and run the rest only
+if the projection stayed under the disk alert's 80%. Two chunks were measured.
+
+| | Chunk 0 (`yqzeebno`) | Chunk 1 (`dveoxolv`) |
+|---|---|---|
+| Grid positions | 0-49 | 50-99 |
+| Run | 121 s | 143 s |
+| Derivation after it | 36 s (81,258 metrics, 26,961 TTM) | 37 s |
+| Code-location peak memory | 1.27 GiB of 2.5 | 1.37 GiB |
+| SEC calls / bytes | 171 / 212 MB, `throttled 0` | — |
+| Raw companyfacts + submissions | +15.8 + 3.6 MB | +16.3 + 6.4 MB |
+| `postgres` database | +11 MB | +14 MB |
+| `df` used | +103 MB over 27 min | +59 MB over 4.5 min |
+
+- **The grid stores nothing in http-cache.** During chunk 1, every `data.sec.gov` request was a
+  `BYPASS` (228). The cache grew 17 MB in the same minutes from the edge's segment handler, which
+  reads archive index files through it. The cache's growth is background, not the grid's.
+- **A chunk costs ~34-40 MB:** raw plus the database. Chunk 0's `df` delta of 103 MB also covered
+  27 minutes of background growth.
+- **The alert's measure is not `df`'s `Use%`.** `muffin-disk-filling` computes
+  `100 - avail / size * 100`, and `size` includes the ext4 reserved blocks that `df` leaves out of
+  `used + avail`. So it read 75.3% where `df` said 74%, and the headroom to 80% was 4.7 GB, not 5.8.
+- **Projection:** 73 more chunks at ~40 MB is ~2.9 GB. Background growth (~0.8 GB a day,
+  Prometheus 10-30..11-01) adds ~0.2 GB over a ~4-hour drain. The total is ~78.5%, so the rest runs.
+- **The remainder is driven in 500-filer batches** (eight backfills of ten runs each). Before each
+  batch the driver stops if the alert's own measure passes 79% or the clock passes 19:15 UTC.
+- **It leaves ~1.5 GB of headroom**, which background growth uses in about two days. The
+  http-cache retention change is due now, and the insider data sets (+~5 GB) wait for it.

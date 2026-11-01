@@ -3353,6 +3353,26 @@ names its provider** is now a guideline for every family.
         fires with the cache shown working:
         [note](docs/deferred/2026-10-31-the-cache-hit-ratio-alert-measures-the-traffic-mix.md).
         `muffin-dagster-run-failed` was the run the 10-30 18:48 roll killed and failed.
+      - **2026-11-01: the CIK grid, measured and projected.** The contract (#479) and #480 deployed
+        at 12:11 (`/mnt/data` 80% -> 75.3%). Two 50-filer chunks:
+        - **Chunk 0** (`yqzeebno`, run 12:23): 121 s, peak 1.27 GiB of 2.5, 171 SEC calls,
+          212 MB fetched, `throttled 0`. It wrote 25,542 filings, 10,572 statements and
+          7,587 calendar periods. Its derivation took 36 s (81,258 metrics, 26,961 TTM).
+        - **Chunk 1** (`dveoxolv`, 12:53): 143 s, peak 1.37 GiB, and a 37 s derivation.
+        - **Disk per chunk:** raw +19-23 MB and the database +11-14 MB, so ~34-40 MB.
+          Chunk 0's `df` showed +103 MB, but that delta spanned 27 minutes of background growth.
+          During chunk 1 the grid itself stored nothing in http-cache (228 `BYPASS` on
+          `sec-data`); the cache's +17 MB was the edge's segment handler.
+        - **The disk alert's measure is not `df`'s `Use%`.** It divides free space by the full
+          size, which includes the reserved blocks, so it read 75.3% where `df` said 74%. Headroom
+          to 80% was 4.7 GB, not 5.8.
+        - **Projection:** 73 more chunks at ~40 MB is ~2.9 GB, and background growth (~0.8 GB a
+          day, Prometheus 10-30..11-01) adds ~0.2 GB over the drain, so ~78.5%. That is under 80%,
+          so the rest runs: 500-filer batches from 13:00, stopping before a batch if the alert's
+          own measure passes 79% or the clock passes 19:15 UTC.
+        - **What it leaves:** ~1.5 GB of headroom, which background growth uses in about two days.
+          So the http-cache retention change (`inactive=365d`) is due within days. The insider
+          data sets (+~5 GB) cannot run until it lands.
       - 2026-10-30: `sec_insider_datasets` stays STOPPED: it fails a run on every unpublished
         quarter ("A Dagster run failed" every Monday) and asks only the newest one.
         [Note](docs/deferred/2026-10-30-the-insider-data-set-schedule-fails-until-sec-publishes.md).
