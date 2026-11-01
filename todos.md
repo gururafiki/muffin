@@ -3391,6 +3391,12 @@ names its provider** is now a guideline for every family.
           inverted period. The 1,601 collected filers were replayed with `reparse` (`hhwxeeer`, no
           SEC request; muffin-deployment#485 lets `backfill` pass op config), and the grid resumed
           at batch ad. The spec's Step 8 has the detail.
+          **The re-parse (`hhwxeeer`, 33 runs) parsed all 1,601:** 172 calendars replaced, 1,415
+          unchanged, 640 same-day reports dropped (annual and quarterly), 0 inverted periods.
+      - [ ] 2026-11-01 — [a report dated days before its filing is not a year end either](docs/deferred/2026-11-01-a-report-dated-days-before-its-filing-is-not-a-year-end.md).
+            126 annual reports sit 1-14 days before their filing. Their regimes (21 securities, all
+            ending 2003-2014) label one statement, with the right label. Options for the user: a
+            14-day window, the year end from the accession's facts, or leave it.
       - [ ] 2026-11-01 — [the http-cache is bounded only by a 40 GB cap](docs/deferred/2026-11-01-the-http-cache-is-bounded-only-by-a-40-gb-cap.md).
             **Decided the same day (the user):** keep the 40 GB cap and `inactive` as they are, and
             keep the cache, and anything a node replacement would lose, on the block volume. Room
