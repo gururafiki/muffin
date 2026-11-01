@@ -3353,6 +3353,11 @@ names its provider** is now a guideline for every family.
         fires with the cache shown working:
         [note](docs/deferred/2026-10-31-the-cache-hit-ratio-alert-measures-the-traffic-mix.md).
         `muffin-dagster-run-failed` was the run the 10-30 18:48 roll killed and failed.
+      - **`sec_daily_index` since the #154 roll, read 2026-11-01:** both 11:00 ticks SUCCESS, each
+        asking only yesterday. 10-31 asked 10-30: 244 Form 4s named and answered, 503 trades inserted,
+        `collapsed` 0, 76 s. 11-01 asked 10-31, a Saturday: the weekend marker, no request, 23 s.
+        `every_business_day_has_an_index` and `form4_days_are_complete` passed both times
+        (`short_days=none`).
       - **2026-11-01: the CIK grid, measured and projected.** The contract (#479) and #480 deployed
         at 12:11 (`/mnt/data` 80% -> 75.3%). Two 50-filer chunks:
         - **Chunk 0** (`yqzeebno`, run 12:23): 121 s, peak 1.27 GiB of 2.5, 171 SEC calls,
