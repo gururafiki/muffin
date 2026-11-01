@@ -1,5 +1,12 @@
 # A report dated days before its filing is not a year end either
 
+**Decided 2026-11-01 (the user): option 1. Built in muffin-ingest#160, rolled 19:26 UTC.** An annual
+or transition report dated 14 days or less before its filing, or after it, names no year end. Not
+for a 10-Q: measured before building, quarterly reports are filed fast (91 month-end quarter ends
+at 8-14 days, 1,647 at 15-21), so a 10-Q keeps the same-day rule. Forward Air joins the fiscal
+fixture: one December calendar where a February one stood. The collected grid was re-parsed from
+disk the same evening (backfill `cpwohusz`).
+
 **Found 2026-11-01**, checking the CIK grid's re-parse after muffin-ingest#159.
 
 ## Why

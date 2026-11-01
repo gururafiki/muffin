@@ -3393,10 +3393,15 @@ names its provider** is now a guideline for every family.
           at batch ad. The spec's Step 8 has the detail.
           **The re-parse (`hhwxeeer`, 33 runs) parsed all 1,601:** 172 calendars replaced, 1,415
           unchanged, 640 same-day reports dropped (annual and quarterly), 0 inverted periods.
-      - [ ] 2026-11-01 — [a report dated days before its filing is not a year end either](docs/deferred/2026-11-01-a-report-dated-days-before-its-filing-is-not-a-year-end.md).
-            126 annual reports sit 1-14 days before their filing. Their regimes (21 securities, all
-            ending 2003-2014) label one statement, with the right label. Options for the user: a
-            14-day window, the year end from the accession's facts, or leave it.
+      - [x] 2026-11-01 — [a report dated days before its filing is not a year end either](docs/deferred/2026-11-01-a-report-dated-days-before-its-filing-is-not-a-year-end.md).
+            126 annual reports sit 1-14 days before their filing. **Decided (the user): a 14-day
+            window**, for annual and transition reports only, since 10-Qs are filed fast (91
+            month-end quarter ends at 8-14 days). muffin-ingest#160, rolled 19:26 with #161.
+      - 2026-11-01 — the derivation failed twice at the 120 s timeout (14:17, 18:47). A `derive_ttm`
+        call's cost is the rows it writes: a page of 1,000 took a whole grid batch's re-queue in one
+        statement (237,035 rows in 222 s when it succeeded). muffin-ingest#161 pages it at 100.
+        Ruled out first: page size with nothing to write (1,000 SEC filers, 27 s, rolled back) and
+        lock waits (no `security_metric` writer in either window).
       - [ ] 2026-11-01 — [the http-cache is bounded only by a 40 GB cap](docs/deferred/2026-11-01-the-http-cache-is-bounded-only-by-a-40-gb-cap.md).
             **Decided the same day (the user):** keep the 40 GB cap and `inactive` as they are, and
             keep the cache, and anything a node replacement would lose, on the block volume. Room

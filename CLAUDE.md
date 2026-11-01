@@ -5736,7 +5736,7 @@ muffin-deployment#482, muffin-ingest#157. The decisions are in
 
 ### The CIK grid (2026-11-01)
 
-muffin-ingest#159, muffin-deployment#484, #485. Detail in the SEC spec's *Step 8*.
+muffin-ingest#159-#161, muffin-deployment#484, #485. Detail in the SEC spec's *Step 8*.
 
 - **A REPORT DATE EQUAL TO THE FILING DATE IS NOT A PERIOD END.** SEC fills `reportDate` with the
   filing date where the filer gave none. Seventeen of Equinor's 20-Fs of 2003-2018 carry one, so the
@@ -5756,6 +5756,18 @@ muffin-ingest#159, muffin-deployment#484, #485. Detail in the SEC spec's *Step 8
   day land in ~60 chunks. Its first tick counted 74 runs mid-grid and will count about as many after
   it. Count the due filers with the module's own rule (`dagster_gql.py sensor-dry-run` gives the
   runs, the module gives the filers).
+- **A REPORT DATED DAYS BEFORE ITS FILING IS NOT A YEAR END EITHER, BUT A QUARTER CAN BE.** Some
+  filings carry a signing date: Forward Air's 10-Ks for 2007 and 2008 are dated 8 and 2 days before
+  filing and made a February calendar. Over 55,000 annual reports, real month ends begin at 15-21
+  days, so an annual report within 14 days names no year end (#160). The same window on 10-Qs would
+  have dropped real quarters: 91 month-end quarter ends sit at 8-14 days. Measure each population
+  before carrying a threshold from one to the other.
+- **A DERIVATION'S COST IS THE ROWS IT WRITES, SO A PAGE SIZED BY ENTITIES DRIFTS AS HISTORIES
+  GROW.** `derive_ttm` took 1,000 securities a call, measured at ~5 s when most held five Yahoo
+  quarters. A SEC filer from the grid writes ~480 TTM rows, so one call wrote a whole batch's
+  re-queue (237,035 rows in 222 s) and twice passed `ingest_rw`'s 120 s timeout. Timing a page with
+  nothing to write (27 s for 1,000, rolled back) cannot show it; the runs' own `ttm_written`
+  metadata did. Now 100 (#161).
 - **A MONITOR EXPIRES AT 30 MINUTES, AND A BATCH THAT TAKES 45 SITS UNREAD.** Batch ac ended at
   ~15:00 and was read at 17:27: its "done" line arrived after the watch expired. Re-arm on every
   expiry while a driver is still running.
