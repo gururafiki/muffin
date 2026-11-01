@@ -5700,7 +5700,39 @@ muffin-ingest#148, #149. Spec: `docs/specs/2026-10-24-sec-family.md`, *Step 6* a
   cache hit-ratio alert fired while a repeated SEC request logged MISS then HIT. Lanes that ask once,
   bypass, or are cache-off leave the ratio to whoever repeats a question within a TTL, and on a quiet
   day nobody does ([note](docs/deferred/2026-10-31-the-cache-hit-ratio-alert-measures-the-traffic-mix.md)).
-  **Before trusting a ratio alert, test the thing it guards directly.**
+  **Before trusting a ratio alert, test the thing it guards directly.** It is now an hourly canary
+  (muffin-deployment#483): http-cache's own `/canary`, asked twice, the second must be a HIT.
+
+### Making room on /mnt/data (2026-11-01)
+
+muffin-deployment#482, muffin-ingest#157. The decisions are in
+[the note](docs/deferred/2026-11-01-the-http-cache-is-bounded-only-by-a-40-gb-cap.md).
+
+- **AN IMAGE THAT DECLARES `VOLUME` LEAVES ONE ANONYMOUS VOLUME PER CONTAINER, AND THEY PILE UP.**
+  152 volumes that no container used held **11.1 GB** of `/mnt/data`. Two causes:
+  - my own schema replays on the node removed `postgres:17-alpine` with `docker rm -f`, which keeps
+    the volume (84 of them, 6.0 GB);
+  - every restart of Firecrawl's `rabbitmq:3` got a fresh one (30, 5.1 GB).
+
+  `docker rm -fv` for anything throwaway. A service whose image declares `VOLUME` gets a named
+  volume, and RabbitMQ also needs a fixed `hostname`, because it names its data directory after the
+  node and a Swarm task's hostname is its container id. `maintenance.yml prune-volumes` selects
+  `dangling=true` plus the `com.docker.volume.anonymous` label, so a named volume can never go.
+- **THE DISK ALERT IS NOT `df`'s `Use%`.** It computes `100 - avail / size * 100`, and `size` includes
+  ext4's reserved blocks, so it reads about 1.3 points above `df`: 75.3% where `df` said 74%.
+  Project headroom against the alert's own formula.
+- **A WRITE-HEAVY BACKFILL GROWS POSTGRES WAL UP TO `max_wal_size` FIRST.** The first 500-filer
+  batch moved the disk 1.19 points, three times the per-chunk estimate: raw +181 MB, the database
+  +233 MB, and WAL 304 → 1,024 MB. The WAL is bounded and recycles, so it is a one-off, not a rate.
+  Split a measured disk delta by component before projecting from it.
+- **THE FREE BLOCK ALLOWANCE IS REGIONAL AND SHARED WITH THE BOOT VOLUME.** OCI's
+  `total-free-storage-gb-regional` is 200: 95 GB boot plus 105 GB data uses all of it. Read it with
+  `oci limits resource-availability get --service-name block-storage --limit-name
+  total-free-storage-gb-regional` (the CLI and `~/.oci/config` are on this machine). Paid storage
+  is ~$0.0425 per GB-month Balanced, and a volume never shrinks.
+- **A GROWN BLOCK VOLUME NEEDS A RESCAN BEFORE `resizefs`.** The kernel keeps the old size until
+  `echo 1 > /sys/class/block/<dev>/device/rescan`, so the `block_storage` role's `resizefs: true`
+  alone would have done nothing.
 
 ## Running an OpenSandbox server locally
 

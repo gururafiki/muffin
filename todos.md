@@ -3391,12 +3391,20 @@ names its provider** is now a guideline for every family.
             data volume to 105 GB, the last of the free 200 GB. Buying more was offered and declined
             for now. muffin-deployment#482 (prune-volumes action, RabbitMQ named volume, rescan
             before resize, 105 GB) and muffin-ingest#157 (throwaway Postgres removed with `-v`).
-            Next: merge, run `prune-volumes confirm=prune`, deploy (plan first). After both, ~64%
-            once the grid ends and ~69% once the insider history lands, then ~2.5 GB a week, so
-            80% in about a month.
+            **Done the same afternoon.** #482 merged 13:34; `prune-volumes confirm=prune` removed all
+            152 (11,166 MB), `/mnt/data` 76% -> 64% by `df`; the deploy (plan: the volume `100 -> 105`
+            in place, 0 to destroy) grew the filesystem online to 102.8 GiB, restarted RabbitMQ onto
+            `muffin_firecrawl-rabbitmq-data` with hostname `firecrawl-rabbitmq`, and left the three
+            Dagster containers untouched (StartedAt 10-31 09:51 before and after). The grid's second
+            batch ended at 62.9% by the alert's measure. Projection: ~65% once the grid ends, ~70%
+            once the insider history lands, then ~2.5 GB a week, so 80% in about a month.
+            muffin-ingest#157 waits for the grid, since a merge builds an image.
       - [ ] 2026-11-01 — the hit-ratio alert becomes an hourly canary (the user chose option 1 of
             [the note](docs/deferred/2026-10-31-the-cache-hit-ratio-alert-measures-the-traffic-mix.md)).
-            To build in muffin-deployment.
+            Built in muffin-deployment#483: http-cache's own `/canary`, asked twice hourly from cron,
+            the second must be a HIT; `muffin-cache-canary-missed` replaces the ratio rule through
+            `deleteRules`. Tested on the node (MISS, HIT, HIT; with `proxy_no_cache 1`, MISS, MISS).
+            Deploys after the grid, because the config change restarts http-cache.
       - 2026-11-01 — a SEC 5xx keeps stopping the Form 4 run (the user; the spec's Step 8).
       - 2026-10-30: `sec_insider_datasets` stays STOPPED: it fails a run on every unpublished
         quarter ("A Dagster run failed" every Monday) and asks only the newest one.
