@@ -2604,13 +2604,15 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
                         (rolled 2026-10-26 18:33). Re-filed from raw (`yhohgrfk`): 1,424 Taiwanese lines
                         now `.TWO`, 1,097 `.TW`. 103 tracked securities held a dead `.TW` for a TPEx
                         line; their symbology re-derive from raw is backfill `dwbfiwqw`.
-                        - [ ] count the 103 on `.TWO` after `dwbfiwqw`, and their first price night.
+                        - [x] count the 103 on `.TWO` after `dwbfiwqw`, and their first price night.
                               **2026-10-27:** all 103 are on `.TWO`. The 10-27 night reached 36 of
                               them, and all 36 now hold histories (first bars 2007-12-27 to
                               2021-05-25, 3,959 bars on average). The other 67 come with the
                               rotation (~5 nights). No Taiwanese line has a bar for Monday 10-26 (443
                               on 10-23), which looks like a holiday (unconfirmed). Check again
                               2026-11-02: 103 of 103 with bars.
+                              **Checked 2026-11-02: 103 of 103 `.TWO` lines hold bars**, all
+                              within the last week (newest bar 10-28 to 10-30).
                         **Decided 2026-10-25 (the user):** a labelled-venue table, `market.exchange_label`
                         (`TT` / `Taipei Stock Exchange` → `.TWO`), then a re-derive from raw. Was: 100 of the 101 dead `.TW` symbols are TPEx lines, which Yahoo
                         spells `.TWO`; OpenFIGI files both markets under `TT`, but its answer's
@@ -2659,9 +2661,24 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
                   **Checked 2026-10-30 (late):** all nine hold histories through 10-27 (444 bars for
                   3ALOGICS 177900.KQ to 6,100 for 3S Korea 060310.KQ) and 7-9 return periods each,
                   fewer only where the listing is under five years old.
-            - [ ] **2026-11-02 after 06:17 UTC:** the first scheduled wave: promoted ≤ 500, outcomes,
+            - [x] **2026-11-02 after 06:17 UTC:** the first scheduled wave: promoted ≤ 500, outcomes,
                   `control_priced`, and `promotion_stays_within_the_sweep`. Then each Monday: the
                   price night's `throttled 0` and the company lane's end time.
+                  **Checked 2026-11-02:** probe `8df6f8b0` (06:17, 2,038 s) made 1,444 calls (1,001
+                  answered + 443 respelled), `throttled`/`transport`/`unasked` 0. Wave `70f24aa6`
+                  (06:52, 16 s): **promoted 500** of 1,000 asked, outcomes priced 946 (423 under a
+                  second spelling), absent 44, not_equity 8, empty 2 (sum 1,000); by venue JT 310,
+                  KS 183, SW 7; `control_priced` true; 8,500 candidates left;
+                  `promotion_stays_within_the_sweep` passed (5 price-pass nights of 7, 1,764
+                  companies a day). Price night: 101 runs, ended 02:19, `throttled` 0, outcomes sum
+                  to the 2,500 requested. **Company lane: 04:50-06:17**, see the next item.
+            - [ ] **2026-11-02 — the company lane now starts ~04:50, not 03:30.** Since 10-27 the
+                  03:00 stale-miss tick (the 30-day cycle from #102) launches 170-205 one-subject
+                  symbology runs, ~30 s each, which hold `sql` from 03:01 to 04:35-04:49. The lane
+                  ends 05:49-06:19 instead of ~04:45, and on Mondays the promotion probe follows it
+                  (06:17-06:51 today). Nothing fails. The run windows in `muffin-deploy` still say
+                  03:30-~06:00; decide whether to give `yahoo_companies` a `dagster/priority` above
+                  the re-ask, or accept the later window and update the skill.
             - [ ] the 3,330 classes with a line abroad (mostly London's) wait for a second rule.
             **Decided 2026-10-25 (the user):** open tier 1 except the US (AU, CA, HK,
             JP, JT, KS, LN, SW), at most 500 a week, checking each week that the price night and the
@@ -3417,6 +3434,32 @@ names its provider** is now a guideline for every family.
         statements and 3 TTM securities and drained each in one page: a re-parse rewrites only
         what changed, so it queued little. Tomorrow's batches are the first real re-queue; read
         `ttm_pages`, `ttm_written` and `ttm_stopped` on the derivations that follow them.
+      - **Check-in 2026-11-02 (read 08:50-11:20 UTC):**
+        - `sec_daily_index`: both ticks since the last check SUCCESS in 23 s, each a weekend marker
+          with no request (10-31 on 11-01, 11-01 on 11-02); `every_business_day_has_an_index` and
+          `form4_days_are_complete` passed (`short_days=none`). The insider data-set tick is 11:45.
+        - Derivation: all 31 `derived_security_metrics` runs since the 19:26 roll SUCCESS. The one
+          after the company lane (created 03:47) took 187 s: 43,934 statements into 299,182
+          metrics in 22 pages, then 1,638 TTM securities into 19,452 rows in 17 pages of 100, both
+          `drained`. A first, modest test of #161; the grid batches (~240,000 TTM rows each) are
+          the real one.
+        - The company lane's calendar step (`yahoo_fiscal_calendar`) ran in all 18 runs over 1,764
+          securities: 1,619 calendars from Yahoo, 129 kept their SEC calendar, 16 had no annual
+          periods, 0 inverted, 43,014 statements labelled; 54 checks passed.
+        - The grid stands at 2,601 of 3,726; batches af-ah start with the 11:07 check-in.
+          `sec_filers_due` is not started.
+      - [ ] **2026-11-02 — the edge's segment queues time out on the grid's filings** (alert
+            `muffin-resource-stalled`): `security-kr-segments` and `security-in-segments` have failed
+            every run since 11-01 13:24 and 14:32. All three queues are EMPTY (19.5 s, 13.7 s and
+            2.5 s for 0 rows): the grid's growth of `security_filing` flipped the planner to a
+            nested-loop join over `fund_holding_current` (260 M rows filtered). Recommended: retire
+            the two parsers until Phase 6.
+            [Note](docs/deferred/2026-11-02-the-segment-queues-time-out-on-the-grid-s-filings.md).
+      - [ ] **2026-11-02 — openbb-api at 85% of its 1 GiB limit** (alert
+            `muffin-container-near-oom`): 800-820 MiB for days, back to 810 within six hours of its
+            10-31 restart, and 870-874 since 11-01 afternoon. A plateau, not a leak; the service was
+            OOM-killed at this limit once before. Options: raise the limit (the node has room), or
+            accept the alert as an early warning and leave it.
       - [ ] 2026-11-01 — [the http-cache is bounded only by a 40 GB cap](docs/deferred/2026-11-01-the-http-cache-is-bounded-only-by-a-40-gb-cap.md).
             **Decided the same day (the user):** keep the 40 GB cap and `inactive` as they are, and
             keep the cache, and anything a node replacement would lose, on the block volume. Room
