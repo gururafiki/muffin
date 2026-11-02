@@ -1235,3 +1235,24 @@ in 928 s. `/mnt/data` went from 63.95% to 64.30% by the alert's measure.
   takes 19.5 s against the 8 s PostgREST ceiling; `pending_in_segments` takes 13.7 s. Both queues
   are empty, and both resources have failed every run since 11-01 afternoon
   ([note](../deferred/2026-11-02-the-segment-queues-time-out-on-the-grid-s-filings.md)).
+
+### Step 7b: `sec_filers_due` on (muffin-ingest#158), 2026-11-02
+
+Rebased onto main, merged at 17:20 UTC and rolled at 17:22 with nothing in flight. All three services
+moved from `f50680d4…` to `b688a6d2…` and are pinned.
+
+- **The first tick crossed the roll.** The new code location declared the sensor RUNNING while the
+  old daemon was still up, so the old daemon began the tick at 17:21:45 and launched one run before
+  it was replaced. The new daemon resumed the tick at its next interval and launched the other 60
+  from 17:36 to 17:48, about 12 s a run. The run keys kept it from relaunching the first. The tick
+  reads `STARTED` until its last run is launched.
+- **61 of 61 runs succeeded, 17:22-18:25, 41 s each on average, and none asked SEC anything.** All
+  3,026 filers in those chunks were `not_due` for both documents (0 calls, 0 bytes, every partition
+  `Unchanged`), and all four checks passed in every run. The sensor makes a filer due on its floor
+  day; the asset asks only when the stored answer is older than its threshold (30 days for
+  submissions, 90 for company facts), and the grid had collected every filer in the previous three
+  days.
+- **So for about a month the daily floor costs ~40 minutes of `sec` and `sql` and fetches
+  nothing.** It ends by itself. From about 12-01, each filer passes 30 days and is asked on its
+  first floor day after that. The refresh therefore spreads over the month instead of arriving as
+  one wave. Filers named in a new index day are still asked at once.

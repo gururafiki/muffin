@@ -5774,6 +5774,22 @@ muffin-ingest#159-#161, muffin-deployment#484, #485. Detail in the SEC spec's *S
 - **A MONITOR EXPIRES AT 30 MINUTES, AND A BATCH THAT TAKES 45 SITS UNREAD.** Batch ac ended at
   ~15:00 and was read at 17:27: its "done" line arrived after the watch expired. Re-arm on every
   expiry while a driver is still running.
+- **A TABLE ONE LANE GROWS CAN BREAK A QUEUE IT DOES NOT WRITE.** The grid took `security_filing`
+  from ~250,000 rows to 1,175,000 and wrote no DART or NSE filing. Even so, the planner's estimate
+  for the 6,518 DART filings fell to 15, and `pending_kr_segments` switched to a nested-loop join
+  over fund holdings: 260 M rows filtered, 19.5 s against the 8 s PostgREST ceiling, for an EMPTY
+  queue. Two edge resources failed every run from that afternoon. Before a backfill multiplies a
+  shared table, time every view that reads it.
+- **A SENSOR'S FIRST TICK CAN START IN THE DAEMON THE ROLL IS REPLACING.** The roll updates the code
+  location first, which declared `sec_filers_due` RUNNING, so the OLD daemon began the tick and
+  launched one run before it was replaced. The new daemon resumed that tick at its next interval
+  and launched the other 60; the run keys stopped duplicates. Until then the tick reads `STARTED`,
+  which looks stuck. Each run took ~12 s to launch, so 61 runs took 12 minutes.
+- **A FLOOR VISIT IS NOT A FETCH.** The sensor makes a filer due on its hash-spread floor day, and
+  the asset decides by the stored answer's age (30 days for submissions, 90 for company facts). Right
+  after a full backfill, the first tick's 61 runs asked SEC nothing (3,026 `not_due`, 41 s each).
+  Count what the asset will FETCH, not only what the sensor requests: the dry run and the module's
+  due rule both said 115 filers, and the honest number was 0.
 
 ## Running an OpenSandbox server locally
 

@@ -3470,6 +3470,15 @@ names its provider** is now a guideline for every family.
         17:21:45 and launched one run before the roll replaced it; the new daemon resumed the tick
         at its next interval and launched the other 60 from 17:36 to 17:48, ~12 s a run. Run keys
         kept it from relaunching the first: 61 runs in all.
+        **61 of 61 SUCCESS (17:22-18:25, 41 s each), and none asked SEC anything:** all 3,026
+        filers in the chunks were `not_due` (0 calls), every partition `Unchanged`, all four checks
+        passed. The floor visits a filer, but the asset asks only when the stored answer is past 30
+        days (submissions) or 90 (company facts), and the grid collected everyone in the last three
+        days. So until ~12-01 the daily floor costs ~40 min of `sec`/`sql` for nothing, then turns
+        into the refresh itself, spread over the month. Filers named in a new index day are asked
+        at once.
+        - [ ] 2026-11-03 after ~11:15 UTC: the first tick on a weekday index (11-02): the filers it
+              names asked and answered, `throttled 0`, outcomes summing to `requested`.
       - [ ] **2026-11-02 — the edge's segment queues time out on the grid's filings** (alert
             `muffin-resource-stalled`): `security-kr-segments` and `security-in-segments` have failed
             every run since 11-01 13:24 and 14:32. All three queues are EMPTY (19.5 s, 13.7 s and
