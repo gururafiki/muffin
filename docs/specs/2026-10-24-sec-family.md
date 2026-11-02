@@ -687,18 +687,31 @@ Later, and optional: show "FY2026 Q2" instead of a date.
 
 ## Deferred notes
 
-To write as the stages land:
-- `the-sec-family-leaves-columns-behind`: step 11's list, drop dates, proving queries;
-- `a-quarter-is-derived-from-year-to-date-facts`: Q2/Q3 cash flow by year-to-date differencing, safe
-  once the calendar exists;
-- `two-sec-clients`: N-PORT and the CIK map still on plain httpx;
-- `the-segment-queue-reads-the-regulator`: Phase 6, `pending_segments` on `disclosure_source_code`;
-  whether 10-KT and amendments carry segments;
-- `the-sec-lane-materialises-every-visited-filer`: the event-log growth;
-- `an-amended-form-4-restates-the-original`;
-- `a-yahoo-calendar-is-observed-not-stated`.
+Written 2026-11-02, each with a dated line in `todos.md`:
+- the contract's list, drop dates and proving query: [the retired families leave columns
+  behind](../deferred/2026-09-30-the-retired-families-leave-columns-behind.md), section *the SEC
+  family* (planned as `the-sec-family-leaves-columns-behind`; one list of things to drop is easier to
+  keep than two);
+- [a quarter is derived from year-to-date facts](../deferred/2026-11-02-a-quarter-is-derived-from-year-to-date-facts.md);
+- [two SEC clients](../deferred/2026-11-02-two-sec-clients.md);
+- [the segment queue reads the regulator](../deferred/2026-11-02-the-segment-queue-reads-the-regulator.md)
+  (Phase 6);
+- [the SEC lane materialises every filer it visits](../deferred/2026-11-02-the-sec-lane-materialises-every-visited-filer.md);
+- [an amended Form 4 restates the original](../deferred/2026-11-02-an-amended-form-4-restates-the-original.md);
+- [a Yahoo calendar is observed, not stated](../deferred/2026-11-02-a-yahoo-calendar-is-observed-not-stated.md);
+- [the SEC history backfills and the label drain](../deferred/2026-11-02-the-sec-history-backfills-and-the-label-drain.md)
+  (what step 8 leaves).
 
-Plus the two Phase 4 notes this spec closes, updated with their "done when" evidence. The
+Also written during the phase: [an unknown currency stalled the
+metrics](../deferred/2026-10-24-an-unknown-currency-stalled-the-metrics.md) (the `TRL` stall),
+[a report dated days before its filing is not a year
+end](../deferred/2026-11-01-a-report-dated-days-before-its-filing-is-not-a-year-end.md) and [the
+segment queues time out on the grid's filings](../deferred/2026-11-02-the-segment-queues-time-out-on-the-grid-s-filings.md).
+
+The two Phase 4 notes this spec closes, [the statement key and fiscal
+periods](../deferred/2026-10-10-the-statement-key-and-fiscal-periods.md) and [a fiscal-year change
+reads as a repeated year](../deferred/2026-10-10-a-fiscal-year-change-reads-as-a-repeated-year.md),
+close at step 11 (the second when `check_one_period_one_point` is re-keyed on fiscal labels). The
 `security-segments` TNDM stall moves to Phase 6 with segments.
 
 ## As built

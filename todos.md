@@ -2681,6 +2681,7 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
                   (06:17-06:51 today). Nothing fails. The run windows in `muffin-deploy` still say
                   03:30-~06:00; decide whether to give `yahoo_companies` a `dagster/priority` above
                   the re-ask, or accept the later window and update the skill.
+                  [Note](docs/deferred/2026-11-02-the-company-lane-waits-for-the-stale-miss-re-ask.md).
             - [ ] the 3,330 classes with a line abroad (mostly London's) wait for a second rule.
             **Decided 2026-10-25 (the user):** open tier 1 except the US (AU, CA, HK,
             JP, JT, KS, LN, SW), at most 500 a week, checking each week that the price night and the
@@ -3310,7 +3311,8 @@ names its provider** is now a guideline for every family.
         from SEC inside stage 2 and rewrites names and values. Measured (spec *Step 3*): every insider
         quarter since 2006 is ~8 M rows; `xbrl_concept` lacks several lines in one taxonomy, so parity
         in step 6 will list `sec` rows company facts do not replace.
-- [ ] 4. `defs/sec/` and `yahoo_fiscal_calendar`, lanes STOPPED except `new_sec_filers`.
+- [x] 4. `defs/sec/` and `yahoo_fiscal_calendar`, lanes STOPPED except `new_sec_filers`. **Done
+      2026-10-29** (#145-#147 rolled 21:54 UTC; the grid's keys filled by hand in step 6).
       - 2026-10-28: the schema half is muffin-deployment#475 (`xbrl_fact_concept`, decision 14 by the
         user on 2026-10-27; `sec-xbrl` rows in `metric_source_field`; `disclosure_source_code`;
         `check_derived_metrics` sampled per source). Replayed on the node and rolled back on
@@ -3337,8 +3339,16 @@ names its provider** is now a guideline for every family.
         FX and indices, 218 asset-job runs (derivation, symbology rungs), the company lane (18 runs,
         03:30-06:09), 8 heartbeats. **market-verify's scheduled run at 10:19 UTC passed**, its first
         scheduled pass since at least 10-23.
-- [ ] 7. Schedules and `sec_filers_due` on. 8. Backfills: the CIK grid, every insider quarter since
-      2006, Form 4 days since 04-01 (the `sec_days` grid's start), the label and derive drain.
+- [ ] 7. Schedules and `sec_filers_due` on. **7 is done** (7a 2026-10-30, 7b 2026-11-02). 8. Backfills:
+      the CIK grid (**done** 11-02), every insider quarter since 2006, Form 4 days since 04-01 (the
+      `sec_days` grid's start), the label and derive drain. **What step 8 leaves, and the order:**
+      [note](docs/deferred/2026-11-02-the-sec-history-backfills-and-the-label-drain.md).
+      - [ ] Next 11:00-20:00 UTC window: the insider data-set history, 2006q1 onward, oldest first,
+            stopping if the disk alert's measure passes 76% (~5 GB, projected ~70%).
+      - [ ] Then Form 4 days 2026-04-01..07-31 (the lane skips days a held data set covers).
+      - [ ] ~2026-11-06, after the rotation: the Yahoo label drain read by reason
+            ([note](docs/deferred/2026-11-02-a-yahoo-calendar-is-observed-not-stated.md)), then
+            COST's quarterly table.
       - 2026-10-30: split in two. **7a** (muffin-ingest#149, **rolled 18:14 UTC**): `sec_daily_index`
         RUNNING and `yahoo_fiscal_calendar` in the company job; the 10-31 11:00 dry run asks 7 days. **The CIK grid goes first, by hand, from 11:00
         UTC 10-31** (one 50-filer chunk measured for time and memory, then the rest inside
@@ -3491,6 +3501,19 @@ names its provider** is now a guideline for every family.
             10-31 restart, and 870-874 since 11-01 afternoon. A plateau, not a leak; the service was
             OOM-killed at this limit once before. Options: raise the limit (the node has room), or
             accept the alert as an early warning and leave it.
+            [Note](docs/deferred/2026-11-02-openbb-api-sits-at-its-memory-limit.md) (884 MiB, 86%, at
+            22:40 UTC).
+      - [ ] 2026-11-02 — Phase 5 findings, each a note:
+            - [a quarter is derived from year-to-date facts](docs/deferred/2026-11-02-a-quarter-is-derived-from-year-to-date-facts.md):
+              SEC cash flow has Q2 17,247 and Q3 16,420 rows against Q1's 37,780; where to build
+              it is the user's call.
+            - [two SEC clients](docs/deferred/2026-11-02-two-sec-clients.md): the CIK map and N-PORT
+              still reach SEC on plain httpx.
+            - [the SEC lane materialises every filer it visits](docs/deferred/2026-11-02-the-sec-lane-materialises-every-visited-filer.md):
+              ~21,000 materializations a day for a tick that asks SEC nothing; the user's call.
+            - [an amended Form 4 restates the original](docs/deferred/2026-11-02-an-amended-form-4-restates-the-original.md):
+              ~400 of 61,302 lane lines counted twice or with the value they corrected; the user's
+              call.
       - [ ] 2026-11-01 — [the http-cache is bounded only by a 40 GB cap](docs/deferred/2026-11-01-the-http-cache-is-bounded-only-by-a-40-gb-cap.md).
             **Decided the same day (the user):** keep the 40 GB cap and `inactive` as they are, and
             keep the cache, and anything a node replacement would lose, on the block volume. Room
@@ -3517,13 +3540,17 @@ names its provider** is now a guideline for every family.
             `first="MISS",second="HIT"`; Grafana holds the new rule and not the old one; nothing
             firing after the restart. Cron runs it hourly at :17.
       - 2026-11-01 — a SEC 5xx keeps stopping the Form 4 run (the user; the spec's Step 8).
-      - 2026-10-30: `sec_insider_datasets` stays STOPPED: it fails a run on every unpublished
-        quarter ("A Dagster run failed" every Monday) and asks only the newest one.
-        [Note](docs/deferred/2026-10-30-the-insider-data-set-schedule-fails-until-sec-publishes.md).
+      - 2026-10-30: `sec_insider_datasets` stayed STOPPED, because it failed a run on every
+        unpublished quarter. **Superseded:** muffin-ingest#153 (rolled 10-31) ends such a run
+        claiming nothing, the schedule runs, and Monday 11-02's tick asked 2026q2 and 2026q3 with no
+        failed run. [Note](docs/deferred/2026-10-30-the-insider-data-set-schedule-fails-until-sec-publishes.md).
       - After the drain, read COST's quarterly table: one column per quarter (on 2026-10-25 SEC's
         and Yahoo's dates for one quarter sat 13–20 days apart, so each showed twice).
-- [ ] 9. Retire the four edge resources. 10. Delete their handlers after 3 clean days.
-- [ ] 11. Contract with drop dates; `check_one_period_one_point` re-keyed on fiscal labels, which
+- [ ] 9. Retire the four edge resources. 10. Delete their handlers after 3 clean days. Also retire
+      `security-eps-history`, unscheduled since legacy 138 but still reachable.
+- [ ] 11. Contract with drop dates (the list, measured 2026-11-02: [the retired families leave columns
+      behind](docs/deferred/2026-09-30-the-retired-families-leave-columns-behind.md), *the SEC
+      family*); `check_one_period_one_point` re-keyed on fiscal labels, which
       closes [a fiscal-year change reads as a repeated year](docs/deferred/2026-10-10-a-fiscal-year-change-reads-as-a-repeated-year.md).
       - List the edge's own `sec-xbrl` metrics still unlabelled after the step 8 drain: `security-xbrl`
         wrote them straight into `security_metric` and only the derivation labels, so any period
@@ -3545,6 +3572,15 @@ convention.
     which notes that Yahoo's `upgradeDowngradeHistory` already holds the data;
   - [the historical segment backlog is rising](docs/deferred/2026-10-04-the-historical-segment-backlog-is-rising.md);
   - `earnings-history` stuck at 2016-06-30 ([note](docs/deferred/2026-10-20-a-resource-can-repeat-the-same-failure-for-weeks.md)).
+
+**Left for Phase 6 by Phase 5:**
+  - [the segment queue reads the regulator](docs/deferred/2026-11-02-the-segment-queue-reads-the-regulator.md):
+    key the queue on `disclosure_source_code`; 3,549 amended and transition XBRL filings never
+    asked; size for 1.2 M filings;
+  - [the segment queues time out on the grid's filings](docs/deferred/2026-11-02-the-segment-queues-time-out-on-the-grid-s-filings.md)
+    (the decision on retiring the Korean and Indian parsers until then);
+  - [two SEC clients](docs/deferred/2026-11-02-two-sec-clients.md), if N-PORT moves with the
+    regulators.
 - Phases 5–6, each keyed provider: redact its credential in the adapter, then scan its raw files
   ([note](docs/deferred/2026-09-16-raw-request-credentials.md)).
 - Every phase: scheduled check-ins live only in the session that made them, so recreate them from

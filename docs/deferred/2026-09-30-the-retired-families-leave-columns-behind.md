@@ -1,7 +1,8 @@
 # The retired families leave columns and tables behind
 
 Created 2026-09-30 · **Drop on or after 2026-10-12** · Status: open; the table half is
-muffin-deployment#479 (2026-10-30), waiting for a deploy.
+muffin-deployment#479 (2026-10-30), deployed 2026-11-01. The SEC family's section was added
+2026-11-02, for Phase 5's step 11.
 
 **2026-10-30: the tables first, for the disk.** `/mnt/data` reached 78% (alert at 80%) with
 Phase 5's backfills to land, so #479 drops `security_price`, `prices`, `exchange_listing` and
@@ -62,6 +63,39 @@ The company lane writes the tables these handlers used to write (`security_profi
 `security_officer`, `security_fundamentals`, `security_share_stats`, `security_estimate`), so the
 tables stay. The edge still writes `statement_currency_missing_at` and `xbrl_missing_at` until
 Phase 5 retires the SEC family. Those two join this list at that phase's contract step.
+
+### Added 2026-11-02: the SEC family (Phase 5)
+
+This is the SEC spec's step 11. Its four edge resources (`security-xbrl`, `-filings`,
+`-filing-history`, `-insider`) still run until step 9 retires them, and `security-statements` was
+retired at step 2b. Their handlers go at step 10, after three clean days. **Drop date: 30 days
+after step 9**, so the old rows stay as a backup while the Dagster lanes run alone. Measured on
+production 2026-11-02 with the query below:
+
+| Object | Written by | Still read by | Before dropping |
+|---|---|---|---|
+| view `pending_xbrl` | — | `security-xbrl` only | step 10 deletes the handler |
+| view `pending_filings` | — | `security-filings` only | as above |
+| view `pending_filing_history` | — | `security-filing-history` only | as above |
+| view `pending_insider` | — | `security-insider` only | as above |
+| `security.xbrl_fetched_at`, `xbrl_missing_at` | `security-xbrl` | `pending_xbrl` | drop the view; remove `xbrl_missing_at` from `symbol_cache_classification` and its `backlog_negative_cache` row |
+| `security.filings_fetched_at` | `security-filings` | `pending_filings` | drop the view |
+| `security.filing_history_fetched_at` | `security-filing-history` | `pending_filing_history` | drop the view and its `backlog_negative_cache` row |
+| `security.insider_fetched_at` | `security-insider` | `pending_insider` | drop the view |
+| `security.statement_currency_missing_at` | `security-statements` (retired at 2b) | nothing | remove its `symbol_cache_classification` row |
+| pg_cron `muffin-filing-history`; `cron_resource` rows of the four | — | — | step 9 unschedules; step 11 deletes the rows |
+| `security_statement` rows `source_code = 'sec'` (44,542 annual, 255 unlabelled) | `security-statements` | `security_statement_current` (lower priority than `sec-xbrl`) | decision 12: list any period only they hold, then delete |
+| `security_metric` rows `source_code = 'sec'` (42,768) | the derivation, from those statements | serving views | go with the statements; check the derivation retracts them |
+| `security_metric` `sec-xbrl` rows the edge wrote directly (unlabelled) | `security-xbrl` | serving views | the filer lane re-derives each period; list what it does not reproduce (todos, step 11) |
+| `insider_trade` rows with no accession (70,346, `sec-form4`) | `security-insider` | `security_insider_summary` (only on days the lane has not collected) | step 9 re-points the summary; the history backfill covers their quarters |
+| `EDGE_WRITES_FLOOR` in `defs/companies/derived.py` | — | the derivation's half-hourly floor | nothing on the edge writes statements or metrics after step 9 |
+
+Found while measuring, from an older family: **`pending_eps_history` and
+`security.eps_history_fetched_at`**. `security-eps-history` (alpha_vantage, 25 calls a day) has had
+no schedule and no `cron_resource` row since legacy migration 138; `earnings-history` (nasdaq)
+replaced it. Its handler is still in `market-refresh/index.ts`, reachable by an admin call and
+guarded in `logic-check.ts`, and it is the only reader of the view. Retiring it (a `-- RETIRES:`
+marker, 410) lets the handler, the view and the column go with step 10 and 11.
 
 The four price columns are classified `symbol_keyed = false` in `market.symbol_cache_classification`,
 so `clear_symbol_caches` no longer clears them. `tests/negative-caches-are-classified.sql` requires

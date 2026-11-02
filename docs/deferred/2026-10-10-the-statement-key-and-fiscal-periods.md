@@ -1,6 +1,14 @@
 # The statement key, precedence between SEC and Yahoo, and fiscal periods
 
-Created 2026-10-10 · Due with Phase 5 (the SEC family) · Status: decided 2026-10-24, building
+Created 2026-10-10 · Due with Phase 5 (the SEC family) · **Status: done 2026-10-25** (step 2b,
+muffin-deployment#466; checked 2026-11-02)
+
+**Done-when, measured 2026-11-02:** `security_statement.period_type` holds annual 352,336, quarter
+533,794 and half 6,668, under `security_statement_period_type_check`; the primary key is
+`(security_id, source_code, statement, period_ending, period_type)`, so two providers' rows for one
+period are both kept and `security_statement_current` serves one by `source_priority`. The labels are
+built (steps 2a-8); the Yahoo half is still draining
+([note](2026-11-02-a-yahoo-calendar-is-observed-not-stated.md)).
 
 **Decided 2026-10-24** ([the Phase 5 spec](../specs/2026-10-24-sec-family.md), decisions 6 and 7):
 the provider joins the key, `(security_id, source_code, statement, period_ending, period_type)`,

@@ -1,6 +1,8 @@
 # A fiscal-year change reads as the same year reported twice
 
-Created 2026-10-10 · Due with Phase 5 (SEC and the fiscal-period model) · Status: decided 2026-10-24, tripwired
+Created 2026-10-10 · Due with Phase 5 (SEC and the fiscal-period model) · Status: decided 2026-10-24,
+tripwired; **closes at Phase 5 step 11**, once every SEC filer has a calendar (done 2026-11-02, the
+CIK grid) and the Yahoo labels have drained (~11-06)
 
 **Decided 2026-10-24** ([the Phase 5 spec](../specs/2026-10-24-sec-family.md), decisions 7 and 11):
 a fiscal calendar per company, built from its own annual reports. When two calendars overlap, the
