@@ -6,6 +6,11 @@ quarter would have been asked on one Monday and never again. The key now carries
 day. Closes when #153 is rolled and its first Monday (2026-11-02 11:45 UTC) asks 2026q2 and
 2026q3 without a failed run.
 
+**2026-11-02:** that Monday did. The 11:45 tick made one run per quarter (`8cdff842` 2026-04,
+`d035c966` 2026-07); each logged "SEC has not published 2026q<n>'s insider data set yet" and ended
+SUCCESS with no materialisation. The second half of *Done when* (2026q2 collected without an
+operator once SEC publishes it) is still open.
+
 Recorded 2026-10-30, Phase 5 step 7a. The `sec_insider_datasets` schedule stays STOPPED until this
 is fixed; every other SEC schedule is on.
 

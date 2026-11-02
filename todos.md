@@ -1749,7 +1749,9 @@ cut over one at a time.
 - [ ] 2026-10-30 — the insider data-set schedule fails a run on every unpublished quarter and asks
       only the newest (fix: muffin-ingest#153, which also gives each tick its own run key; rolled
       2026-10-31 09:52 UTC; closes after Monday 11-02 11:45 asks 2026q2 and 2026q3 with no failed
-      run). Was: fails a run on every unpublished quarter and asks
+      run). **2026-11-02: the Monday half is met** — the 11:45 tick asked both quarters, each run
+      logged "SEC has not published … yet" and ended SUCCESS claiming nothing. Still open: 2026q2
+      collected by the schedule, with no operator, once SEC publishes it. Was: fails a run on every unpublished quarter and asks
       only the newest: a quarter not published should end the run claiming nothing, and the
       schedule should ask every completed quarter not held
       ([note](docs/deferred/2026-10-30-the-insider-data-set-schedule-fails-until-sec-publishes.md)).
@@ -3448,6 +3450,26 @@ names its provider** is now a guideline for every family.
           periods, 0 inverted, 43,014 statements labelled; 54 checks passed.
         - The grid stands at 2,601 of 3,726; batches af-ah start with the 11:07 check-in.
           `sec_filers_due` is not started.
+      - **The CIK grid is complete, 2026-11-02 13:16 UTC: 3,726 of 3,726 filers collected.** af
+        (`vtoneoco`, 10 of 10 runs, 2,985 s), ag (`wpjiligj`, 10 of 10, 2,185 s) and ah
+        (`erntqocq`, 3 of 3, 928 s) all COMPLETED_SUCCESS; `/mnt/data` 63.95% -> 64.30% by the
+        alert's measure. **#161's TTM page held under load:** af's derivation (11:33, 176 s) took
+        50,670 statements into 287,248 metrics and 466 TTM securities into 87,527 rows in 5 pages;
+        ag's (12:17, 125 s) 30,818 into 167,548 and 449 into 44,456 rows in 5 pages; ah's (13:04,
+        40 s) 540 and 18. All drained, no statement timeout.
+      - **Monday's insider data-set tick (11:45) asked 2026q2 and 2026q3** and logged "SEC has not
+        published … yet" for each; both runs SUCCESS, nothing claimed, no failed run. That is
+        muffin-ingest#153's closing condition.
+      - **`sec_filers_due`'s first tick, counted after the grid:** with the module's own rule
+        (`filers_due` over index day 11-01, a Sunday): 115 filers due, all on their floor day,
+        none never-collected, in 61 runs; the deployed sensor's dry run agrees (61 run requests,
+        next cursor 2026-11-01). Before the grid the same count was 1,210 filers in 67 runs.
+      - **Step 7b live, 2026-11-02:** muffin-ingest#158 (rebased on main; its `definitions` check
+        had failed on one 101-column docstring line) merged 17:20 and rolled 17:22 (all three
+        services `f50680d4…` -> `b688a6d2…`, pinned). The old daemon began the first tick at
+        17:21:45 and launched one run before the roll replaced it; the new daemon resumed the tick
+        at its next interval and launched the other 60 from 17:36 to 17:48, ~12 s a run. Run keys
+        kept it from relaunching the first: 61 runs in all.
       - [ ] **2026-11-02 — the edge's segment queues time out on the grid's filings** (alert
             `muffin-resource-stalled`): `security-kr-segments` and `security-in-segments` have failed
             every run since 11-01 13:24 and 14:32. All three queues are EMPTY (19.5 s, 13.7 s and

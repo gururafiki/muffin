@@ -537,6 +537,10 @@ The Dagster filings writer must:
 
 Re-keying `pending_segments` on `disclosure_source_code` is Phase 6.
 
+**Measured 2026-11-02, after the grid:** the five rules held. What they did not cover is size: the
+regulator queues (`pending_kr_segments`, `pending_in_segments`) read `security_filing`, and its
+fourfold growth moved their plans past the 8 s ceiling. See Step 8 below.
+
 ## Still to measure (rollout step 3; from the node, paced, past the cache)
 
 | Item | Subjects | Expected |
@@ -1214,3 +1218,20 @@ securities it is given. A SEC filer brings decades of quarters, about 480 TTM ro
 of 1,000 took a whole batch's re-queue in one statement (237,035 rows in 222 s when it succeeded).
 The page is now 100 securities, about 50,000 rows. The first derivation after the roll had only 67
 statements to derive, so the new page meets a real re-queue only with the remaining batches.
+
+**The grid is complete (2026-11-02 13:16 UTC): 3,726 of 3,726 filers collected.** The last three
+batches all ended COMPLETED_SUCCESS: af 10 of 10 runs in 2,985 s, ag 10 of 10 in 2,185 s, ah 3 of 3
+in 928 s. `/mnt/data` went from 63.95% to 64.30% by the alert's measure.
+
+- **The 100-security TTM page held.** The derivation after af (176 s) wrote 287,248 metrics from
+  50,670 statements and 87,527 TTM rows for 466 securities in 5 pages. After ag (125 s): 167,548
+  and 44,456. After ah: 2,567 and 315. All drained, with no statement timeout.
+- **`sec_filers_due`'s first tick, counted with the module's own rule:** 115 filers due on index
+  day 11-01 (a Sunday, so nothing filed), all on their floor day and none never-collected, in 61
+  runs. The deployed sensor's dry run gives the same 61. Before the grid it was 1,210 in 67.
+- **The grid's growth broke two edge queues it does not write.** `security_filing` went from about
+  250,000 rows to 1,175,000, and the planner's estimate for the DART filings collapsed to 15 of
+  6,518. So `pending_kr_segments` joins fund holdings by nested loop (260,012,566 rows filtered) and
+  takes 19.5 s against the 8 s PostgREST ceiling; `pending_in_segments` takes 13.7 s. Both queues
+  are empty, and both resources have failed every run since 11-01 afternoon
+  ([note](../deferred/2026-11-02-the-segment-queues-time-out-on-the-grid-s-filings.md)).
