@@ -3571,7 +3571,10 @@ names its provider** is now a guideline for every family.
               `duplicate_constituents` arm over `sector_constituents` (per-row industry lateral,
               13,058 loops, plus `security_symbol`). The rewrite, measured rolled back on production:
               whole view 1,323 -> 218 ms, IT page 153 -> 88 ms, 0 rows different.
-              muffin-deployment PR with its guard test, replayed on the node with three mutations.
+              **muffin-deployment#488**, green (11 checks), replayed on the node (113 tests, three
+              mutations caught). Not merged: the merge-and-deploy was refused by the permission check
+              on 11-04 ~20:25 UTC, so it waits for the user. After the deploy, time `data_defect`
+              and the sector read as anon once `pgrep -fc '[m]uffin-db-backup.sh'` reads 0.
             - `security-kr-segments` / `security-in-segments` stalled: the 11-02 decision, still
               open ([note](docs/deferred/2026-11-02-the-segment-queues-time-out-on-the-grid-s-filings.md)).
               market-verify stays red on this alone until it is decided.
