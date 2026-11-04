@@ -27,6 +27,24 @@ notes*) · Status: **Decided 2026-11-04 (the user):** option 1, in stage 2 (`sec
   `ytd_disagrees`, in each run's metadata), plus the captured filers' test.
 - **Before**, for the TTM comparison: 10,382 TTM free-cash-flow rows over 3,351 SEC filers.
 
+## Live, 2026-11-04 22:19 UTC
+
+Five filers re-parsed from stored raw (backfill `xuzbjufe`, no SEC request), after #491's deploy and
+#163's roll:
+
+| Filer | Lines computed | Computed cash quarters written | TTM free cash flow rows |
+|---|---|---|---|
+| AAPL | 130-154 | 36 | 2 -> 45 (2014-2026) |
+| COST | 130-154 | 36 | -> 61 |
+| CIK 1367644 | 130-154 | 31 | -> 44 |
+| MSFT | 0 | 0 (it states its quarters) | |
+| TSM | 0 | 0 (20-F, not a quarterly filer) | |
+
+- Every computed row is labelled and derived, and the TTM derivation drained (`ttm_backlog_after` 0).
+- AAPL's computed operating cash flow equals Yahoo's to the dollar for the quarters both hold:
+  27.867, 28.702 and 34.369 bn.
+- The whole grid is re-parsed in the next SEC window.
+
 ## Why
 
 A 10-Q states the cash-flow statement year to date: six months in Q2, nine in Q3. The 10-K

@@ -1,6 +1,6 @@
 # The segment queues time out on the grid's filings
 
-Recorded 2026-11-02, from the firing `muffin-resource-stalled` alert. **Decided 2026-11-04 (the user):** option 1, retire `security-kr-segments` and `security-in-segments` until Phase 6. **Built in muffin-deployment#489** (merged 2026-11-04; deploy pending): both answer 410 and their pg_cron jobs are removed; the queue views and their three tests stay for Phase 6.
+Recorded 2026-11-02, from the firing `muffin-resource-stalled` alert. **Decided 2026-11-04 (the user):** option 1, retire `security-kr-segments` and `security-in-segments` until Phase 6. **Built in muffin-deployment#489** (deployed 2026-11-04 22:15 UTC; both answer 410, their jobs are gone, and `muffin-resource-stalled` stopped firing): both answer 410 and their pg_cron jobs are removed; the queue views and their three tests stay for Phase 6.
 
 ## Why
 

@@ -1,7 +1,7 @@
 # An amended Form 4 restates the original
 
 Created 2026-11-02 · Planned in [the SEC spec](../specs/2026-10-24-sec-family.md) (*Deferred
-notes*) · Status: **Decided 2026-11-04 (the user):** option 2, the summary view skips a superseded original; then measure how the data sets mark amendments. **Built in muffin-deployment#490** (merged 2026-11-04; deploy pending).
+notes*) · Status: **Decided 2026-11-04 (the user):** option 2, the summary view skips a superseded original; then measure how the data sets mark amendments. **Built in muffin-deployment#490** (deployed 2026-11-04 22:15 UTC).
 
 ## As built, 2026-11-04
 

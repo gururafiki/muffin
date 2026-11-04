@@ -3577,32 +3577,46 @@ names its provider** is now a guideline for every family.
               and as anon after the backup the sector page reads in 92 ms; `data_defect` 0.36 s.
             - `security-kr-segments` / `security-in-segments` stalled. **Decided 11-04 (the user):
               retire both until Phase 6.** muffin-deployment#489 (RETIRES, 410, pg_cron jobs
-              removed; views and tests kept), merged 11-04 21:00. **Not deployed:** the deploy
-              dispatch was refused by the permission check, so it waits for the user.
-              market-verify stays red on this alone until it deploys.
+              removed; views and tests kept). **Deployed 11-04 22:15 UTC** (the user approved):
+              both answer 410, `cron.job` no longer holds their jobs, `muffin-resource-stalled`
+              stopped firing. The next market-verify should pass the segment check.
       - [ ] **2026-11-04 — the seven decisions on Phase 5's notes (the user, all as recommended).**
-            Deploys and rolls wait for the user: the permission check refuses a production deploy.
+            The permission check refuses a production deploy; the user approved the deploy (22:05-22:15
+            UTC, muffin-deployment 3bc8cfa) and the roll (22:16-22:18, muffin-ingest d88a0c4) at
+            ~22:00. Verified: four migrations applied, the Dagster containers untouched by the deploy,
+            the roll pulled, SERVING, LOADED, all three services on the new digest, no run in flight.
             - 1, #488: deployed (above).
-            - 2, the segment parsers: #489 merged, deploy pending (above).
-            - 3, openbb-api to 1.5 GiB: in #489, deploy pending. Done when `muffin-container-near-oom`
-              reads 0 for it ([note](docs/deferred/2026-11-02-openbb-api-sits-at-its-memory-limit.md)).
+            - 2, the segment parsers: #489, deployed (above).
+            - 3, openbb-api to 1.5 GiB: in #489, deployed; the limit reads 1,610,612,736 and the service
+              sits at 21.8% after its restart. `muffin-container-near-oom` stopped firing. Re-read once
+              its ~870 MiB plateau returns (~11-06)
+              ([note](docs/deferred/2026-11-02-openbb-api-sits-at-its-memory-limit.md)).
             - 4, the company lane ahead of the re-ask: muffin-ingest#162 (priority 1; the short lanes
-              move to 2), merged 21:49, roll pending. Done when a night's company runs start within
+              move to 2), rolled 22:18; the loaded definitions read company 1, FX and indices 2. Done
+              when a night's company runs start within
               a minute or two of 03:30; then move the run windows in `muffin-deploy` and CLAUDE.md
               back to 03:30-~05:50
               ([note](docs/deferred/2026-11-02-the-company-lane-waits-for-the-stale-miss-re-ask.md)).
-            - 5, computed quarters: muffin-deployment#491 (source `sec-xbrl-ytd`, priority 45) then
-              muffin-ingest#163 (stage 2). **Deploy #491 before rolling #163** (foreign key). Then
-              re-parse the grid inside the SEC window (`sec_filer_facts`, `reparse=true`, no SEC
+            - 5, computed quarters: muffin-deployment#491 (source `sec-xbrl-ytd`, priority 45),
+              deployed, then muffin-ingest#163 (stage 2), rolled. **Live tiny subset 22:19 (backfill
+              `xuzbjufe`, five filers, stage 2 only):** 130-154 lines computed per quarterly filer;
+              computed cash quarters AAPL 36, COST 36, CIK 1367644 31, MSFT 0 (states its quarters),
+              TSM 0 (20-F); all labelled and derived; AAPL's computed operating cash flow equals
+              Yahoo's to the dollar (27.867, 28.702, 34.369 bn); TTM free cash flow AAPL 2 -> 45 rows
+              (2014-2026), COST -> 61, CIK 1367644 -> 44. Remaining: re-parse the whole grid inside
+              the SEC window (`sec_filer_facts`, `reparse=true`, no SEC
               request) and compare TTM free cash flow for SEC filers with 10,382 rows over 3,351
               securities (11-04). Probe over 250 filers: operating cash flow Q2 59 -> 2,826 and Q3
               43 -> 2,786 against Q1 2,828; 627 of 636 within 1% of Yahoo's stated quarters
               ([note](docs/deferred/2026-11-02-a-quarter-is-derived-from-year-to-date-facts.md)).
-            - 6, skippable outputs: **back to the user.** Dagster 1.13.22 records an output for every
-              partition of the run's range, so a skippable output saves ~2%, not most of the growth
+            - 6, skippable outputs: Dagster 1.13.22 records an output for every partition of the run's
+              range, so a skippable output saves ~2%. **Re-decided 11-04 (the user): accept, chart,
+              prune later.** muffin-deployment#492 (`pg_database_size_bytes` per database on the node
+              dashboard; `muffin-dagster-storage-large` at 20 GB; dagster 4.46 GB today), merged.
+              **Not deployed**: the permission check refused it; it rides the next deploy
               ([note](docs/deferred/2026-11-02-the-sec-lane-materialises-every-visited-filer.md)).
             - 7, amended Form 4s: muffin-deployment#490 (the summary skips an original line a 4/A
-              restates, keyed on owner, day, derivative flag and code), merged 21:49, deploy pending.
+              restates, keyed on owner, day, derivative flag and code), deployed 22:15.
               The data sets carry a 4/A as its own accession with no link to the original
               ([note](docs/deferred/2026-11-02-an-amended-form-4-restates-the-original.md)).
       - 2026-11-01 — a SEC 5xx keeps stopping the Form 4 run (the user; the spec's Step 8).

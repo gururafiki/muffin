@@ -1,7 +1,7 @@
 # The SEC lane materialises every filer it visits
 
 Created 2026-11-02 · Planned in [the SEC spec](../specs/2026-10-24-sec-family.md) (*Deferred
-notes*, *Risks*) · Status: **Decided 2026-11-04 (the user):** option 1, skippable outputs, after checking Dagster 1.13.22. **The check came back against it (2026-11-04, below); back to the user before anything is built.**
+notes*, *Risks*) · Status: **Decided 2026-11-04 (the user):** option 1, skippable outputs, after checking Dagster 1.13.22. **The check came back against it (2026-11-04, below). Re-decided the same day (the user): option 3, accept it, chart it and alert at 20 GB; build the prune (option 2) when the alert fires.** Built in muffin-deployment#492 (merged; deploys with the next deploy): `pg_database_size_bytes` per database on the node dashboard, and `muffin-dagster-storage-large`. The `dagster` database was 4.46 GB on 2026-11-04.
 
 ## Checked 2026-11-04: a skippable output skips a whole chunk, never a filer
 
