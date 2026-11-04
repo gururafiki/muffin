@@ -23,6 +23,14 @@ Measured 2026-11-02:
 At ~60 runs a day the floor alone adds ~21,000 of each, ~45 MB a day before indexes, ~16 GB a
 year. CLAUDE.md's earlier estimate for the whole instance was ~11 GB a year, revisited past ~20 GB.
 
+**Measured on the first two weekdays (11-03, 11-04): it is the whole grid, every weekday.** The
+filers one day's index names fall in every 50-filer chunk, so each weekday tick launched all **75
+runs** and visited all 3,726 filers: ~26,000 materializations plus as many planned events a day,
+and ~65 minutes of `sec` and `sql` (11:08-12:15). Of those 3,726, 289-415 were asked for their
+submissions and 79-185 for company facts. So the estimate above is a floor: closer to ~55 MB a day
+before indexes, ~20 GB a year from this lane alone. Option 1 below removes most of it, because a
+visited filer that was not asked writes nothing.
+
 **The floor also fetches nothing for a month.** The grid collected every filer between 10-30 and
 11-02, so until ~12-01 no stored answer is past 30 days (submissions) or 90 (company facts), and
 each floor visit is `not_due`. The ~60 runs hold `sec` and then `sql` for ~40 minutes a day for

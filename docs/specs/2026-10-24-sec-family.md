@@ -1249,6 +1249,29 @@ in 928 s. `/mnt/data` went from 63.95% to 64.30% by the alert's measure.
   are empty, and both resources have failed every run since 11-01 afternoon
   ([note](../deferred/2026-11-02-the-segment-queues-time-out-on-the-grid-s-filings.md)).
 
+### Step 8: the insider data sets' history, first batch, 2026-11-03
+
+Backfill `tbixaful`, 2006q1-2007q4, ran 12:19-12:24 UTC once the filer sensor's tick freed the `sec`
+pool. 16 of 16 materialisations; per quarter, as decision 10 asks:
+
+| Quarter | Zip kept raw | Tracked filings | Untracked filings | Trades inserted | Amendments |
+|---|---|---|---|---|---|
+| 2006q1 | 17.3 MB | 27,243 | 56,414 | 83,891 | 1,127 |
+| 2006q2 | 14.1 MB | 21,391 | 48,904 | 69,509 | 715 |
+| 2006q3 | 11.1 MB | 16,008 | 37,556 | 51,954 | 503 |
+| 2006q4 | 13.2 MB | 19,523 | 41,436 | 72,118 | 641 |
+| 2007q1 | 17.2 MB | 27,528 | 55,012 | 86,404 | 1,168 |
+| 2007q2 | 14.7 MB | 22,587 | 49,268 | 77,849 | 711 |
+| 2007q3 | 12.7 MB | 18,656 | 39,651 | 80,070 | 635 |
+| 2007q4 | 13.9 MB | 19,664 | 44,083 | 85,779 | 629 |
+
+`collapsed`, `malformed` and `retracted` 0 in every quarter. 607,574 trades in all; `insider_trade`
+went from 71 MB to 419 MB (~575 bytes a row) and `/mnt/data` from 64.52% to 65.36% by the disk
+alert's measure over the 33 hours since (background growth included). The 73 quarters left (2008q1-2026q1)
+project to ~70%. The `amendments` column counts the quarter's amended filings; whether the data
+set also keeps the filings they amend is not yet measured, and is the open half of
+[the amendment note](../deferred/2026-11-02-an-amended-form-4-restates-the-original.md).
+
 ### Step 7b: `sec_filers_due` on (muffin-ingest#158), 2026-11-02
 
 Rebased onto main, merged at 17:20 UTC and rolled at 17:22 with nothing in flight. All three services
@@ -1269,3 +1292,17 @@ moved from `f50680d4…` to `b688a6d2…` and are pinned.
   nothing.** It ends by itself. From about 12-01, each filer passes 30 days and is asked on its
   first floor day after that. The refresh therefore spreads over the month instead of arriving as
   one wave. Filers named in a new index day are still asked at once.
+
+**The first two weekday ticks, read 2026-11-04.** Both launched 75 runs (11:08-11:23), all
+SUCCESS, ~50 s each, so the lane holds `sec` and `sql` until ~12:15. `throttled 0`, and the outcomes
+sum to `requested` = 3,726 for both specs:
+
+| Index day | Filings named | Submissions answered / not due | Company facts answered / not due |
+|---|---|---|---|
+| 11-02 (tick 11-03) | 368 | 289 / 3,437 | 79 / 3,647 |
+| 11-03 (tick 11-04) | 600 | 415 / 3,311 | 185 / 3,541 |
+
+Company facts are asked only for filers whose named form refreshes facts, hence the smaller column.
+**A weekday tick visits the whole grid**: the filers one day's index names fall in every 50-filer
+chunk, so all 75 chunks run every weekday, and every visited filer writes a materialization for
+each of the seven specs ([note](../deferred/2026-11-02-the-sec-lane-materialises-every-visited-filer.md)).

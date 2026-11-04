@@ -5791,6 +5791,37 @@ muffin-ingest#159-#161, muffin-deployment#484, #485. Detail in the SEC spec's *S
   Count what the asset will FETCH, not only what the sensor requests: the dry run and the module's
   due rule both said 115 filers, and the honest number was 0.
 
+### A gate that runs whenever GitHub gets to it (2026-11-03..04)
+
+market-verify failed on 11-02, 11-03 and 11-04, with four causes, three of them consequences of the
+CIK grid. Fixed in muffin-deployment#487 and the `sector_constituents` migration that followed.
+
+- **GITHUB STARTS A SCHEDULED WORKFLOW WHEN IT CAN, AND HERE THAT WAS 6-8 HOURS LATE, LATER EACH
+  DAY.** The cron says 03:30 UTC. The runs started 09:13 (10-27), 10:16, 10:19, 09:52, 10:42, then
+  11:31, 11:10 and 11:21 (11-02..11-04), which puts them inside the SEC filer sensor's weekday tick
+  (11:08-12:15). Nothing on our side sets that hour, so **a guard must hold up under the load of
+  any hour it lands in**, not only the quiet one its cron names.
+- **AN `order=` ON A COLUMN NO INDEX SERVES IS A FULL SCAN, AND IT GROWS WITH THE TABLE.** Two
+  guards read "the newest rows" of `security_metric` by `fetched_at`. The grid took the table to
+  6.8 M rows, so each read became a parallel sequential scan (0.77 s warm) and answered HTTP 500 at
+  `service_role`'s 8 s ceiling under load. Sampling by lower bounds on `security_id` reads through
+  the primary key in 3-52 ms and still rotates by day (#487). The same rule as offset paging
+  (10-29): **a guard's read must be cheap by construction, not by the table being small**.
+- **A WEEKDAY TICK OF `sec_filers_due` VISITS THE WHOLE GRID.** The filers one day's SEC index names
+  fall in every 50-filer chunk, so all 75 chunks run every weekday (~65 minutes of `sec` and `sql`),
+  not only the floor days, and every visited filer materialises seven specs. Counting the due
+  filers (368 and 600 filings named) said nothing about how many chunks they touch.
+- **A WHOLE-VIEW READ PAYS FOR EVERY PER-ROW LOOKUP THE PAGE READ HIDES.** `data_defect` reads
+  `sector_constituents` whole. Its per-constituent industry `LATERAL` cost 390 ms there (13,058
+  loops) while the sector page, filtered to one sector, read in 153 ms. Same shape as #391, in the
+  same view: 1,323 -> 218 ms whole, 0 rows different, once the industry was one hash-joined CTE.
+- **A GUARD CAN BE DRIVEN AGAINST PRODUCTION FROM THE NODE WITHOUT THE KEY EVER BEING SHOWN.** Read
+  it into a variable on the node and pass it to the container by NAME, which takes the value from
+  the client's environment rather than from argv:
+  `export SRV="$(docker exec $F printenv SUPABASE_SERVICE_ROLE_KEY)"; export BASE="$(docker exec
+  $F printenv SUPABASE_URL)"; docker exec -i -e SRV -e BASE <muffin-ingest> python - < guard.py`,
+  where `$F` is the `supabase-functions` container. That is how #487 was run before it merged.
+
 ## Running an OpenSandbox server locally
 
 - **`docker run -d -p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock opensandbox/server:latest`.**

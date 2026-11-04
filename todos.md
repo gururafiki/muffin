@@ -3345,6 +3345,14 @@ names its provider** is now a guideline for every family.
       [note](docs/deferred/2026-11-02-the-sec-history-backfills-and-the-label-drain.md).
       - [ ] Next 11:00-20:00 UTC window: the insider data-set history, 2006q1 onward, oldest first,
             stopping if the disk alert's measure passes 76% (~5 GB, projected ~70%).
+            **Batch 1 done 2026-11-03** (`tbixaful`, 2006q1-2007q4, 12:19-12:24, after the filer
+            sensor's tick freed the `sec` pool): 16 of 16 materialisations, **607,574 trades**
+            (52,000-86,000 a quarter), `collapsed` 0, `malformed` 0, `retracted` 0. Per quarter:
+            11-17 MB of zip kept raw (114 MB in all), ~1 minute, 16,000-27,500 tracked filings
+            against 37,500-56,400 untracked. `insider_trade` 71 MB -> 419 MB (~575 bytes a row);
+            `/mnt/data` 64.52% -> 65.36% by the alert's measure over 33 hours (background growth
+            included). The 73 quarters left (2008q1-2026q1) project to ~70%. 11-04's window passed with the session
+            idle; the rest runs from the 11-05 check-in.
       - [ ] Then Form 4 days 2026-04-01..07-31 (the lane skips days a held data set covers).
       - [ ] ~2026-11-06, after the rotation: the Yahoo label drain read by reason
             ([note](docs/deferred/2026-11-02-a-yahoo-calendar-is-observed-not-stated.md)), then
@@ -3487,8 +3495,15 @@ names its provider** is now a guideline for every family.
         days. So until ~12-01 the daily floor costs ~40 min of `sec`/`sql` for nothing, then turns
         into the refresh itself, spread over the month. Filers named in a new index day are asked
         at once.
-        - [ ] 2026-11-03 after ~11:15 UTC: the first tick on a weekday index (11-02): the filers it
+        - [x] 2026-11-03 after ~11:15 UTC: the first tick on a weekday index (11-02): the filers it
               names asked and answered, `throttled 0`, outcomes summing to `requested`.
+              **Read 2026-11-04 for both weekday ticks.** Each launched **75 runs** (11:08-11:23),
+              all SUCCESS, ~50 s each, so the tick holds `sec` and `sql` until ~12:15. `throttled 0`;
+              outcomes sum to `requested` = 3,726 for both specs. 11-03: submissions 289 answered +
+              3,437 not due, company facts 79 + 3,647, 368 filings named. 11-04: 415 + 3,311 and
+              185 + 3,541, 600 named. **A weekday tick visits the WHOLE grid**: the filers one day's
+              index names fall in every 50-filer chunk, so all 75 chunks run every weekday, not
+              only on floor days ([note](docs/deferred/2026-11-02-the-sec-lane-materialises-every-visited-filer.md)).
       - [ ] **2026-11-02 — the edge's segment queues time out on the grid's filings** (alert
             `muffin-resource-stalled`): `security-kr-segments` and `security-in-segments` have failed
             every run since 11-01 13:24 and 14:32. All three queues are EMPTY (19.5 s, 13.7 s and
@@ -3539,6 +3554,27 @@ names its provider** is now a guideline for every family.
             **Deployed 2026-11-01 20:27 UTC**, between grid batches. Run once by hand at 20:28:
             `first="MISS",second="HIT"`; Grafana holds the new rule and not the old one; nothing
             firing after the restart. Cron runs it hourly at :17.
+      - [ ] **2026-11-04 — market-verify red since 11-02, four causes, three of them Phase 5's
+            grid.** GitHub has started the 03:30 UTC cron 6-8 hours late (09:13 on 10-27, 11:10-11:31
+            on 11-02..11-04), so each run lands inside the filer sensor's weekday tick (11:08-12:15).
+            - `check_derived_metrics` (11-02..11-04) and `check_quarter_is_a_quarter` (11-02) answered
+              HTTP 500: both read the newest rows by `fetched_at`, which no index serves, a parallel
+              scan of 6.8 M rows. **Fixed in muffin-deployment#487** (merged 11-04, no deploy needed):
+              lower bounds on `security_id` through the primary key. Run against production: 1,547
+              values compared in 6 s; quarters median 1.05 over 222 fiscal years.
+            - `check_one_period_one_point`: 121 then 122 pairs against 120 known. One is 355690.KQ, a
+              KOSDAQ REIT from the 11-02 wave (six-month years served as annual); raised to 122 in
+              #487. 120 of the 122 pairs have an unlabelled row, and every one of the 922
+              same-label pairs is SEC beside Yahoo within 7 days. Each weekly wave can add such
+              REITs, so the label re-key (step 11) should follow the label drain directly.
+            - `data_defect` as anon `57014` (11-04): 0.9-1.3 s quiet, 0.9 s of it the
+              `duplicate_constituents` arm over `sector_constituents` (per-row industry lateral,
+              13,058 loops, plus `security_symbol`). The rewrite, measured rolled back on production:
+              whole view 1,323 -> 218 ms, IT page 153 -> 88 ms, 0 rows different.
+              muffin-deployment PR with its guard test, replayed on the node with three mutations.
+            - `security-kr-segments` / `security-in-segments` stalled: the 11-02 decision, still
+              open ([note](docs/deferred/2026-11-02-the-segment-queues-time-out-on-the-grid-s-filings.md)).
+              market-verify stays red on this alone until it is decided.
       - 2026-11-01 — a SEC 5xx keeps stopping the Form 4 run (the user; the spec's Step 8).
       - 2026-10-30: `sec_insider_datasets` stayed STOPPED, because it failed a run on every
         unpublished quarter. **Superseded:** muffin-ingest#153 (rolled 10-31) ends such a run
