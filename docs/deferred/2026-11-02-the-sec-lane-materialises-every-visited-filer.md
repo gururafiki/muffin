@@ -1,7 +1,29 @@
 # The SEC lane materialises every filer it visits
 
 Created 2026-11-02 · Planned in [the SEC spec](../specs/2026-10-24-sec-family.md) (*Deferred
-notes*, *Risks*) · Status: open, **the user decides**; not urgent
+notes*, *Risks*) · Status: **Decided 2026-11-04 (the user):** option 1, skippable outputs, after checking Dagster 1.13.22. **The check came back against it (2026-11-04, below); back to the user before anything is built.**
+
+## Checked 2026-11-04: a skippable output skips a whole chunk, never a filer
+
+Dagster 1.13.22 records a yielded output's materializations in `_get_output_asset_events`
+(`_core/execution/plan/execute_step.py`). It emits one event for **every** key in
+`output_context.asset_partition_keys`, which is the run's whole range. A `skippable=True` spec can
+therefore be left out for all 50 filers of a chunk or for none. Nothing in the output path names a
+subset of the range.
+
+Measured over the 2026-11-04 weekday tick (75 runs × 7 outputs = 525 output-runs), an output
+produced nothing for its whole chunk in **12** of them: `raw_sec_companyfacts` 6, each of the six
+others 1. Skipping those saves ~600 of the ~26,000 materializations a day, **about 2%**. Option 1 as
+worded does not deliver what it was chosen for.
+
+What would:
+
+1. **Skippable outputs plus per-filer events.** The lane writes its own files and yields
+   `AssetMaterialization(partition=k)` for each filer it wrote, leaving the output unyielded. A
+   not-due filer then writes nothing. It replaces the I/O manager's write path for seven specs, and
+   the planned events stay (Dagster plans the whole range), so it halves the growth at most.
+2. **Prune** materializations beyond the newest per (asset, partition) (option 2 below).
+3. **Accept it** and chart `event_logs` against a threshold (option 3).
 
 ## Why
 

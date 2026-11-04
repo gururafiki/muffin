@@ -1,7 +1,6 @@
 # openbb-api sits near its memory limit
 
-Created 2026-11-02, from the firing `muffin-container-near-oom` alert · Status: open, **the user
-decides**
+Created 2026-11-02, from the firing `muffin-container-near-oom` alert · Status: **Decided 2026-11-04 (the user):** option 1, raise the limit to 1.5 GiB. **Built in muffin-deployment#489** (merged 2026-11-04; deploy pending).
 
 ## Why
 

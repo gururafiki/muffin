@@ -5822,6 +5822,42 @@ CIK grid. Fixed in muffin-deployment#487 and the `sector_constituents` migration
   $F printenv SUPABASE_URL)"; docker exec -i -e SRV -e BASE <muffin-ingest> python - < guard.py`,
   where `$F` is the `supabase-functions` container. That is how #487 was run before it merged.
 
+### Building the seven decisions on Phase 5's notes (2026-11-04)
+
+muffin-deployment#489-#491, muffin-ingest#162-#163. Three of the decisions met a fact the decision had
+not seen, and each was measured before it was built.
+
+- **CHECK THE FRAMEWORK'S MECHANISM BEFORE CHOOSING AN OPTION THAT DEPENDS ON IT: A SKIPPABLE OUTPUT
+  IS ALL OR NOTHING FOR A RUN'S RANGE.** Dagster 1.13.22 records a yielded output's materializations
+  in `_get_output_asset_events` (`execute_step.py`), one event per key of
+  `output_context.asset_partition_keys`, which is the run's whole range. So `skippable=True` can
+  leave out all 50 filers of a SEC chunk or none of them. On the 11-04 weekday tick, 12 of 525
+  output-runs produced nothing: ~2% of the growth the option was chosen to remove. It went back to
+  the user rather than being built.
+- **AN AMENDMENT RESTATES THE LINES IT CORRECTS, NOT THE WHOLE FILING.** A Form 4/A can restate one
+  derivative grant and leave the same day's open-market purchase standing. Keying "superseded" on
+  owner and day dropped 81 real lines in the 90-day window. The key is the amendment's own grain:
+  owner, day, derivative flag and transaction code. SEC's insider data sets mark an amendment the
+  same way the XML does: its own accession, nothing naming the original.
+- **THE TWO TERMS OF A DIFFERENCE MUST SHARE A VINTAGE.** Computing Q2 = H1 - Q1 from each term's
+  latest filing paired a Q1 restated in 2023 with a half year never restated, giving +7.0 m against
+  a restated -0.5 m. The subtrahend is the figure as it stood when the minuend was filed. Even
+  then, 4% of computed quarters differ from SEC's own stated ones, through restatements and recasts
+  (a Q3 10-Q's nine months on a new basis, less a half year on the old). **An external benchmark
+  settles accuracy where the internal one cannot:** 627 of 636 computed quarters are within 1% of
+  Yahoo's stated figures. So the computed figure fills only what nothing states, and ranks below
+  any stated one.
+- **A stated Q2/Q3 SEC cash row is usually one line.** 1.4 lines on average, operating cash flow in
+  956 of 17,247. That is why computed quarters are their own rows under their own source (the
+  derivation chooses per metric by `source_priority`), not lines merged into the stated row.
+- **The permission check refuses a production deploy dispatch, and a merge alone is allowed.** Deploys
+  and rolls wait for the user even when the decision behind them is the user's.
+- **A PROBE OVER PRODUCTION'S RAW FILES IS THE YIELD MEASUREMENT.** The branch's library on
+  `PYTHONPATH`, run in a throwaway container from the production image, in the code location's
+  network namespace, with the raw volume read-only and a 1 GB memory cap. It runs the new rule over
+  250 real filers in a minute, with no provider request and no write. Pass the database URL by
+  name (`-e INGEST_DATABASE_URL` after exporting it on the node), never as a value.
+
 ## Running an OpenSandbox server locally
 
 - **`docker run -d -p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock opensandbox/server:latest`.**

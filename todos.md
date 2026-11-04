@@ -3572,12 +3572,39 @@ names its provider** is now a guideline for every family.
               13,058 loops, plus `security_symbol`). The rewrite, measured rolled back on production:
               whole view 1,323 -> 218 ms, IT page 153 -> 88 ms, 0 rows different.
               **muffin-deployment#488**, green (11 checks), replayed on the node (113 tests, three
-              mutations caught). Not merged: the merge-and-deploy was refused by the permission check
-              on 11-04 ~20:25 UTC, so it waits for the user. After the deploy, time `data_defect`
-              and the sector read as anon once `pgrep -fc '[m]uffin-db-backup.sh'` reads 0.
-            - `security-kr-segments` / `security-in-segments` stalled: the 11-02 decision, still
-              open ([note](docs/deferred/2026-11-02-the-segment-queues-time-out-on-the-grid-s-filings.md)).
-              market-verify stays red on this alone until it is decided.
+              mutations caught). **Deployed 11-04 20:38 UTC** (the user approved). Verified: the
+              migration is applied, the Dagster containers did not restart (StartedAt 11-02 17:21),
+              and as anon after the backup the sector page reads in 92 ms; `data_defect` 0.36 s.
+            - `security-kr-segments` / `security-in-segments` stalled. **Decided 11-04 (the user):
+              retire both until Phase 6.** muffin-deployment#489 (RETIRES, 410, pg_cron jobs
+              removed; views and tests kept), merged 11-04 21:00. **Not deployed:** the deploy
+              dispatch was refused by the permission check, so it waits for the user.
+              market-verify stays red on this alone until it deploys.
+      - [ ] **2026-11-04 — the seven decisions on Phase 5's notes (the user, all as recommended).**
+            Deploys and rolls wait for the user: the permission check refuses a production deploy.
+            - 1, #488: deployed (above).
+            - 2, the segment parsers: #489 merged, deploy pending (above).
+            - 3, openbb-api to 1.5 GiB: in #489, deploy pending. Done when `muffin-container-near-oom`
+              reads 0 for it ([note](docs/deferred/2026-11-02-openbb-api-sits-at-its-memory-limit.md)).
+            - 4, the company lane ahead of the re-ask: muffin-ingest#162 (priority 1; the short lanes
+              move to 2), merged 21:49, roll pending. Done when a night's company runs start within
+              a minute or two of 03:30; then move the run windows in `muffin-deploy` and CLAUDE.md
+              back to 03:30-~05:50
+              ([note](docs/deferred/2026-11-02-the-company-lane-waits-for-the-stale-miss-re-ask.md)).
+            - 5, computed quarters: muffin-deployment#491 (source `sec-xbrl-ytd`, priority 45) then
+              muffin-ingest#163 (stage 2). **Deploy #491 before rolling #163** (foreign key). Then
+              re-parse the grid inside the SEC window (`sec_filer_facts`, `reparse=true`, no SEC
+              request) and compare TTM free cash flow for SEC filers with 10,382 rows over 3,351
+              securities (11-04). Probe over 250 filers: operating cash flow Q2 59 -> 2,826 and Q3
+              43 -> 2,786 against Q1 2,828; 627 of 636 within 1% of Yahoo's stated quarters
+              ([note](docs/deferred/2026-11-02-a-quarter-is-derived-from-year-to-date-facts.md)).
+            - 6, skippable outputs: **back to the user.** Dagster 1.13.22 records an output for every
+              partition of the run's range, so a skippable output saves ~2%, not most of the growth
+              ([note](docs/deferred/2026-11-02-the-sec-lane-materialises-every-visited-filer.md)).
+            - 7, amended Form 4s: muffin-deployment#490 (the summary skips an original line a 4/A
+              restates, keyed on owner, day, derivative flag and code), merged 21:49, deploy pending.
+              The data sets carry a 4/A as its own accession with no link to the original
+              ([note](docs/deferred/2026-11-02-an-amended-form-4-restates-the-original.md)).
       - 2026-11-01 — a SEC 5xx keeps stopping the Form 4 run (the user; the spec's Step 8).
       - 2026-10-30: `sec_insider_datasets` stayed STOPPED, because it failed a run on every
         unpublished quarter. **Superseded:** muffin-ingest#153 (rolled 10-31) ends such a run

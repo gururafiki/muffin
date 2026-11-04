@@ -1,7 +1,26 @@
 # An amended Form 4 restates the original
 
 Created 2026-11-02 · Planned in [the SEC spec](../specs/2026-10-24-sec-family.md) (*Deferred
-notes*) · Status: open, **the user decides**
+notes*) · Status: **Decided 2026-11-04 (the user):** option 2, the summary view skips a superseded original; then measure how the data sets mark amendments. **Built in muffin-deployment#490** (merged 2026-11-04; deploy pending).
+
+## As built, 2026-11-04
+
+**The key is narrower than the decision's wording.** An amendment can restate only the lines it
+corrects, so "issuer, owner and day" would also drop real trades. Measured:
+- one 4/A restates only a derivative grant (30,864 -> 31,397 shares), and leaves the same day's
+  11,626-share purchase at 129.02 standing;
+- three 4/As of 2026-11-02 each restate only line `nd:1` of a Form 4 whose other lines stand.
+
+So a line is superseded only by an amendment line with the same security, owner, transaction day,
+derivative flag and transaction code, filed on or after it.
+- **In the 90-day window:** 350 lines rather than 431. 86 securities move, and no buyer or seller
+  count changes.
+- **Still uncovered:** 14 lane groups hold more original lines than amendment lines even at that
+  key. The XML carries no per-line link, so nothing narrower exists.
+
+**How the data sets mark amendments:** as their own accession, `4/A` beside `4` (15,047 against
+584,889 lines in 2006-07), with no field naming the original. One rule therefore covers both sources,
+and option 1 (retract by accession) is not possible from either.
 
 ## Why
 

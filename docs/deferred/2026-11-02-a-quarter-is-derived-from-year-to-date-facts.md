@@ -1,7 +1,31 @@
 # A quarter is derived from year-to-date facts
 
 Created 2026-11-02 · Planned in [the SEC spec](../specs/2026-10-24-sec-family.md) (*Deferred
-notes*) · Status: open, **the user decides where it is built**
+notes*) · Status: **Decided 2026-11-04 (the user):** option 1, in stage 2 (`sec_facts`), marked as computed. **Built:** muffin-deployment#491 (the source) and muffin-ingest#163 (the rule). Deploy #491 before rolling #163.
+
+## As built, 2026-11-04
+
+- **The rule.** Q2 = H1 - Q1 and Q3 = 9M - H1, for a quarterly filer's money lines, only where no
+  three-month figure is stated. Both terms come from one concept.
+- **The marker.** Rows carry the source `sec-xbrl-ytd` at priority 45, below a provider's stated
+  figure, as `derived-q4` is.
+- **ONE VINTAGE, NOT EACH TERM'S LATEST FILING.** The minuend is its latest filing; the subtrahend is
+  the figure as it stood at that filing. Pairing a restated Q1 with an unrestated half year put one
+  quarter at +7.0m against a restated -0.5m.
+- **Measured over 250 production filers** (read-only, the branch's reader):
+
+  | Operating cash flow quarters | Before | After |
+  |---|---|---|
+  | Q1 | 2,828 | 2,828 |
+  | Q2 | 59 | 2,826 |
+  | Q3 | 43 | 2,786 |
+
+  - Against Yahoo's stated quarters: 627 of 636 within 1%.
+  - Against SEC's own stated quarters: 33,053 agree and 1,501 differ, mostly restatements and
+    recasts. Those quarters keep their stated figure.
+- **The guard** is the stage-2 comparison wherever a figure is stated (`ytd_agrees`,
+  `ytd_disagrees`, in each run's metadata), plus the captured filers' test.
+- **Before**, for the TTM comparison: 10,382 TTM free-cash-flow rows over 3,351 SEC filers.
 
 ## Why
 
