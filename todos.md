@@ -3580,6 +3580,22 @@ names its provider** is now a guideline for every family.
               removed; views and tests kept). **Deployed 11-04 22:15 UTC** (the user approved):
               both answer 410, `cron.job` no longer holds their jobs, `muffin-resource-stalled`
               stopped firing. The next market-verify should pass the segment check.
+      - [ ] **2026-11-05 — the check-ins of 11:19 and 12:23 reached the session at 22:15 UTC**, after
+            the SEC window had closed, so the insider history batches (2008-01..2026-01) and the
+            whole-grid re-parse did not run. Both wait for the 11-06 window, behind the weekday
+            tick (11:08-~12:24): first the re-parse with its derivation drain, then the insider
+            batches. Read at 22:15:
+            - Alerts: only `muffin-backlog-stalled`, on `pending_price_targets`. finviz moved its
+              quote page on or around 11-04 16:00 and finvizfinance no longer parses it, so the
+              edge resource has advanced nothing since. For the user
+              ([note](docs/deferred/2026-11-05-finviz-moved-its-quote-page.md)).
+            - market-verify 11-05 (11:19): **the segment check passed** (the 11-04 retirement).
+              The only failure is the one-period tripwire, 123 pairs against 122. Each promotion
+              wave adds REIT pairs like these, so the step-11 re-key on fiscal labels is the fix,
+              not another raise.
+            - Disk `/mnt/data` 65.80% by the alert's measure (65.36% on 11-04).
+            - Every lane succeeded today: 100 price runs (00:00-02:20), 19 company runs, 74 SEC
+              filer runs (11:12-12:24).
       - [ ] **2026-11-04 — the seven decisions on Phase 5's notes (the user, all as recommended).**
             The permission check refuses a production deploy; the user approved the deploy (22:05-22:15
             UTC, muffin-deployment 3bc8cfa) and the roll (22:16-22:18, muffin-ingest d88a0c4) at
@@ -3588,12 +3604,15 @@ names its provider** is now a guideline for every family.
             - 1, #488: deployed (above).
             - 2, the segment parsers: #489, deployed (above).
             - 3, openbb-api to 1.5 GiB: in #489, deployed; the limit reads 1,610,612,736 and the service
-              sits at 21.8% after its restart. `muffin-container-near-oom` stopped firing. Re-read once
-              its ~870 MiB plateau returns (~11-06)
+              sits at 21.8% after its restart. `muffin-container-near-oom` stopped firing. Its 24-hour
+              peak on 11-05 was 598 MiB (39%). Re-read once its ~870 MiB plateau returns (~11-06)
               ([note](docs/deferred/2026-11-02-openbb-api-sits-at-its-memory-limit.md)).
             - 4, the company lane ahead of the re-ask: muffin-ingest#162 (priority 1; the short lanes
-              move to 2), rolled 22:18; the loaded definitions read company 1, FX and indices 2. Done
-              when a night's company runs start within
+              move to 2), rolled 22:18; the loaded definitions read company 1, FX and indices 2. **Done
+              11-05:** the first company run started at 03:30:45, the lane ended at 05:05 (it had
+              been ending 05:49-06:19), and the 193 stale-miss runs followed until 06:18. The
+              run windows in `muffin-deploy` and `muffin-dagster-operations` now say so (on
+              muffin-deployment#493's branch). It was done when a night's company runs started within
               a minute or two of 03:30; then move the run windows in `muffin-deploy` and CLAUDE.md
               back to 03:30-~05:50
               ([note](docs/deferred/2026-11-02-the-company-lane-waits-for-the-stale-miss-re-ask.md)).
@@ -3603,8 +3622,16 @@ names its provider** is now a guideline for every family.
               computed cash quarters AAPL 36, COST 36, CIK 1367644 31, MSFT 0 (states its quarters),
               TSM 0 (20-F); all labelled and derived; AAPL's computed operating cash flow equals
               Yahoo's to the dollar (27.867, 28.702, 34.369 bn); TTM free cash flow AAPL 2 -> 45 rows
-              (2014-2026), COST -> 61, CIK 1367644 -> 44. Remaining: re-parse the whole grid inside
-              the SEC window (`sec_filer_facts`, `reparse=true`, no SEC
+              (2014-2026), COST -> 61, CIK 1367644 -> 44. **11-05 weekday tick:** 584 filers
+              parsed under the rule, 49,098 lines computed, 83,228 agree with stated ones and 3,630
+              differ (4.2%, as probed); 13,205 computed rows over 530 securities. TTM free cash flow
+              for SEC filers 10,382 -> 21,703, quarterly operating cash flow 55,768 -> 67,608, **but
+              TTM operating cash flow only 11,746 -> 12,372**: `derive_ttm`'s fourth quarter
+              required the year's own source, so `sec-xbrl-ytd` quarters formed no Q4. Fixed in
+              **muffin-deployment#493** (`data_source.computed_from`; the 524 affected filers
+              re-queued). Rolled back on production, AAPL's TTM operating cash flow went 4 -> 69
+              rows, equal to the filed annual at every year end. Needs a deploy. Remaining: re-parse
+              the whole grid inside the SEC window (`sec_filer_facts`, `reparse=true`, no SEC
               request) and compare TTM free cash flow for SEC filers with 10,382 rows over 3,351
               securities (11-04). Probe over 250 filers: operating cash flow Q2 59 -> 2,826 and Q3
               43 -> 2,786 against Q1 2,828; 627 of 636 within 1% of Yahoo's stated quarters

@@ -45,6 +45,33 @@ Five filers re-parsed from stored raw (backfill `xuzbjufe`, no SEC request), aft
   27.867, 28.702 and 34.369 bn.
 - The whole grid is re-parsed in the next SEC window.
 
+## The first weekday tick, 2026-11-05, and a TTM that did not form
+
+- **The tick.** 584 filers parsed under the rule, and 49,098 lines computed. Against stated
+  figures, 83,228 agree and 3,630 differ, 4.2% as probed. 13,205 computed rows now cover 530
+  securities.
+- **The counts for SEC filers:**
+
+  | | Before | After |
+  |---|---|---|
+  | TTM free cash flow | 10,382 | 21,703 |
+  | Quarterly operating cash flow | 55,768 | 67,608 |
+  | TTM operating cash flow | 11,746 | 12,372 |
+
+  The last barely moved. AAPL held 45 TTM free-cash-flow rows and 4 of operating cash flow.
+- **The cause.** `derive_ttm` derives the fiscal fourth quarter as the year less its three
+  quarters, and required the quarters to share the year's source. The year is `sec-xbrl`, while Q2
+  and Q3 are now `sec-xbrl-ytd`. Free cash flow escaped only because its quarters and year are all
+  `derived`.
+- **The fix, muffin-deployment#493.** `data_source.computed_from` (`sec-xbrl-ytd` -> `sec-xbrl`) and
+  the fourth quarter accepting either source; the 524 affected filers are re-queued.
+- **Rolled back on production:** AAPL's TTM operating cash flow went 4 -> 69 rows (2009-2026), equal
+  to the filed annual at every year end; COST 1 -> 61; CIK 1367644 4 -> 52.
+
+**The lesson:** a derivation that groups by source must know which sources are computed from which.
+The five-filer subset looked complete because it was read for free cash flow, not operating cash
+flow.
+
 ## Why
 
 A 10-Q states the cash-flow statement year to date: six months in Q2, nine in Q3. The 10-K

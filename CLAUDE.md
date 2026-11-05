@@ -5852,6 +5852,15 @@ not seen, and each was measured before it was built.
   derivation chooses per metric by `source_priority`), not lines merged into the stated row.
 - **The permission check refuses a production deploy dispatch, and a merge alone is allowed.** Deploys
   and rolls wait for the user even when the decision behind them is the user's.
+- **A DERIVATION THAT GROUPS BY SOURCE MUST KNOW WHICH SOURCES ARE COMPUTED FROM WHICH.** The
+  computed quarters went live, TTM free cash flow for SEC filers doubled (10,382 -> 21,703), and TTM
+  operating cash flow barely moved (11,746 -> 12,372). `derive_ttm` derives the fiscal Q4 as the year
+  less its three quarters, and required those quarters to share the year's source. The year is
+  `sec-xbrl` while Q2 and Q3 are now `sec-xbrl-ytd`, so no Q4 and no TTM formed. Free cash flow
+  escaped only because all of its rows are `derived`. `data_source.computed_from` now names the
+  source a computed one comes from (#493). **The five-filer live subset had looked complete because I
+  read free cash flow, the metric that happened to work.** Read every metric a change feeds, not the
+  one you set out to fix.
 - **A PROBE OVER PRODUCTION'S RAW FILES IS THE YIELD MEASUREMENT.** The branch's library on
   `PYTHONPATH`, run in a throwaway container from the production image, in the code location's
   network namespace, with the raw volume read-only and a 1 GB memory cap. It runs the new rule over

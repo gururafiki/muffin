@@ -1,6 +1,6 @@
 # The company lane waits for the stale-miss re-ask
 
-Created 2026-11-02, from the Monday promotion check-in · Status: **Decided 2026-11-04 (the user):** option 1, a `dagster/priority` on `yahoo_companies`. **Built in muffin-ingest#162** (rolled 2026-11-04 22:18 UTC; done when the 11-05 03:30 runs start at once): the lane takes priority 1 and the short lanes move from 1 to 2, so they still outrank everything.
+Created 2026-11-02, from the Monday promotion check-in · Status: **Decided 2026-11-04 (the user):** option 1, a `dagster/priority` on `yahoo_companies`. **Built in muffin-ingest#162** (rolled 2026-11-04 22:18 UTC). **Done 2026-11-05:** the first company run started at 03:30:45, the lane ended at 05:05, and the 193 stale-miss runs followed until 06:18.: the lane takes priority 1 and the short lanes move from 1 to 2, so they still outrank everything.
 
 ## Why
 
