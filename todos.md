@@ -3580,6 +3580,14 @@ names its provider** is now a guideline for every family.
               removed; views and tests kept). **Deployed 11-04 22:15 UTC** (the user approved):
               both answer 410, `cron.job` no longer holds their jobs, `muffin-resource-stalled`
               stopped firing. The next market-verify should pass the segment check.
+      - [ ] **2026-11-06 — the user's answers (given ~23:50 UTC): deploy #492/#493, and retire finviz
+            price targets with a Yahoo replacement.** The deploy was moved out of the 00:00-02:15 price
+            night (#493's migration briefly locks `data_source`) to a 02:21 check-in, which also merges
+            and ships **muffin-deployment#494** (`security-price-targets` retired, `pending_price_targets`
+            dropped). The Yahoo analyst-actions design waits for the user
+            ([spec](docs/specs/2026-11-07-analyst-actions-from-yahoo.md)): key with the provider and
+            the action's timestamp, full history since 2012, finviz rows kept behind the view until
+            the contract, `0.0` targets as null.
       - [ ] **2026-11-05 — the check-ins of 11:19 and 12:23 reached the session at 22:15 UTC**, after
             the SEC window had closed, so the insider history batches (2008-01..2026-01) and the
             whole-grid re-parse did not run. Both wait for the 11-06 window, behind the weekday

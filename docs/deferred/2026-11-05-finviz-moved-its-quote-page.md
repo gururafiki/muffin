@@ -1,6 +1,6 @@
 # finviz moved its quote page, and the price-target resource is frozen
 
-Created 2026-11-05, from the firing `muffin-backlog-stalled` alert · Status: **open, for the user to decide**.
+Created 2026-11-05, from the firing `muffin-backlog-stalled` alert · Status: **Decided 2026-11-06 (the user): option 1.** Retired in muffin-deployment#494; the Yahoo replacement's design is [the spec](../specs/2026-11-07-analyst-actions-from-yahoo.md), awaiting approval.
 
 ## Why
 
