@@ -3343,8 +3343,8 @@ names its provider** is now a guideline for every family.
       the CIK grid (**done** 11-02), every insider quarter since 2006, Form 4 days since 04-01 (the
       `sec_days` grid's start), the label and derive drain. **What step 8 leaves, and the order:**
       [note](docs/deferred/2026-11-02-the-sec-history-backfills-and-the-label-drain.md).
-      - [ ] Next 11:00-20:00 UTC window: the insider data-set history, 2006q1 onward, oldest first,
-            stopping if the disk alert's measure passes 76% (~5 GB, projected ~70%).
+      - [x] The insider data-set history, 2006q1 onward, oldest first, stopping if the disk alert's
+            measure passes 76% (~5 GB, projected ~70%). **Done 2026-11-07** (below).
             **Batch 1 done 2026-11-03** (`tbixaful`, 2006q1-2007q4, 12:19-12:24, after the filer
             sensor's tick freed the `sec` pool): 16 of 16 materialisations, **607,574 trades**
             (52,000-86,000 a quarter), `collapsed` 0, `malformed` 0, `retracted` 0. Per quarter:
@@ -3604,6 +3604,35 @@ names its provider** is now a guideline for every family.
             - The 12:31 check-in's SEC work (the whole-grid re-parse, the insider history) arrived
               after 18:30, so it moves to the 11-07 window. The deploy of #492/#493 is the 02:21
               check-in's.
+      - [ ] **Check-in 2026-11-07 11:13 UTC (Saturday).**
+            - Alerts: `muffin-backlog-flat` and `muffin-backlog-stalled`, the retirement leftovers
+              #497 fixes (replayed: `pending_eps_history` FLAT at 309, `pending_price_targets` 2,865
+              with 15 samples, both last sampled 02:04). #497 is merged, not deployed; both clear by
+              themselves (~19:05 today, ~02:05 on 11-08).
+            - The 02:24 deploy carried #492-#495. #497 waits for the next deploy, and muffin-ingest#164
+              (merged 02:39) is **not rolled**: no approval in the conversation.
+            - market-verify 11-07 (10:31, before the tick): only the one-period tripwire, 123 pairs
+              against 122. #496 closes it once #164 is rolled.
+            - The Saturday filer tick: 74 of 74 runs, 11:01-12:12, after `sec_daily_index` read
+              Friday's index.
+            - **The whole grid re-parsed** (`mkaasrwf`, 12:12-13:23, 75 of 75 runs, no SEC request):
+              278,510 lines computed, 462,786 agree with a stated figure and 18,929 differ (3.9%);
+              derivation drained to 0. For SEC filers: `sec-xbrl-ytd` rows 28,562 -> 74,973 over
+              2,973 securities; TTM free cash flow 33,802 -> **77,107** (10,382 on 11-04); TTM
+              operating cash flow 55,802 -> **133,531** (11,746 on 11-04); quarterly operating
+              cash flow 90,826 -> 152,187; distinct cash quarters Q1 37,827, Q2 38,199, Q3 38,743.
+              [The YTD note](docs/deferred/2026-11-02-a-quarter-is-derived-from-year-to-date-facts.md)
+              is done. It ran on the pre-#164 calendars: after the roll, re-parse the filers
+              whose calendars change (49 in the grid-wide comparison), then confirm 0 labelled
+              annual pairs under 300 days and merge #496.
+            - **The insider history is done**: five backfills, 13:18-14:34, 73 quarters
+              (2008q1-2026q1), all SUCCESS, `collapsed`/`malformed`/`retracted` 0 everywhere;
+              4,667,336 trades, equal to the table's growth (746,544 -> 5,413,880 rows, 428 MB ->
+              3.2 GB). `/mnt/data` 67.47% -> 71.95%. All 81 quarters 2006q1-2026q1 held.
+            - `coverage_current` reads 25-42 s, against 8.6 s cold on 10-03: its distinct scan of
+              `insider_trade` heap-fetches the 818k rows inserted after the 14:21 autovacuum. The
+              coverage sample's pg_cron bound is 120 s. Re-measure at the next check-in.
+            - **Form 4 days 2026-04-01..07-31** (`ouowexhn`) launched 14:34; ~3 h expected.
       - [ ] **2026-11-06 — the user's answers (given ~23:50 UTC): deploy #492/#493, and retire finviz
             price targets with a Yahoo replacement.** The deploy was moved out of the 00:00-02:15 price
             night (#493's migration briefly locks `data_source`) to a 02:21 check-in, which also merges

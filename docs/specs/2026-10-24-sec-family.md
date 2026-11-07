@@ -1272,6 +1272,51 @@ project to ~70%. The `amendments` column counts the quarter's amended filings; w
 set also keeps the filings they amend is not yet measured, and is the open half of
 [the amendment note](../deferred/2026-11-02-an-amended-form-4-restates-the-original.md).
 
+### Step 8: the whole grid re-parsed for computed quarters, 2026-11-07
+
+Backfill `mkaasrwf`, 12:12-13:23 UTC, after the Saturday filer tick (74 of 74 runs, 11:01-12:12).
+It covered all 3,726 filers from stored raw with `reparse=true` and no SEC request, in 75 of 75 runs
+of about 55 s each. The derivation ran between them and drained (25,008 statements and 755 TTM
+securities in one run of 337 s), ending at 0 and 0. It ran before muffin-ingest#164's roll, so
+about 49 filers' calendars still follow the old overlap rule; a re-parse of those filers follows the
+roll.
+
+- Summed over the runs: 9,245,094 facts read, 2,045,420 year-to-date facts. **278,510 lines
+  computed; 462,786 agree with a stated figure and 18,929 differ (3.9%).** 42,351 statement rows
+  changed; 0 retracted, 0 collapsed, 133 mixed-currency facts, 74,793 off-calendar durations.
+- For SEC filers: `sec-xbrl-ytd` rows 28,562 -> 74,973 over 1,154 -> 2,973 securities; TTM free
+  cash flow 33,802 -> 77,107 (10,382 on 11-04); TTM operating cash flow 55,802 -> 133,531 (11,746
+  on 11-04); quarterly operating cash flow 90,826 -> 152,187.
+- Distinct cash quarters: Q1 37,827, Q2 38,199, Q3 38,743. The note
+  [a quarter is derived from year-to-date facts](../deferred/2026-11-02-a-quarter-is-derived-from-year-to-date-facts.md)
+  is done.
+
+### Step 8: the insider data sets' history, done, 2026-11-07
+
+Five backfills after the grid re-parse, 13:18-14:34 UTC, 73 quarters (2008q1-2026q1), one run a
+quarter at ~46 s. Every run succeeded; `collapsed`, `malformed` and `retracted` were 0 in every
+quarter. With the first batch (11-03), all 81 quarters 2006q1-2026q1 are held.
+
+| Backfill | Quarters | Zips kept raw | Trades inserted | `/mnt/data` after |
+|---|---|---|---|---|
+| `ccotgaqz` | 2008q1-2011q4 | 181.5 MB | 818,415 | 68.46% |
+| `myvzmvlj` | 2012q1-2015q4 | 178.6 MB | 872,777 | 69.28% |
+| `cuvijjiw` | 2016q1-2019q4 | 167.0 MB | 983,964 | 70.24% |
+| `mtiqwwlr` | 2020q1-2023q4 | 175.1 MB | 1,230,216 | 71.30% |
+| `aywkxbaq` | 2024q1-2026q1 | 94.1 MB | 761,964 | 71.95% |
+
+- `/mnt/data` was 67.47% before the first batch (after the re-parse), by the disk alert's measure.
+- `insider_trade`: 746,544 -> 5,413,880 rows, 428 MB -> 3,211 MB. The summed `rows` equal the
+  table's growth exactly, so every counted row reached the table.
+- Per quarter: 8-16 MB zipped; 15,800-54,700 tracked filings (rising, since today's issuers filed
+  more in recent years); 316-1,090 amendments. The per-quarter counters are in each run's metadata.
+- The summary the app reads is unaffected: AAPL 1-19 ms, JPM 3 ms as anon; 2,775 securities.
+- `coverage_current` read **25-42 s** at 14:35 against 8.6 s cold on 10-03. Its
+  `select distinct security_id from insider_trade` became an index-only scan with heap fetches,
+  because the 818k rows inserted after the 14:21 autovacuum have no visibility-map bits yet. The
+  twice-daily sample runs from pg_cron with a 120 s bound, so it still fits; re-measure after the
+  next autovacuum.
+
 ### Step 7b: `sec_filers_due` on (muffin-ingest#158), 2026-11-02
 
 Rebased onto main, merged at 17:20 UTC and rolled at 17:22 with nothing in flight. All three services

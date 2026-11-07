@@ -1,7 +1,7 @@
 # A quarter is derived from year-to-date facts
 
 Created 2026-11-02 · Planned in [the SEC spec](../specs/2026-10-24-sec-family.md) (*Deferred
-notes*) · Status: **Decided 2026-11-04 (the user):** option 1, in stage 2 (`sec_facts`), marked as computed. **Built:** muffin-deployment#491 (the source) and muffin-ingest#163 (the rule). Deploy #491 before rolling #163.
+notes*) · Status: **Done 2026-11-07.** Decided 2026-11-04 (the user): option 1, in stage 2 (`sec_facts`), marked as computed. Built in muffin-deployment#491 (the source), muffin-ingest#163 (the rule) and muffin-deployment#493 (the fourth quarter). The whole grid was re-parsed on 2026-11-07 (below).
 
 ## As built, 2026-11-04
 
@@ -71,6 +71,33 @@ Five filers re-parsed from stored raw (backfill `xuzbjufe`, no SEC request), aft
 **The lesson:** a derivation that groups by source must know which sources are computed from which.
 The five-filer subset looked complete because it was read for free cash flow, not operating cash
 flow.
+
+## The whole grid, 2026-11-07
+
+Backfill `mkaasrwf` re-parsed all 3,726 filers from stored raw (`reparse=true`, no SEC request),
+12:12-13:23 UTC, 75 of 75 runs. It ran after #493's deploy and before muffin-ingest#164's roll, so
+the calendars are still the old rule for the ~49 filers that roll changes. The derivation kept up
+between runs and ended at 0 underived statements and 0 TTM securities.
+
+- **The rule, summed over the 75 runs:** 278,510 lines computed. Against a stated figure, 462,786
+  agree and 18,929 differ (3.9%). 42,351 statement rows changed, 0 retracted, 0 collapsed.
+- **The counts for SEC filers** (the "11-07 before" column is today at 11:20, after two weekday
+  ticks had already computed quarters for the filers they visited):
+
+  | | 11-04 | 11-05 | 11-07 before | 11-07 after |
+  |---|---|---|---|---|
+  | `sec-xbrl-ytd` statement rows | 0 | 13,205 | 28,562 | 74,973 |
+  | securities with one | 0 | 530 | 1,154 | 2,973 |
+  | TTM free cash flow | 10,382 | 21,703 | 33,802 | 77,107 |
+  | TTM operating cash flow | 11,746 | 12,372 | 55,802 | 133,531 |
+  | Quarterly operating cash flow | 55,768 | 67,608 | 90,826 | 152,187 |
+
+- **Cash quarters, counted as distinct (security, period):** Q1 37,827, Q2 38,199, Q3 38,743, Q4
+  726. Q2 and Q3 now match Q1 (17,247 and 16,420 on 11-02). Counted as rows by source, Q2 and Q3
+  read about 54,000, because a period can hold both a stated `sec-xbrl` row (1.4 lines on average)
+  and a computed `sec-xbrl-ytd` row: 20,930 Q2 and 21,679 Q3 periods are computed only.
+
+All three *Done when* conditions hold.
 
 ## Why
 
