@@ -3706,6 +3706,23 @@ names its provider** is now a guideline for every family.
         `pending_ttm`; `dagster` database 5.01 GB against the new 20 GB alert. The stalled-backlog
         alert fired at 02:30, before the views went; it reads samples (last 02:04), so it clears at
         the next sample. To confirm.
+      - **Check-in 2026-11-07 06:27 UTC: that prediction was wrong, and the flat-backlog alert now
+        fires too.** Both rules judge a backlog for a while after its last sample, so retiring a
+        sampled view fires them until the samples age out:
+        - `muffin-backlog-stalled` reads 24 hours of `backlog_sample` and counts
+          `pending_price_targets` (2,865, spread 0, 20 samples, last 02:04). It needs 8 samples in
+          the window, so it clears at ~19:05 UTC today.
+        - `muffin-backlog-flat` reads `backlog_drain`, which keeps a backlog until its last sample
+          is a day old. `pending_eps_history` (309, FLAT) stays until ~02:05 on 11-08. #495 removed
+          its name exclusion on the assumption that the view drops it at the next sample.
+        - Nothing else counted: `pending_insider` moved (spread 112), `pending_cn_segments` drains
+          ~1 an hour, `pending_metrics` 23,379 of spread.
+        - The fix is to judge only backlogs whose view still exists, in both: muffin-deployment#497.
+      - **TTM drained.** `pending_ttm` 1,105 -> **0**; TTM operating cash flow 18,326 -> **60,813**
+        rows (12,372 before #493), TTM free cash flow 40,746.
+      - **#164 not rolled: no approval in the conversation by 06:27.** At 06:29 the stale-miss
+        backfill `tcnjghgc` was 208 of 241 runs done (24 s each), then 10 automation runs, so the
+        `sql` pool is free by ~07:00.
       - **muffin-ingest#164 merged 02:39 (919ad1e), image built; the roll was refused by the
         permission check and waits for the user.** Grid-wide, old against new over 3,726 filers: 49
         calendars change, filers with canonical years overlapping by more than a month 27 -> 0,
