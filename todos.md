@@ -3698,6 +3698,20 @@ names its provider** is now a guideline for every family.
         #492-#494. Step 10 (delete the handlers) from ~2026-11-10; the segments throughput panel
         keeps the two filing resources until then (`check_dashboards_can_render.py` derives its
         list from the handlers).
+      - **Deployed 2026-11-07 02:24-02:38 UTC with #492-#494** (run 42329104918, after the price night
+        ended at 02:24). Verified: four migrations applied; Dagster's three services kept their
+        11-04 22:17 start; the six backlog views and `muffin-filing-history` gone; the five
+        resources plus `security-price-targets` answer 410 naming their lane; insider summary 2,758
+        securities; TTM operating cash flow 12,372 -> 18,326 rows with 1,105 securities still in
+        `pending_ttm`; `dagster` database 5.01 GB against the new 20 GB alert. The stalled-backlog
+        alert fired at 02:30, before the views went; it reads samples (last 02:04), so it clears at
+        the next sample. To confirm.
+      - **muffin-ingest#164 merged 02:39 (919ad1e), image built; the roll was refused by the
+        permission check and waits for the user.** Grid-wide, old against new over 3,726 filers: 49
+        calendars change, filers with canonical years overlapping by more than a month 27 -> 0,
+        filers with labelled annual pairs under 300 days 6 -> 0, 21 short years relabelled `T`
+        (the third rule, added after the first comparison: Seneca's August 1994 - March 1995).
+        Roll before the 11:13 re-parse so it applies the fix; otherwise a second re-parse.
 - [ ] 11. Contract with drop dates (the list, measured 2026-11-02: [the retired families leave columns
       behind](docs/deferred/2026-09-30-the-retired-families-leave-columns-behind.md), *the SEC
       family*); `check_one_period_one_point` re-keyed on fiscal labels, which
