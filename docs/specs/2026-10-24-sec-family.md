@@ -1311,11 +1311,32 @@ quarter. With the first batch (11-03), all 81 quarters 2006q1-2026q1 are held.
 - Per quarter: 8-16 MB zipped; 15,800-54,700 tracked filings (rising, since today's issuers filed
   more in recent years); 316-1,090 amendments. The per-quarter counters are in each run's metadata.
 - The summary the app reads is unaffected: AAPL 1-19 ms, JPM 3 ms as anon; 2,775 securities.
-- `coverage_current` read **25-42 s** at 14:35 against 8.6 s cold on 10-03. Its
-  `select distinct security_id from insider_trade` became an index-only scan with heap fetches,
-  because the 818k rows inserted after the 14:21 autovacuum have no visibility-map bits yet. The
-  twice-daily sample runs from pg_cron with a 120 s bound, so it still fits; re-measure after the
-  next autovacuum.
+- `coverage_current` read **25-42 s** at 14:35 and 67.7 s at 19:04, against 8.6 s cold on 10-03.
+  Its `select distinct security_id from insider_trade` became an index-only scan with heap fetches:
+  the rows inserted after the 14:21 autovacuum have no visibility-map bits, and the next
+  insert-triggered autovacuum needs ~1.08 M more. The twice-daily sample had already reached 119 s
+  of its 120 s bound that morning, before the load
+  ([note](../deferred/2026-11-07-the-coverage-sample-reaches-its-120-second-bound.md)).
+
+### Step 8: the Form 4 days since 04-01, 2026-11-07
+
+Backfill `ouowexhn` (`raw_sec_daily_index`, `raw_sec_form4`, `sec_form4_trade`), 14:34-~18:15 UTC, 123
+runs for 122 days. 2026q2 is not published, so every day was asked. SEC answered 26 requests with
+its own 503 page (2,825 bytes), about one in 1,650; each stopped that day's run, as decided on
+11-01. Two re-asks of the short days (`csztqyrl`, 14 days; `wlgxzmam`, 12 days, no refusal) finished
+at 19:04. The raw file merges on accession, so a re-ask asks only what the day lacks.
+
+| | Sum over the 122 days |
+|---|---|
+| Form 4s named | 49,822 |
+| answered | 49,819 |
+| absent (a 404 the index named) | 3 |
+| trades inserted | 108,741 (`collapsed` 0) |
+| raw bytes | 781 MB |
+
+The trades inserted equal the table's Form 4 and 4/A rows filed April-July. `/mnt/data` read 70.81%
+afterwards (71.95% after the insider history; WAL recycled in between). The 90-day summary is
+unchanged, since these days fall outside its window.
 
 ### Step 7b: `sec_filers_due` on (muffin-ingest#158), 2026-11-02
 

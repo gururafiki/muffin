@@ -1,7 +1,7 @@
 # The SEC history backfills and the label drain
 
 Created 2026-11-02 · Phase 5 step 8, which the plan says not to wait on (implementation rule 8:
-start the backfill, do not wait for the drain) · Status: open; the insider history is done (2026-11-07), the Form 4 days are running
+start the backfill, do not wait for the drain) · Status: open; items 1 and 2 done 2026-11-07, items 3-5 open
 
 ## What step 8 has done
 
@@ -21,8 +21,9 @@ start the backfill, do not wait for the drain) · Status: open; the insider hist
    adds ~5 GB (projected ~70%). `sec_insider_datasets` asks only the newest published quarter, so
    history is a backfill of `raw_sec_insider_dataset` then `sec_insider_trade`, quarters oldest
    first, reading `/mnt/data` by the disk alert's own measure between batches (stop at 76%).
-2. **Running 2026-11-07** (backfill `ouowexhn`, from 14:34 UTC; 2026q2 is still unpublished, so the
-   lane asks every day). **Form 4 days 2026-04-01..07-31**, the start of the `sec_days` grid. Days inside a quarter whose
+2. **Done 2026-11-07.** Backfill `ouowexhn` plus two re-asks of the days SEC's 503s cut short; all
+   122 days complete, 49,819 of 49,822 Form 4s answered (3 absent), 108,741 trades (the spec's
+   *Step 8: the Form 4 days since 04-01*). Planned as: **Form 4 days 2026-04-01..07-31**, the start of the `sec_days` grid. Days inside a quarter whose
    data set is already held are skipped by the lane, so run this after item 1: it then asks only
    what the data sets do not yet hold (2026q2 is not published as of 11-02).
 3. **The Yahoo label drain** finishes with the company rotation, ~11-06

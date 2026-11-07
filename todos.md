@@ -3629,10 +3629,21 @@ names its provider** is now a guideline for every family.
               (2008q1-2026q1), all SUCCESS, `collapsed`/`malformed`/`retracted` 0 everywhere;
               4,667,336 trades, equal to the table's growth (746,544 -> 5,413,880 rows, 428 MB ->
               3.2 GB). `/mnt/data` 67.47% -> 71.95%. All 81 quarters 2006q1-2026q1 held.
-            - `coverage_current` reads 25-42 s, against 8.6 s cold on 10-03: its distinct scan of
-              `insider_trade` heap-fetches the 818k rows inserted after the 14:21 autovacuum. The
-              coverage sample's pg_cron bound is 120 s. Re-measure at the next check-in.
-            - **Form 4 days 2026-04-01..07-31** (`ouowexhn`) launched 14:34; ~3 h expected.
+            - **Form 4 days 2026-04-01..07-31 done** (`ouowexhn` 14:34-~18:15, 123 runs; re-asks
+              `csztqyrl` 14 days and `wlgxzmam` 12 days, all SUCCESS, the last at 19:04). SEC
+              answered 26 requests with its own 503 page (about 1 in 1,650), each stopping that
+              day's run as designed; the second re-ask hit none. All 122 days complete: 49,822 Form
+              4s named, 49,819 answered, 3 absent (404). 108,741 trades inserted, equal to the
+              table's April-July Form 4 rows. Raw 781 MB. `/mnt/data` 70.81% at 19:05. The 2026q2
+              data set is still unpublished; when it lands it replaces April-June.
+            - **The coverage sample is at its bound**
+              ([note](docs/deferred/2026-11-07-the-coverage-sample-reaches-its-120-second-bound.md)):
+              `muffin-coverage` took 119 s at 05:23 today against `statement_timeout = '120s'` (43-84
+              s on 11-05/06), and `coverage_current` read 67.7 s at 19:04. The insider load made
+              its `insider_trade` scan worse: 926,730 rows inserted after the 14:21 autovacuum have
+              no visibility-map bits, and the next insert-triggered autovacuum needs ~1.08 M.
+              For the user: raise the bound and set the table's insert scale factor (recommended),
+              or rework the view.
       - [ ] **2026-11-06 — the user's answers (given ~23:50 UTC): deploy #492/#493, and retire finviz
             price targets with a Yahoo replacement.** The deploy was moved out of the 00:00-02:15 price
             night (#493's migration briefly locks `data_source`) to a 02:21 check-in, which also merges
