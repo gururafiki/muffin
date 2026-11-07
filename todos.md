@@ -3687,6 +3687,17 @@ names its provider** is now a guideline for every family.
         and Yahoo's dates for one quarter sat 13–20 days apart, so each showed twice).
 - [ ] 9. Retire the four edge resources. 10. Delete their handlers after 3 clean days. Also retire
       `security-eps-history`, unscheduled since legacy 138 but still reachable.
+      - **2026-11-07 ~02:00 UTC: step 9 built and merged (muffin-deployment#495).** `security-xbrl`,
+        `-filings`, `-filing-history`, `-insider` and `-eps-history` answer 410; rotation rows
+        disabled; `muffin-filing-history` unscheduled; the five `pending_*` views dropped now (as
+        `pending_price_targets` was), since the backlog alerts sample them; the flat-backlog rule
+        no longer excludes `pending_eps_history` by name. `security_insider_summary` counts only
+        rows naming their filing (the Form 4 lane covers filing days 08-03..11-05). Validated on
+        production, rolled back: 2,758 securities kept, 8 change by 17 trades, no buyer or seller
+        count moves. Node replay: bundle 114 objects, 113 tests, two mutations caught. Deploys with
+        #492-#494. Step 10 (delete the handlers) from ~2026-11-10; the segments throughput panel
+        keeps the two filing resources until then (`check_dashboards_can_render.py` derives its
+        list from the handlers).
 - [ ] 11. Contract with drop dates (the list, measured 2026-11-02: [the retired families leave columns
       behind](docs/deferred/2026-09-30-the-retired-families-leave-columns-behind.md), *the SEC
       family*); `check_one_period_one_point` re-keyed on fiscal labels, which
@@ -3695,6 +3706,14 @@ names its provider** is now a guideline for every family.
         wrote them straight into `security_metric` and only the derivation labels, so any period
         the filer lane does not reproduce stays unlabelled (Vodafone's 55 quarterly balance-sheet
         metrics, 2026-10-30). Decide per kind, as for the retired `sec` rows.
+      - **2026-11-07: the re-key is built, as a draft (muffin-deployment#496).** Both rows labelled
+        and under 300 days apart fails; an unlabelled row is a gauge. Measured: 123 pairs, 121 with
+        an unlabelled row, 2 labelled (Magnera, Republic Airways). Those two are successor calendars
+        whose years overlap by a quarter, which the "more than half" rule served twice; 31
+        securities hold such overlaps, most from transition periods dated as twelve months. Fixed
+        in muffin-ingest#164 (SEC calendars: a regime's first year starts after the previous one;
+        the newer regime wins any overlap past a month). Order: roll #164 before 11:00, let the
+        11:13 whole-grid re-parse apply it, confirm 0 labelled pairs, then merge #496.
 - [ ] 12. Grafana, docs, skills.
 
 ### Phases 6-8 — the remaining family cutovers — not started
