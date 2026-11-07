@@ -5867,6 +5867,27 @@ not seen, and each was measured before it was built.
   250 real filers in a minute, with no provider request and no write. Pass the database URL by
   name (`-e INGEST_DATABASE_URL` after exporting it on the node), never as a value.
 
+### The SEC history loaded (2026-11-07)
+
+The whole grid was re-parsed for computed quarters, all 81 insider quarters were loaded, and every
+Form 4 day since 04-01 was collected. Records: the SEC spec's *Step 8* sections of 11-07.
+
+- **A BULK LOAD INTO A TABLE SLOWS ITS INDEX-ONLY SCANS FOR MONTHS.** Autovacuum's insert trigger is
+  1,000 + 0.2 × reltuples, so the threshold rises with the load itself. `insider_trade` went from 0.75 M
+  to 5.41 M rows. 926,730 rows inserted after the last autovacuum have no visibility-map bits, and the
+  next autovacuum needs ~1.08 M more. The daily lane adds 1,000-2,000 rows a day. Every index-only scan
+  then reads the heap for those rows. `coverage_current`'s `select distinct security_id from insider_trade`
+  went from 0.6 s to the largest node in a 25-68 s plan. Before a load that multiplies a table, set
+  `autovacuum_vacuum_insert_scale_factor` on it, or plan the vacuum.
+- **The coverage sample is at its bound, and the alert only sees it stop.** `muffin-coverage` took
+  119 s of its 120 s `statement_timeout` at 05:23 on 11-07, before that load. On 10-03 it took 8.6 s
+  ([note](docs/deferred/2026-11-07-the-coverage-sample-reaches-its-120-second-bound.md)).
+  `cron.job_run_details` holds each pg_cron job's duration. Read it whenever a sample's input grows.
+- **SEC's 503 rate on Form 4 documents was ~1 in 1,650 requests** (26 in ~43,000). Each 503 stops that
+  day's run, as decided. Two re-asks of the short days finished the 122 days, and the second hit no
+  refusal. A partition-scoped schedule re-asks only recent days, so a backfill's short days are
+  re-asked by hand, read off each day's newest `raw_sec_form4` counters.
+
 ## Running an OpenSandbox server locally
 
 - **`docker run -d -p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock opensandbox/server:latest`.**
