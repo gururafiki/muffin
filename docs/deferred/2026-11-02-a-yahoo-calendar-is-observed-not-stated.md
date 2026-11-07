@@ -1,7 +1,7 @@
 # A Yahoo calendar is observed, not stated
 
 Created 2026-11-02 · Planned in [the SEC spec](../specs/2026-10-24-sec-family.md) (*Deferred
-notes*) · Status: open; first measure after the label drain (~2026-11-06)
+notes*) · Status: open; measured 2026-11-07 (below), the 62 unvisited securities re-read ~2026-11-10
 
 ## Why
 
@@ -28,6 +28,41 @@ rest by about 11-06.
 `defaultKeyStatistics.lastFiscalYearEnd`, which equalled the newest period on every listing
 measured in Phase 4 (CLAUDE.md, "the earnings date names the next report"). Tenth instance of "the
 answer is already in a response you fetch".
+
+## Measured 2026-11-07 ~00:05 UTC, after the rotation's first full week with the calendar step
+
+Yahoo calendars: 3,552 -> **9,308**. Yahoo statement rows still unlabelled:
+
+| Period type | 2026-11-02 | 2026-11-07 |
+|---|---|---|
+| annual | 74,465 of 172,707 | **2,158** of 179,583 |
+| quarter | 67,102 of 165,912 | **1,912** of 177,987 |
+| half | 1,536 of 3,297 | **55** of 3,339 |
+
+Every unlabelled row has a reason. None is "a canonical period exists": the labeller is
+consistent.
+
+- **No calendar: 62 securities** (868 annual and 831 quarterly rows). They are not recent listings.
+  TMRP.TA, STJ.L, WEIR.L, 2380.HK and several Shanghai lines each hold five clean December years.
+  They were last visited on 2026-10-30 at ~03:37, hours before the calendar step joined the
+  company job that day, and the rotation has not come back to them since. They get a calendar on
+  their next visit. **This is not the "no annual period" case**, which the measurement has not met.
+- **Off calendar: 213 securities annual, 266 quarterly.** Almost all hold a **SEC** calendar, which
+  replaces a Yahoo one for the whole security. Among income rows, Yahoo periods lie:
+  - before the SEC calendar's first period: 233 annual, 2 quarterly;
+  - after its last: 93 annual, 137 quarterly (Yahoo serves a quarter before its 10-Q exists);
+  - inside the span but more than 10 days from any SEC period: 281 quarterly, 10 annual.
+
+  Calendars built from Yahoo account for 30 such rows.
+- **Superseded, or a period of another class nearby:** 71 securities annual, 24 quarterly.
+
+**COST shows the inside-the-span case** (read as anon from `security_metric_series`, 2026-11-07).
+Three quarters still appear twice, because Yahoo dates them at the month end (2025-05-31,
+2026-02-28, 2026-05-31) and Costco's 12/12/12/16-week quarters end on a Sunday 13-21 days earlier
+(05-11, 02-15, 05-10). That is beyond the 10-day window, so Yahoo's rows stay unlabelled and get
+their own columns. The values are identical. A rule matching a Yahoo month-end to the canonical
+period ending in the same month, within ~31 days and with no nearer period of its class, would
+label them. That is a change to `market.label_fiscal_periods`, for the user.
 
 ## What to do, after the drain
 

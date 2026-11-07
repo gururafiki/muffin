@@ -3580,6 +3580,30 @@ names its provider** is now a guideline for every family.
               removed; views and tests kept). **Deployed 11-04 22:15 UTC** (the user approved):
               both answer 410, `cron.job` no longer holds their jobs, `muffin-resource-stalled`
               stopped firing. The next market-verify should pass the segment check.
+      - [ ] **2026-11-07 ~00:00 UTC — the 11-06 check-ins of 11:41 and 12:31, read at night.**
+            - **The label drain is nearly done**
+              ([note](docs/deferred/2026-11-02-a-yahoo-calendar-is-observed-not-stated.md)).
+              Unlabelled Yahoo rows: annual 74,465 -> 2,158, quarter 67,102 -> 1,912, half
+              1,536 -> 55; Yahoo calendars 3,552 -> 9,308. The reasons:
+              - 62 securities last visited 10-30 before the calendar step joined the job;
+                re-read ~11-10, once the rotation has been back;
+              - Yahoo periods outside the span of a SEC calendar, which replaces Yahoo's;
+              - quarters more than 10 days from a SEC quarter. COST still shows three quarters
+                twice (Yahoo's month-end against Costco's Sunday, 13-21 days apart). A labeller
+                rule is for the user.
+            - **market-verify 11-06 failed on three checks, two of them load, not data.** The run
+              started at 11:16, inside the SEC weekday tick (11:08-12:24):
+              - `data_defect` as anon: `57014` (1.1 s cold, 0.4 s warm at midnight);
+              - `check_segments_reconcile`'s sampling read: HTTP 500 at the 8 s ceiling (0.22 s
+                quiet);
+              - the 123-pair tripwire.
+
+              GitHub has started the 03:30 cron at 09:13-11:31, later each week, so it now lands
+              in the tick. For the user: hold the job until the tick ends, retry, or move it.
+              `check_derived_metrics` already compares `sec-xbrl-ytd` (521 values) and passed.
+            - The 12:31 check-in's SEC work (the whole-grid re-parse, the insider history) arrived
+              after 18:30, so it moves to the 11-07 window. The deploy of #492/#493 is the 02:21
+              check-in's.
       - [ ] **2026-11-06 — the user's answers (given ~23:50 UTC): deploy #492/#493, and retire finviz
             price targets with a Yahoo replacement.** The deploy was moved out of the 00:00-02:15 price
             night (#493's migration briefly locks `data_source`) to a 02:21 check-in, which also merges
