@@ -5888,6 +5888,28 @@ Form 4 day since 04-01 was collected. Records: the SEC spec's *Step 8* sections 
   refusal. A partition-scoped schedule re-asks only recent days, so a backfill's short days are
   re-asked by hand, read off each day's newest `raw_sec_form4` counters.
 
+### The calendars rebuilt, and a retraction the derivation never saw (2026-11-08)
+
+muffin-ingest#164 rolled; the whole SEC grid re-parsed on its calendars; muffin-deployment#498, #499.
+
+- **A DERIVATION THAT ONLY UPSERTS CANNOT FOLLOW ITS INPUT'S DELETES.** The SEC filer lane retracts a
+  statement a re-parse no longer produces, and `derive_security_metrics` left the metric derived
+  from it standing, label and all. Its source-priority guard then kept the lower-priority yfinance
+  statement at the same key from replacing it. So #164 fixed both calendars it was written for, and
+  `check_one_period_one_point` still failed on exactly those two companies. 1,286 labelled metrics
+  had outlived their statements. Fixed by an AFTER DELETE trigger on `security_statement` (#499),
+  the other half of the BEFORE UPDATE requeue trigger beside it. **When adding a derived table,
+  ask what deletes its inputs**: "an upsert cannot retract" again, one table downstream of the
+  rule that already covers the writer.
+- **A REPAIR SHOWS WHERE IT DID NOT REACH ONLY IF YOU RE-RUN THE CHECK THAT MOTIVATED IT.** The
+  calendars, the statement labels and the derivation's queue all read as fixed. Only #496's own
+  check, run against production after the re-parse, showed the two pairs still there.
+- **A MEASUREMENT TAKEN UNDER ANOTHER JOB'S WRITE LOAD SAYS NOTHING ABOUT A CHANGE.** After
+  `insider_trade`'s new vacuum setting, `coverage_current` read 52.6 s during the re-parse and every
+  node was slower, so I reported the vacuum had bought nothing. Quiet, the same read took 22.4 s and
+  the `insider_trade` scan fell from 33.2 to 17.6 s. Check `runs` for anything in flight before
+  timing, as for the backup.
+
 ## Running an OpenSandbox server locally
 
 - **`docker run -d -p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock opensandbox/server:latest`.**

@@ -1338,6 +1338,47 @@ The trades inserted equal the table's Form 4 and 4/A rows filed April-July. `/mn
 afterwards (71.95% after the insider history; WAL recycled in between). The 90-day summary is
 unchanged, since these days fall outside its window.
 
+### Step 8: the calendars rebuilt (muffin-ingest#164), and a retraction the metrics never saw, 2026-11-08
+
+#164 was rolled at 12:45 UTC with nothing in flight; all three services moved off `b3492ba5…`. The
+whole grid was then re-parsed from stored raw on the new calendars (backfill `pyufqdue`,
+`sec_filer_facts.reparse=true`, 12:46-~14:00, 75/75 runs, no SEC request):
+
+| `sec_fiscal_calendar` | | `sec_statement` | |
+|---|---|---|---|
+| filers parsed | 3,726 | statements changed | 29 |
+| calendars replaced | **49** (the grid-wide comparison's 49) | statements retracted | 85 |
+| unchanged | 3,366 | relabelled | 48 |
+| no calendar | 339 | YTD computed / agree / differ | 278,486 / 462,737 / 18,929 |
+| clipped to a transition | 21 | off calendar | 75,003 |
+
+The derivation drained to 0. Both calendars #164 was written for came out right: Magnera's December
+years 2022 and 2023 are non-canonical under Berry's September calendar, and Mesa's September years
+2023 and 2024 under Republic's December one.
+
+**#496's check still failed, on exactly those two.** Magnera's revenue for 2022-12-31 still read
+1,491,326,000 labelled FY 2022 (273 days from FY 2023), and Republic's for 2024-09-30 476,409,000
+labelled FY 2024 (274 days). Their `sec-xbrl` statements had been retracted by the re-parse, and the
+metrics derived from them stayed: `derive_security_metrics` only adds or overwrites, and its
+source-priority guard stops the lower-priority yfinance statement at the same key from replacing
+the SEC metric. Across the table, 1,286 labelled metrics had no statement at their own source,
+period and period type (105 annual, 16 half-year, 1,066 quarterly `sec-xbrl`, 99 computed quarters;
+about 80 securities). The edge never wrote labels, so these were all derived; the ~48,900
+unlabelled `sec-xbrl` metrics with no statement are the retired edge resource's, for step 11.
+
+**Fixed in muffin-deployment#499**: `security_statement_retract`, AFTER DELETE once per statement
+over a transition table, deletes the metrics a deleted statement could produce at its own source and
+key, the `derived` free cash flow or total debt whose input went, re-queues the remaining statements
+at those keys and the security's TTM. A one-off repair did the same for the 1,286. Five mutations
+caught; on production, rolled back, the repair removed 1,286 orphans and 91 computed metrics,
+re-queued 46 statements and 74 TTMs, and one derivation (87 metrics) left 0 labelled annual revenue
+pairs 7-300 days apart.
+
+Deployed at ~14:55 UTC. The repair re-queued the same 46 statements and 74 TTMs, a hand-launched
+`derived_security_metrics` run drained both to 0, and #496's check then passed on production: 0
+labelled annual pairs closer than a year over 78,162 rows, and 123 pairs with an unlabelled row,
+reported as a gauge.
+
 ### Step 7b: `sec_filers_due` on (muffin-ingest#158), 2026-11-02
 
 Rebased onto main, merged at 17:20 UTC and rolled at 17:22 with nothing in flight. All three services

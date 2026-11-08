@@ -3604,6 +3604,25 @@ names its provider** is now a guideline for every family.
             - The 12:31 check-in's SEC work (the whole-grid re-parse, the insider history) arrived
               after 18:30, so it moves to the 11-07 window. The deploy of #492/#493 is the 02:21
               check-in's.
+      - [ ] **2026-11-08 — the user: "go ahead with roll and deploy, you don't have to ask me every
+            time."** Recorded as a standing authorization in memory (merged changes only; the run
+            windows and in-flight runs still apply).
+            - **muffin-ingest#164 rolled** 12:45 UTC, nothing in flight. **#497 deployed** ~12:55:
+              the retired backlogs left `backlog_drain`, and nothing reads FLAT.
+            - **muffin-deployment#498 deployed** ~13:05: `muffin-coverage` gets 300 s (the 11-08 05:23
+              run was cancelled at 120 s) and `insider_trade` vacuums at 1% new inserts. Autovacuum
+              ran at 13:07; quiet, `coverage_current` 22.4 s and its `insider_trade` scan 33.2 ->
+              17.6 s ([note](docs/deferred/2026-11-07-the-coverage-sample-reaches-its-120-second-bound.md)).
+              **Next:** read `muffin-coverage`'s durations in `cron.job_run_details` for a week, from
+              11-09 05:23.
+            - **The whole grid re-parsed on #164's calendars** (`pyufqdue`, 75/75): 49 calendars
+              replaced, exactly as predicted; 29 statements changed, 85 retracted, 48 relabelled.
+            - **#496's check still failed on Magnera and Republic Airways**: the retracted statements'
+              metrics had stayed (1,286 labelled orphans across the table). **Fixed in
+              muffin-deployment#499**, deployed ~14:55: a delete trigger on `security_statement`
+              plus a one-off repair. After one derivation, #496's check passes on production.
+            - **#496 merged** 15:11 (rebased, 11 checks green). **market-verify green** on dispatch
+              (run 42493578391), the first pass since 11-01; red 11-02..11-08 05:23.
       - [ ] **Check-in 2026-11-07 11:13 UTC (Saturday).**
             - Alerts: `muffin-backlog-flat` and `muffin-backlog-stalled`, the retirement leftovers
               #497 fixes (replayed: `pending_eps_history` FLAT at 309, `pending_price_targets` 2,865
