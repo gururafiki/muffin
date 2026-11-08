@@ -5919,6 +5919,39 @@ muffin-ingest#164 rolled; the whole SEC grid re-parsed on its calendars; muffin-
   read-only session) found it in one call; the error's `CONTEXT` named only where the timeout
   happened to land (`price_bar`).
 
+### Step 10, a narrower gate, and analyst actions from Yahoo (2026-11-08 evening)
+
+muffin-deployment#501-#504, muffin-ingest#166, muffin-ui#143. Record: the SEC spec's *Step 10* and
+*Step 12*, and `docs/specs/2026-11-07-analyst-actions-from-yahoo.md` § *As built*.
+
+- **market-verify checks only what the Dagster lanes write** (the user's decision). Checks over
+  edge-written data and the frozen `*_missing_at` marks left it; Grafana's alerts judge the edge
+  resources. Before adding a check to market-verify, ask which writer produced the data it reads.
+- **A CONFIG TEST MUST LOAD THE FILE AT THE PATH THE MAIN CONFIG INCLUDES, AND A BROKEN CONTROL IS
+  WHAT PROVES IT DID.** The first `openresty -t` of the nginx edit mounted it at
+  `conf.d/default.conf`, which `openresty.conf` never includes, so "before" and "after" both
+  passed while testing nothing. The include path is `conf.d/muffin-cache.conf`. Run every config
+  test three ways: unchanged (passes), edited (passes), deliberately broken (fails).
+- **A HANDLER'S RETIRED ENTRY OUTLIVES THE HANDLER.** Deleting a retired handler keeps its `RETIRED`
+  line, so the resource still answers 410 naming its replacement, and logic-check still holds the
+  list equal to the migrations' `-- RETIRES:` markers. Deleting the handler also orphans the
+  guards that pinned it: run every `*-check.ts` and remove what only covered the deleted code.
+- **An action Yahoo states twice in a day needs the timestamp in the key.** AAPL's 971 analyst
+  actions hold two same-firm, same-day pairs, at different seconds. `security_price_target` is keyed
+  on `(security_id, source_code, published_at, analyst_company)`.
+- **TWO PROVIDERS DO NOT NAME ONE EVENT THE SAME WAY, SO PRECEDENCE IS PER ENTITY, NOT PER ROW.** The
+  first view hid a finviz action only where Yahoo stated the same firm, ignoring case, on the same
+  day. On the live run, 29 of the 42 finviz rows still shown were Yahoo actions under another
+  spelling ("BofA Securities" against "B of A Securities", "Robert W. Baird" against "Baird"), some
+  a day apart. Since #505, `security_analyst_action` serves each company from its best source
+  alone. Before matching events across providers, read the overlapping rows: the fixture had
+  matching names, so the test passed.
+- **"NO BETTER ROW EXISTS" AS AN ANTI-JOIN IS QUADRATIC WITHIN AN ENTITY; AS A WINDOW IT IS LINEAR.**
+  `not exists (… same company, higher priority)` checked every pair of a company's rows and called
+  `source_priority()` for each: AAPL took 147-168 ms as anon. `max(priority) over (partition by
+  security_id)`, with `data_source` joined, took 1.1-1.8 ms, and the filter still reached the
+  primary key below the window.
+
 ## Running an OpenSandbox server locally
 
 - **`docker run -d -p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock opensandbox/server:latest`.**

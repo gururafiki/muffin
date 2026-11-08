@@ -90,6 +90,16 @@ production 2026-11-02 with the query below:
 | `insider_trade` rows with no accession (70,346, `sec-form4`) | `security-insider` | `security_insider_summary` (only on days the lane has not collected) | step 9 re-points the summary; the history backfill covers their quarters |
 | `EDGE_WRITES_FLOOR` in `defs/companies/derived.py` | — | the derivation's half-hourly floor | nothing on the edge writes statements or metrics after step 9 |
 
+**Re-measured 2026-11-08, after step 10** (handlers deleted, data untouched):
+- `security_statement` rows `sec`: **44,542**.
+- `insider_trade` rows with no accession: **71,497**.
+- `sec-xbrl` metrics with no fiscal label (the edge wrote them directly): **52,427**. Of these,
+  **48,936 have no `sec-xbrl` statement at their own key** (14,375 annual over 2,326 securities,
+  34,561 quarterly over 1,928), so the filer lane's derivation can never reproduce or retract them.
+  Before deleting them on 12-07, compare a sample against company facts to learn why they have no
+  statement (off-calendar periods, year-to-date durations the edge called quarters, or dates a SEC
+  calendar moved).
+
 Found while measuring, from an older family: **`pending_eps_history` and
 `security.eps_history_fetched_at`**. `security-eps-history` (alpha_vantage, 25 calls a day) has had
 no schedule and no `cron_resource` row since legacy migration 138; `earnings-history` (nasdaq)

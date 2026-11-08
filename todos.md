@@ -3633,6 +3633,50 @@ names its provider** is now a guideline for every family.
               sibling samples, which this file already says to do.
             - **Waiting for the user:** the Yahoo analyst-actions design, market-verify landing inside
               the SEC tick, and Costco's doubled quarters (recommendations in the 11-06/11-07 entries).
+      - [ ] **2026-11-08 evening — the user: "don't stop until done, or until there is some decision
+            I have to make."** Four decisions asked at once (AskUserQuestion):
+            - **Step 10 now** (not 11-10). **muffin-deployment#501**, deployed 21:01: the SEC family's
+              handlers, plus the retired price-target, Tiingo and derive-classifications ones, and the
+              Tiingo/Alpha Vantage modules, origins and http-cache locations. The four checked answer
+              410; http-cache restarted 20:58 and the canary hits; Dagster untouched.
+            - **market-verify: "verify only the data pulled by dagster, we don't care about edge
+              functions."** **#503**, deployed: resource health, the frozen `*_missing_at` checks,
+              segment reconciliation and spine, retention, and the edge probes left. The narrowed
+              gate passed at 21:05. **Next:** read the 11-09 run, which lands in the SEC tick; if
+              `data_defect` still times out as anon there, the timing question comes back to the user.
+            - **Step 12's Grafana half: #502**, deployed: SEC requests by outcome and a refusals stat
+              (Providers), "SEC filers behind their filings" from the check's history (Pipeline). The
+              umbrella's skill mirrors were re-synced from their canonical copies (six had drifted).
+            - **Analyst actions: approved as recommended (1a, 2a, 3a).** muffin-deployment#504
+              (deployed: the key carries the provider and the action's timestamp, plus
+              `security_analyst_action`), muffin-ingest#166 (`yahoo_analyst_action`, outside the job
+              until a live run and a replay), muffin-ui#143 (reads the view, per-row currency).
+              Record in the spec's *As built*.
+            - **Analyst actions went further the same evening:**
+              - the live run on six companies matched one action across providers by firm and day,
+                and showed one action twice (Yahoo writes "B of A Securities" where finviz wrote
+                "BofA Securities");
+              - **#505**, deployed, serves each company from its best source alone, as a window:
+                1.1-1.8 ms for AAPL as anon, against 147-168 ms as an anti-join;
+              - **the replay over every stored summary** (backfill `swfbhjmr`, `--partitions
+                grid:security`, a new option of the ops script): 129/129 runs, 410,213 Yahoo
+                actions over 3,376 companies; the view serves 3,393, 17 of them from finviz alone;
+                the UI is deployed and reads the view;
+              - **muffin-ingest#167**, rolled 22:12, adds `yahoo_analyst_action` to the
+                `yahoo_companies` job.
+            - **Costco's doubled quarters: the user approved my recommendation** (25 days, quarters
+              on a 52/53-week calendar only, nearest row wins). **muffin-deployment#506**, deployed
+              22:06. Its one-time relabel labelled 106 Yahoo statement rows (47 quarters, the ten
+              retailers), with none lost. All of COST's quarters are labelled, and the relabelled
+              rows wait for the derivation's floor.
+            - **Step 11: the user kept 2026-12-07** for the data drops. Measured for it: 44,542 `sec`
+              statements, 71,497 legacy insider rows, and 48,936 edge `sec-xbrl` metrics with no
+              statement at their key, which the filer lane can never reproduce
+              ([note](docs/deferred/2026-09-30-the-retired-families-leave-columns-behind.md)).
+              `EDGE_WRITES_FLOOR` stays: it is also the retry a failed eager request never gets
+              (#167, comment only).
+            - **Next:** the check-in on 11-09 at ~12:47 UTC (cron 132f25d1) reads market-verify inside the
+              SEC tick, the first company run with analyst actions, and the Costco derivation.
       - [ ] **Check-in 2026-11-07 11:13 UTC (Saturday).**
             - Alerts: `muffin-backlog-flat` and `muffin-backlog-stalled`, the retirement leftovers
               #497 fixes (replayed: `pending_eps_history` FLAT at 309, `pending_price_targets` 2,865

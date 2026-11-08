@@ -1,8 +1,8 @@
 # Analyst actions from Yahoo
 
-Status: **design, for the user's approval** (the replacement decided on 2026-11-06, when finviz's
-price targets retired: muffin-deployment#494,
-[note](../deferred/2026-11-05-finviz-moved-its-quote-page.md)).
+Status: **approved by the user 2026-11-08, as recommended (1a, 2a, 3a), and built** (the
+replacement decided on 2026-11-06, when finviz's price targets retired: muffin-deployment#494,
+[note](../deferred/2026-11-05-finviz-moved-its-quote-page.md)). See *As built* at the end.
 
 ## What exists
 
@@ -58,3 +58,63 @@ price targets retired: muffin-deployment#494,
 - **muffin-ingest.** A stage-2 asset in `defs/companies/` reading the stored documents, in the
   `yahoo_companies` job; tests over the captured AAPL document; a tiny local subset, then a live
   subset; then a replay over every stored document, which needs no request.
+
+## As built (2026-11-08)
+
+- **muffin-deployment#504** (deployed):
+  - `security_price_target` gains `published_at` and `currency_code`;
+  - its key becomes `(security_id, source_code, published_at, analyst_company)`;
+  - finviz's 49,025 rows take midnight UTC and USD.
+
+  `security_analyst_action` hides a row where a higher-priority source states the same firm
+  (compared without case), security and day. The guard's fixture makes the wrong rules disagree,
+  and four mutations were caught on the node replay. On a rolled-back production dry run, AAPL read
+  as anon in 13.6 ms, and the view has an anon latency probe.
+- **muffin-ingest#166:**
+  - `facets/analyst_actions.py` and the stage-2 asset `yahoo_analyst_action`, over
+    `raw_yahoo_summary`;
+  - Yahoo's codes map to the app's words (`main` is "Maintains"), a 0.0 target is no target, and
+    targets carry the quote currency;
+  - a document carrying the module retracts Yahoo's own rows it no longer states, per company;
+  - it ships outside the `yahoo_companies` job until a live run and a replay over every stored
+    document, then joins it.
+- **muffin-ui#143:** the stock page reads the view, orders by `published_at`, and labels each target
+  with its own currency.
+
+### The live run, and why the view picks per company (2026-11-08)
+
+- **Live run.** After the roll, a backfill over six companies (AAPL, MSFT, NVDA, TSM, 7203.T,
+  VOD.L) succeeded. Yahoo's rows run from 2012 to 2026-11-03: AAPL 979, MSFT 955, NVDA 984, TSM 106,
+  all USD and all in the five words. Toyota and Vodafone carry no module and wrote nothing.
+- **Matching one action across providers does not work.** With the first view's rule (same firm,
+  ignoring case, same day), 42 finviz rows still showed beside Yahoo's on those four companies.
+  29 of them had a Yahoo action within three days at the same target under another spelling:
+  - BofA Securities and B of A Securities;
+  - KeyBanc Capital Markets and Keybanc;
+  - Evercore ISI and Evercore ISI Group;
+  - Rothschild & Co Redburn and Rothschild & Co;
+  - Robert W. Baird and Baird;
+  - The Benchmark Company and Benchmark.
+
+  Some were also a day apart (Stifel on MSFT). So the page showed one action twice.
+- **muffin-deployment migration 20261108220000** applies "Yahoo first" (3a) per company: a source's
+  rows show only where no higher-priority source has any row for that company. A covered company
+  loses the few actions only finviz recorded; they stay in the table until the contract.
+  - **The first form was too slow.** Written as an anti-join, it took AAPL to 147-168 ms as anon:
+    every pair of the company's rows was checked, with a `source_priority()` call for each.
+  - **The window is linear.** As `max(priority) over (partition by security_id)`, with
+    `data_source` joined, AAPL reads in 1.1-1.8 ms, and the filter reaches the primary key below
+    the window.
+- **The replay over every stored summary**, backfill `swfbhjmr`:
+  - launched 21:20 UTC over 12,846 partitions, with `dagster_gql.py --partitions grid:security`, an
+    option added for it;
+  - 129/129 runs succeeded, 15-18 s each, by 22:07;
+  - 410,213 Yahoo actions over 3,376 companies, newest 2026-11-07;
+  - targets are USD 400,720, CAD 7,419, MXN 594, ILA 495, CHF 465, GBX 232, EUR 157, and 95
+    withheld.
+
+  The view serves 3,393 companies, 17 of them from finviz alone.
+- **muffin-ui#143** deployed at 21:48: the served bundle reads `security_analyst_action`.
+- **muffin-ingest#167** rolled at 22:12: the asset is in the `yahoo_companies` job from the 11-09
+  03:30 run.
+

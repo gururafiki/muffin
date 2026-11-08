@@ -1413,3 +1413,68 @@ Company facts are asked only for filers whose named form refreshes facts, hence 
 **A weekday tick visits the whole grid**: the filers one day's index names fall in every 50-filer
 chunk, so all 75 chunks run every weekday, and every visited filer writes a materialization for
 each of the seven specs ([note](../deferred/2026-11-02-the-sec-lane-materialises-every-visited-filer.md)).
+
+### Step 10: the handlers leave (muffin-deployment#501), 2026-11-08
+
+The user chose to run it two days early, on 11-08 rather than 11-10: the handlers already answered
+410, so a revert is the rollback, and the data backup stays until the 12-07 contract either way.
+
+- **Deleted from `market-refresh`:** the handlers of `security-xbrl`, `-filings`,
+  `-filing-history`, `-insider`, `-statements` and `-eps-history`. Three other retired handlers that
+  were still in the file went with them: finviz's `security-price-targets`, Tiingo's
+  `security-corporate-actions`, and `derive-classifications`. Each keeps its `RETIRED` entry, and
+  the four checked after the deploy answer 410 naming the lane that replaced them.
+- **The modules only they used:** `tiingo.ts` and `alpha-vantage.ts`, their origins, their two
+  http-cache locations and the env vars that pointed at them, and `noDataForSymbol`. The rendered
+  nginx config without the two locations passed `openresty -t` on the node, against a deliberately
+  broken copy that failed. The deploy restarted http-cache at 20:58, and the canary hits.
+- **No migration:** the backlog views went at retirement. `xbrl.ts` stays while `security-segments`
+  imports it. The Korean and Indian segment handlers stay retired, not deleted, until Phase 6.
+- **logic-check** lost the guards that pinned the deleted handlers. The backlog-TTL guard now names
+  news and wikidata, and the scope guard's floor is the nine backlog-driven resources left.
+
+### market-verify checks only Dagster data (muffin-deployment#503), 2026-11-08
+
+The user's decision, asked because GitHub now starts the 03:30 cron inside the SEC weekday tick:
+"we should verify only the data pulled by dagster, we don't care about edge functions".
+
+- **Left the gate**, with their scripts:
+  - resource health;
+  - the `*_missing_at` checks by market cap and by fund weight (those columns have had no writer
+    since their resources retired);
+  - segment reconciliation and the segment-spine refresh;
+  - retention, whose six tables are all pruned by edge resources;
+  - the business-lines and macro anon probes.
+- **Stayed:** everything over Dagster tables and views, `data_defect` included.
+- **The narrowed gate passed** on its first run, 21:05 UTC.
+
+Whether it still fails under the SEC tick's load, as `data_defect` did as anon on 11-06, is
+unproven. The next weekday run (11-09) shows it.
+
+### Step 12, the Grafana half (muffin-deployment#502), 2026-11-08
+
+- **Providers:**
+  - the ingest worker's SEC requests by outcome, with `refused`, `throttled` and `transport` drawn
+    red;
+  - a stat of refusals and throttles over 24 h (0 when deployed; 297 answered that day).
+- **Pipeline:** "SEC filers behind their filings", the `no_filer_is_behind_its_filings` check's
+  `missing` and `filings_named` per evaluation, read from Dagster's `asset_check_executions`, so it
+  costs the market database nothing. 519 evaluations in the 7 days before, 23 of them non-zero,
+  the newest 0 of 3,430.
+- **Segments:** the throughput panel stopped naming the two filing resources whose handlers left.
+- **Not built:** raw bytes under `raw_sec_*`. No metric breaks the raw volume down by asset, and
+  `muffin_volume_bytes` already plots the volume.
+
+### Two decisions the same evening, 2026-11-08
+
+- **Costco's doubled quarters** (the user approved the recommendation): muffin-deployment#506. For a
+  quarter on a 52/53-week SEC calendar, `label_fiscal_periods` matches within 25 days instead of
+  10, and beyond 10 days the nearest row of a source wins. Its one-time relabel labelled 106 Yahoo
+  statement rows across COST, PEP, KR, AZO, DPZ, ACI, AAP, CAVA, FLO and JACK, with none lost.
+  Five mutations were caught.
+- **Step 11 keeps 2026-12-07** (the user). The numbers it will act on are in
+  [the note](../deferred/2026-09-30-the-retired-families-leave-columns-behind.md).
+  `EDGE_WRITES_FLOOR` stays rather than going at the contract: no edge resource writes statements
+  any more, but the floor is what retries a derivation that failed, since a failed eager request
+  counts as handled.
+
