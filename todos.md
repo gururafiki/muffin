@@ -3623,6 +3623,16 @@ names its provider** is now a guideline for every family.
               plus a one-off repair. After one derivation, #496's check passes on production.
             - **#496 merged** 15:11 (rebased, 11 checks green). **market-verify green** on dispatch
               (run 42493578391), the first pass since 11-01; red 11-02..11-08 05:23.
+            - **"The scheduler has stopped firing" was red from ~14:05, on a healthy scheduler**
+              (`muffin-rotation` ran every 5 minutes). The hourly universe sample had been cancelled
+              at its 60 s bound in 13 of 23 hours since 11-07 11:05. Timed part by part, 33.4 s of its
+              ~52 s was `max(as_of)` over `insider_trade`, a sequential scan of 5.52 M rows since the
+              insider history. **muffin-deployment#500**, deployed ~16:25: an index on
+              `insider_trade (as_of)` (43 s to build, 38 MB, `max()` 0.06 ms) and 300 s for the job.
+              A sample by hand took 17.5 s. I had fixed coverage that morning without checking its
+              sibling samples, which this file already says to do.
+            - **Waiting for the user:** the Yahoo analyst-actions design, market-verify landing inside
+              the SEC tick, and Costco's doubled quarters (recommendations in the 11-06/11-07 entries).
       - [ ] **Check-in 2026-11-07 11:13 UTC (Saturday).**
             - Alerts: `muffin-backlog-flat` and `muffin-backlog-stalled`, the retirement leftovers
               #497 fixes (replayed: `pending_eps_history` FLAT at 309, `pending_price_targets` 2,865

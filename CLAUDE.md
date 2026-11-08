@@ -5909,6 +5909,15 @@ muffin-ingest#164 rolled; the whole SEC grid re-parsed on its calendars; muffin-
   node was slower, so I reported the vacuum had bought nothing. Quiet, the same read took 22.4 s and
   the `insider_trade` scan fell from 33.2 to 17.6 s. Check `runs` for anything in flight before
   timing, as for the backup.
+- **THE SAME DAY, THE SIBLING SAMPLE FAILED THE SAME WAY, AND I HAD NOT LOOKED.** Raising
+  `muffin-coverage`'s bound fixed one pg_cron sample; `muffin-universe`, beside it, was already
+  failing 13 hours in 23 at its 60 s bound, and "The scheduler has stopped firing" went red on a
+  healthy scheduler (#500). 33.4 s of its ~52 s was one `max(as_of)` over `insider_trade`, a
+  sequential scan, because no index led on the column. **A bulk load grows every whole-table read
+  of that table, not only the one you are looking at: list the samples and checks that read it, and
+  time each one.** Timing the function part by part (a `do` block raising a notice per query, in a
+  read-only session) found it in one call; the error's `CONTEXT` named only where the timeout
+  happened to land (`price_bar`).
 
 ## Running an OpenSandbox server locally
 
