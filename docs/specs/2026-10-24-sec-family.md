@@ -1478,3 +1478,33 @@ unproven. The next weekday run (11-09) shows it.
   any more, but the floor is what retries a derivation that failed, since a failed eager request
   counts as handled.
 
+### An outflow is stored negative (muffin-deployment#507), 2026-11-08 night
+
+Company facts made the metric layer mix two sign conventions. SEC tags capex, buybacks and dividends
+paid as positive payments, while Yahoo and openbb's `sec` rows state them negative. Share of rows
+above zero, measured before the change:
+
+| Metric | Company facts | Yahoo |
+|---|---|---|
+| capital_expenditure | 0.98 of 115,271 | 0.00 of 80,604 |
+| buyback | 0.74 of 78,324 | 0.01 of 30,812 |
+| dividends_paid | 0.94 of 81,221 | 0.01 of 61,511 |
+
+Every other cash-flow metric agrees. The p50 of all three flipped sign when the history loaded (the
+unit-flip alert, 11-07 03:06). A TTM takes the best source per quarter, so it summed both
+conventions: Apple's TTM capex read +189 m for the year to 2026-09-26.
+
+**Decided by the user:** outflows negative. As built:
+- **`metric_source_field.sign`** is -1 for `sec-xbrl` and `sec-xbrl-ytd`'s three payments; the
+  derivation multiplies by it.
+- **`metric.is_outflow`** makes the fourth-quarter guard judge an outflow as the payments it
+  records, so capex keeps its guard, while a loss-making company's profitable Q4 is still derived.
+- **Free cash flow** is unchanged (`OCF - abs(capex)`).
+- **The repair:** 249,501 rows negated in place, in 117.6 s, including 3,356 edge rows no
+  re-derivation could reach. The 23:17 derivation run re-derived the TTMs and fourth quarters of
+  3,358 securities (836 s, 217,339 rows).
+- **The check:** `check_derived_metrics` asserts served == sign × filing. It passes on 2,092
+  production values, and fails on 806 with the sign ignored.
+
+Six mutations were caught by `an-outflow-is-stored-negative.sql`.
+

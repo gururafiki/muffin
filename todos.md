@@ -3677,6 +3677,24 @@ names its provider** is now a guideline for every family.
               (#167, comment only).
             - **Next:** the check-in on 11-09 at ~12:47 UTC (cron 132f25d1) reads market-verify inside the
               SEC tick, the first company run with analyst actions, and the Costco derivation.
+            - **Cash-flow outflows: the user chose "negative".** The unit-flip alert of 11-07 03:06
+              was the only uninvestigated alert left. Company facts state capex, buybacks and
+              dividends paid as positive payments (0.98 / 0.74 / 0.94 of rows above zero), against
+              Yahoo's 0.00 / 0.01 / 0.01. TTMs summed both: Apple's TTM capex read +189 m for the
+              year to 2026-09-26. **muffin-deployment#507**, deployed 23:05:
+              - `metric_source_field.sign` (-1 for `sec-xbrl`/`sec-xbrl-ytd`'s three payments);
+              - `metric.is_outflow`, so the fourth-quarter guard keeps working for capex;
+              - 249,501 rows negated in place in 117.6 s;
+              - the 23:17 derivation run re-derived the TTMs of 3,358 securities (836 s, 217,339
+                rows);
+              - `check_derived_metrics` asserts served == sign × filing: 2,092 values pass on
+                production, and the same check ignoring the sign fails on 806.
+
+              The unit-flip alert fires once more after the 00:06 sample (the medians flipping
+              back) and clears after 01:06. The Dagster-storage NoData notice at 23:00 and 23:10 was
+              the scrape starved by the repair (5.69 GB actual). **The 11-09 check-in also confirms**
+              `check_derived_metrics` passes in the scheduled market-verify, and reads alerts
+              `--since` the previous check-in.
       - [ ] **Check-in 2026-11-07 11:13 UTC (Saturday).**
             - Alerts: `muffin-backlog-flat` and `muffin-backlog-stalled`, the retirement leftovers
               #497 fixes (replayed: `pending_eps_history` FLAT at 309, `pending_price_targets` 2,865

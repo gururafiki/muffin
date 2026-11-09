@@ -5952,6 +5952,44 @@ muffin-deployment#501-#504, muffin-ingest#166, muffin-ui#143. Record: the SEC sp
   security_id)`, with `data_source` joined, took 1.1-1.8 ms, and the filter still reached the
   primary key below the window.
 
+### An outflow is stored negative (2026-11-08 night)
+
+muffin-deployment#507. Found by investigating a unit-flip alert that had fired once, on 11-07 at
+03:06, and cleared within the hour.
+
+- **A PROVIDER'S SIGN CONVENTION IS PART OF ITS SPELLING, AND IT CHANGES WHEN THE PREFERRED SOURCE
+  DOES.** SEC company facts tag capex, buybacks and dividends paid as positive payments, while Yahoo
+  and openbb state them negative, as a cash-flow statement does. Measured share of rows above zero:
+  0.98 against 0.00 (capex), 0.74 against 0.01 (buybacks), 0.94 against 0.01 (dividends). No other
+  cash-flow metric differs. The difference had been there all along; it surfaced when the 11-07 SEC
+  history made company facts the preferred source for ~3,700 filers. The user decided outflows are
+  negative. `metric_source_field.sign` carries the provider's convention, and the derivation
+  multiplies by it. `-abs()` would also hide a filer that tagged a payment negative.
+- **A SUM OVER TWO SIGN CONVENTIONS IS WRONG, NOT MERELY INCONSISTENT.** A TTM takes the best source
+  per quarter, so a SEC filer's window mixed SEC's positive quarters with Yahoo's negative ones.
+  Apple's TTM capex read **+189 m** for the year to 2026-09-26, against −9.04 bn.
+- **A GUARD WRITTEN ON A SIGN ASSUMES THE SIGN.** The fourth-quarter guard ("a non-negative series
+  cannot leave a negative remainder") would silently stop applying to capex once capex is stored
+  negative. A mirror for every metric would refuse a loss-making company's profitable Q4.
+  `metric.is_outflow` makes the guard judge each metric in its natural orientation. When a change
+  flips a stored sign, grep the derivations for comparisons with zero.
+- **AN IN-PLACE REPAIR IS THE ATOMIC WAY TO MIRROR A RE-DERIVATION.** Re-queueing 192,371 cash
+  statements would have left about an hour of half-flipped companies, and it could not reach 3,356
+  rows the edge wrote with no statement behind them. Negating in place took 117.6 s for 249,501
+  rows: `fetched_at` is in two of `security_metric`'s six indexes, so no update is HOT. Moving
+  `fetched_at` re-listed 3,358 securities in `pending_ttm`. The 23:17 floor run of the derivation
+  drained them in 836 s: 34 pages, 217,339 TTM and fourth-quarter rows. Afterwards 271,437 backed
+  rows equal sign × statement, 0 differ.
+- **A HEAVY MIGRATION STARVES THE METRICS SCRAPE.** During the repair and the `pg_dump` every deploy
+  ends with, the `pg_database_size` series went missing for two evaluations. "Dagster's run storage
+  passed 20 GB" then sent its NoData notice (5.69 GB actual). This is transient; read the rule's
+  `noDataState` before chasing it.
+- **AN ALERT THAT FIRES ONCE AND CLEARS IS INVISIBLE TO A CHECK-IN READING WHAT FIRES NOW.** The
+  unit-flip alert compares one hourly sample with the one before, so it fires for at most an hour.
+  The 11-07 check-in read the last 30 minutes of Grafana's log. A check-in reads the log since the
+  previous check-in (`--since 24h` or more). The same alert fired again at 00:06 on 11-09 as the
+  medians flipped back. That firing is this change landing, not a defect.
+
 ## Running an OpenSandbox server locally
 
 - **`docker run -d -p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock opensandbox/server:latest`.**
