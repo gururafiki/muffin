@@ -89,6 +89,7 @@ production 2026-11-02 with the query below:
 | `security_metric` `sec-xbrl` rows the edge wrote directly (unlabelled) | `security-xbrl` | serving views | the filer lane re-derives each period; list what it does not reproduce (todos, step 11) |
 | `insider_trade` rows with no accession (70,346, `sec-form4`) | `security-insider` | `security_insider_summary` (only on days the lane has not collected) | step 9 re-points the summary; the history backfill covers their quarters |
 | `EDGE_WRITES_FLOOR` in `defs/companies/derived.py` | — | the derivation's half-hourly floor | nothing on the edge writes statements or metrics after step 9 |
+| `security.market_cap`, `market_cap_at` (added 2026-11-09, the user: "step 11") | nothing since Phase 4 step 5 | five readers as of 11-09: `security_market_cap_usd`, `security_current`, `instrument_current` (as the fallback), `sector_constituents`, `security_facets` | [its note](2026-10-10-the-native-cap-readers-left-on-the-legacy-column.md): move `sector_constituents` and `security_facets` onto `security_fundamentals.market_cap`, time the app's reads as anon, drop the fallbacks, then the columns |
 
 **Re-measured 2026-11-08, after step 10** (handlers deleted, data untouched):
 - `security_statement` rows `sec`: **44,542**.

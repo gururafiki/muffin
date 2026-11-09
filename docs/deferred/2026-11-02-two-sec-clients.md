@@ -1,7 +1,8 @@
 # Two SEC clients
 
 Created 2026-11-02 · Planned in [the SEC spec](../specs/2026-10-24-sec-family.md) (*Deferred
-notes*) · Status: open, small, no decision needed
+notes*) · Status: open, small, no decision needed. **Scheduled 2026-11-09 (the user): 2026-11-11**, a
+muffin-ingest PR, rolled outside the night windows and the SEC tick
 
 ## Why
 

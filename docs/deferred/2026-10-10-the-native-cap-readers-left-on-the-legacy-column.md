@@ -1,7 +1,8 @@
 # Two readers still take a market cap from `security.market_cap`, which stops refreshing
 
 Created 2026-10-10 · Due with Phase 4's contract step (step 10) · Status: open; **step 10 passed
-without it** (2026-10-24). Read 2026-11-09: `security.market_cap` and `market_cap_at` still exist,
+without it** (2026-10-24). **Scheduled 2026-11-09 (the user): Phase 5 step 11, 2026-12-07**, in
+[the drop list](2026-09-30-the-retired-families-leave-columns-behind.md). Read 2026-11-09: `security.market_cap` and `market_cap_at` still exist,
 and five readers still name the column (`security_market_cap_usd`, `security_current`,
 `instrument_current` as the fallback; `sector_constituents`, `security_facets`).
 

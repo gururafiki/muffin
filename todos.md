@@ -3746,6 +3746,26 @@ names its provider** is now a guideline for every family.
                   needed;
                 - [muffin-ingest's Dependabot PRs](docs/deferred/2026-10-26-muffin-ingest-s-dependabot-prs-wait-unmerged.md):
                   10 critical, 40 high, 13 PRs open.
+              - **Scheduled 2026-11-09 (the user approved the recommendation):**
+                - [ ] **2026-11-10, ~13:17 UTC check-in.** It replaces the 12:43-local one, which
+                      fell inside the SEC tick and predated today's rules. In order:
+                      - the alerts since 11-09 14:37 UTC;
+                      - market-verify's scheduled run inside the tick, on the 256th sample (#509);
+                      - the Yahoo label drain: the 62 unvisited securities, and whether the "no
+                        annual period" case appears;
+                      - **the half-year measurement** (read-only): split the 12,848 rows into real
+                        half-years and quarters missing between Yahoo windows, then propose the fix;
+                      - the coverage sample's 05:23 duration.
+                - [ ] **2026-11-11, ~13:17 UTC.** Two SEC clients (a muffin-ingest PR) and the
+                      Dependabot patch bumps, then Pillow 13 after the `pdfplumber` check. Rolled
+                      outside 00:00–02:15, 03:00–06:20 and the SEC tick (11:00–12:30). Python 3.14
+                      (#114) is not touched.
+                - [ ] **2026-11-16:** close the coverage-sample note if a week of runs stayed well
+                      under 300 s.
+                - [ ] **2026-12-07, step 11:** the drop list now includes the legacy
+                      `security.market_cap` columns and their five readers.
+
+                These are session-only check-ins; a new session recreates them from these lines.
       - [ ] **Check-in 2026-11-07 11:13 UTC (Saturday).**
             - Alerts: `muffin-backlog-flat` and `muffin-backlog-stalled`, the retirement leftovers
               #497 fixes (replayed: `pending_eps_history` FLAT at 309, `pending_price_targets` 2,865

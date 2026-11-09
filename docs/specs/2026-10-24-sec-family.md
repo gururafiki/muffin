@@ -1472,7 +1472,8 @@ unproven. The next weekday run (11-09) shows it.
   10, and beyond 10 days the nearest row of a source wins. Its one-time relabel labelled 106 Yahoo
   statement rows across COST, PEP, KR, AZO, DPZ, ACI, AAP, CAVA, FLO and JACK, with none lost.
   Five mutations were caught.
-- **Step 11 keeps 2026-12-07** (the user). The numbers it will act on are in
+- **Step 11 keeps 2026-12-07** (the user). **Added 2026-11-09 (the user):** the legacy
+  `security.market_cap` columns and their five readers, a Phase 4 leftover. The numbers it will act on are in
   [the note](../deferred/2026-09-30-the-retired-families-leave-columns-behind.md).
   `EDGE_WRITES_FLOOR` stays rather than going at the contract: no edge resource writes statements
   any more, but the floor is what retries a derivation that failed, since a failed eager request

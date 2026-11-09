@@ -1,7 +1,9 @@
 # muffin-ingest's Dependabot PRs wait unmerged, behind 107 open alerts
 
 Created 2026-10-26 · Status: open. Read 2026-11-09: 100 open alerts (10 critical, 40 high, 43
-medium, 7 low) and 13 open Dependabot PRs.
+medium, 7 low) and 13 open Dependabot PRs. **Scheduled 2026-11-09 (the user): 2026-11-11**, steps 1
+and 2 below (the patch bumps, then Pillow 13 once `pdfplumber` is checked against it). Python 3.14
+(#114) stays a separate decision.
 
 ## Why
 
