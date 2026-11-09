@@ -1,7 +1,10 @@
 # The segment queue reads the regulator
 
 Created 2026-11-02 · Planned in [the SEC spec](../specs/2026-10-24-sec-family.md) (*Deferred
-notes*) · **For Phase 6** (segments on Dagster) · Status: open
+notes*) · **For Phase 6** (segments on Dagster) · Status: open; **planned 2026-11-09** in
+[the Phase 6 spec](../specs/2026-11-09-segments-and-regulators.md). Items 1–2 are handled by its
+design (per-filer queues keyed on the regulator); item 3 moved to
+[the widening note](2026-11-09-segment-parsing-is-ported-as-is-and-widened-later.md) (decision 2)
 
 ## Why
 

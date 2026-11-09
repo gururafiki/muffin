@@ -1,6 +1,7 @@
 # The historical segment backlog is rising, and some splits are accepted against no revenue
 
-Created 2026-10-04 · Status: open, belongs to the segments family (Phase 6).
+Created 2026-10-04 · Status: open, belongs to the segments family (Phase 6). **Planned 2026-11-09:** the restored
+`segments_reconcile` check measures it (spec step 7); changing the parser rule is decided after.
 
 ## Why
 

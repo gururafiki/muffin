@@ -3949,13 +3949,40 @@ names its provider** is now a guideline for every family.
         11:13 whole-grid re-parse apply it, confirm 0 labelled pairs, then merge #496.
 - [ ] 12. Grafana, docs, skills.
 
-### Phases 6-8 — the remaining family cutovers — not started
+### Phase 6 — segments and the regulators — PLANNED 2026-11-09
 
-Regulators and segments, macro and events (with news), derived and serving (with Wikidata), then
-retirement of the edge function. **Each gets its own planning session**, per the phased-work
-convention.
+Spec: [docs/specs/2026-11-09-segments-and-regulators.md](docs/specs/2026-11-09-segments-and-regulators.md).
+Decisions 1–7 by the user, 2026-11-09:
+- **Scope:** segments + regulators; macro and events become Phase 6b.
+- **Port as-is, then drain.**
+- **`security_segment` extended in place.**
+- **PDFs:** whole, then pruned at 30 days or a 5 GB cap.
+- **Filer grids:** with a 30-day floor.
+- **SEC instances:** an asset of their own on `sec_filer`.
+- **PDFs parsed in a memory-capped child process.**
 
-**Left for them by Phase 4** (read these in the planning session):
+Measured 2026-11-09: SEC segment runs fail 17% on `pending_segments` timeouts, and China has
+31,169 annual reports unparsed at one a run.
+
+- [ ] 0. Spec, todos, rework table, deferred notes (this commit).
+- [ ] 1. Library port: `facets/segments.py` plus the four regulator modules and providers; the
+      edge checks ported as pytest.
+- [ ] 2. Validation and fixtures; golden parity ≥ 99.9% of rows per regulator, every difference
+      explained.
+- [ ] 3. SEC: `raw_sec_instance`, `sec_segment`, `sec_instances_due`; then retire the edge's
+      `security-segments`.
+- [ ] 4. CNINFO: registry, grid, PDF child process, retention; retire `security-cn-segments` and
+      `cn-filings`; the backlog backfill, with its deferred note.
+- [ ] 5. DART: corp-code registry, grid, `crtfc_key` redacted from raw; retire `kr-filings`.
+- [ ] 6. NSE: grid from `security_nse_filer`; retire `in-filings`.
+- [ ] 7. Grafana `segments.json` re-pointed; market-verify segment checks back.
+- [ ] 8. Delete the handlers and modules after 3 clean days.
+- [ ] 9. Contract with a drop date: the `pending_*` segment and history views, the DART cursor,
+      the walk cursors.
+- [ ] 10. Docs, skills, memory.
+
+**Left for Phases 6 and 6b by Phases 4 and 5.** Read in Phase 6's planning on 2026-11-09; how each
+is handled is in the spec's *Notes inherited from earlier phases*.
 - Phase 6 (regulators, segments, events):
   - `security-segments` stuck on one filing ([note](docs/deferred/2026-10-20-a-resource-can-repeat-the-same-failure-for-weeks.md)),
     moved from Phase 5 with segments (Phase 5 decision 1);
@@ -3976,6 +4003,19 @@ convention.
   ([note](docs/deferred/2026-09-16-raw-request-credentials.md)).
 - Every phase: scheduled check-ins live only in the session that made them, so recreate them from
   the dated lines above when a new session starts.
+
+### Phase 6b — macro and events — not started (its own planning session)
+
+`macro-indicators` (49 indicators, healthy), `earnings-calendar` (healthy), `earnings-history`
+(**stalled since 2026-09-06** on the window ending 2016-06-30: openbb 500, 546 windows waiting)
+and `security-news` (46,660 rows, healthy). Measured 2026-11-09.
+
+### Phases 7-8 — derived and serving, then retirement — not started
+
+Derived and serving (with Wikidata, the segment spine refresh and the classification), then
+retirement of the edge function. **Each gets its own planning session**, per the phased-work
+convention.
+
 
 ## Other P2
 - [ ] Add new tab to donate to Ukraine with links to different funds
