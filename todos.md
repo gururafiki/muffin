@@ -2871,7 +2871,7 @@ returns **0 rows** against `exchange_listing`'s 148,782. The Markets search has 
             [note](docs/deferred/2026-10-06-an-index-scope-is-only-ever-seeded.md).
       - [ ] Stage 7 — Grafana universe panels, docs and skills.
 
-### Phase 4 — Yahoo company data — PLANNED 2026-10-10
+### Phase 4 — Yahoo company data — PLANNED 2026-10-10, DONE 2026-10-24 (step 10)
 
 Spec: [docs/specs/2026-10-10-yahoo-company-data.md](docs/specs/2026-10-10-yahoo-company-data.md).
 Thirteen decisions taken 2026-10-10, all as recommended. The headline findings: most of the family
@@ -3257,7 +3257,7 @@ never re-asked); no Yahoo statement row has a currency; `muffin-metrics` fails 3
       **Read run counters once per run:** a run's metadata is copied onto every partition's event, so
       summing materializations multiplies them by the run's width.
 
-### Phase 5 — the SEC family — PLANNED 2026-10-24
+### Phase 5 — the SEC family — PLANNED 2026-10-24, DONE 2026-11-08 except step 11 (drops on 2026-12-07)
 
 Spec: [docs/specs/2026-10-24-sec-family.md](docs/specs/2026-10-24-sec-family.md). Twelve decisions
 taken 2026-10-20..24. Five edge resources move (`security-statements`' SEC half, `-xbrl`,
@@ -3724,6 +3724,28 @@ names its provider** is now a guideline for every family.
                    bound (the 11-08 05:23 run failed at the old 120 s).
               - **Next:** the 11-10 check-in (12:43 UTC, cron f0a1dd22) also reads market-verify's
                 scheduled run inside the SEC tick, now on the 256th sample.
+            - **Audit of the deferred notes, docs and phase scope, 2026-11-09** (asked by the user):
+              - **Closed eight notes that were finished but still read as open:** the price-target
+                cached control, finviz's quote page, Tiingo's dividends, the visited-filer
+                materialisations, the amended Form 4, the fiscal-year change, the first company
+                rotation. Corrected one more: `a-resource-can-repeat` still put segments in Phase 5.
+              - **Added 11-09 readings** to the notes that stay open: the Yahoo calendar (COST case
+                fixed by #506), the insider schedule (two Mondays clean), the coverage sample, the
+                http-cache cap (71.8%), and Dependabot.
+              - **The rework design's family table** (§8) now shows Phase 4 done, Phase 5 done
+                except step 11, segments and the regulators in Phase 6, Wikidata in Phase 7, and
+                what already left on other paths. Also fixed: a duplicated §8 heading, four rows of
+                `docs/data-ingestion.md` (outflow sign, statement currency, corporate actions,
+                analyst actions), and the README's price-targets row (muffin-deployment#510).
+              - **Open, with no phase or date owning them:**
+                - [half-years filed as quarters](docs/deferred/2026-10-10-the-edge-s-half-years-filed-as-quarters.md):
+                  12,848 rows over 5,983 securities at a 170-195 day gap;
+                - [the legacy market-cap readers](docs/deferred/2026-10-10-the-native-cap-readers-left-on-the-legacy-column.md):
+                  five readers and two columns; Phase 4 step 10 passed without it;
+                - [two SEC clients](docs/deferred/2026-11-02-two-sec-clients.md): small, no decision
+                  needed;
+                - [muffin-ingest's Dependabot PRs](docs/deferred/2026-10-26-muffin-ingest-s-dependabot-prs-wait-unmerged.md):
+                  10 critical, 40 high, 13 PRs open.
       - [ ] **Check-in 2026-11-07 11:13 UTC (Saturday).**
             - Alerts: `muffin-backlog-flat` and `muffin-backlog-stalled`, the retirement leftovers
               #497 fixes (replayed: `pending_eps_history` FLAT at 309, `pending_price_targets` 2,865

@@ -2,7 +2,8 @@
 
 Created 2026-11-07, from reading `coverage_current` after the insider history · Status: **decided
 2026-11-08 (the user): options 1 and 2, built in muffin-deployment#498.** Open until a week of runs
-finishes well under the new bound.
+finishes well under the new bound. Read 2026-11-09 from `cron.job_run_details`: 74.1 s (11-08
+17:23) and 102.3 s (11-09 05:23) against 300 s. Close after 2026-11-15 if it stays there.
 
 ## Why
 

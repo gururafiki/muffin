@@ -1,6 +1,10 @@
 # The price-target lane trusted a cached control, and Yahoo already holds the data
 
-Status: open. Phase 6 (events family), where `security-price-targets` leaves the edge. The outage
+Status: **closed 2026-11-08**, ahead of Phase 6. finviz moved its quote page, so the edge resource
+was retired early (muffin-deployment#494, 410 since 2026-11-06; handler deleted in #501), and the
+company lane's `yahoo_analyst_action` has written `security_price_target` from Yahoo's
+`upgradeDowngradeHistory` since 2026-11-08 (muffin-ingest#166/#167). `pending_price_targets` is
+gone. Every *Done when* condition holds. Before closing: The outage
 itself is over: finviz answers again since openbb-mcp-docker#5 (deployed 2026-10-20 12:20 UTC; the
 12:30 run advanced 120 securities), and both edge controls ask past the cache since
 muffin-deployment#454.

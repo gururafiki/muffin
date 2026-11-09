@@ -1,7 +1,8 @@
 # A resource can repeat the same failure for weeks, and no alert sees it
 
 Created 2026-10-20 · Status: open. **Decided 2026-10-20 (the user): no alert.** Each instance is fixed
-when its family leaves the edge: `security-segments` in Phase 5, `earnings-history` in Phase 6. The
+when its family leaves the edge: `security-segments` and `earnings-history`, both in Phase 6 (the
+Phase 5 plan moved segments there, with the regulators that share its parser). The
 sweep stays in `market-diagnose` for finding the next one.
 
 ## Why
@@ -60,7 +61,7 @@ these two resources, and nothing else.
 
 ## Done when
 
-`security-segments` no longer asks about an unreadable filing on every run (Phase 5), and
+`security-segments` no longer asks about an unreadable filing on every run (Phase 6), and
 `earnings-history` steps past the date nasdaq cannot serve (Phase 6). If this shape recurs often
 enough to matter, revisit the alert.
 

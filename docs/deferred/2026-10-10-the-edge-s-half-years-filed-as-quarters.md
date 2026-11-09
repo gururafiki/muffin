@@ -1,6 +1,10 @@
 # 3,094 half-years sit in `security_statement` as quarters
 
-Created 2026-10-10 · Due after the edge's `security-quarters` retires (Phase 4 step 9) · Status: open
+Created 2026-10-10 · Due after the edge's `security-quarters` retires (Phase 4 step 9) · Status: open,
+and **no phase owns it yet**. Read 2026-11-09: 12,848 yfinance `quarter` rows over 5,983
+securities sit 170-195 days after the previous one. Part of that is the condition this note is
+about, and part may be a quarter missing between two Yahoo windows; the count does not separate
+them.
 
 ## Why it is deferred
 

@@ -2,6 +2,10 @@
 
 Created 2026-11-02 · Planned in [the SEC spec](../specs/2026-10-24-sec-family.md) (*Deferred
 notes*) · Status: open; measured 2026-11-07 (below), the 62 unvisited securities re-read ~2026-11-10
+(the 11-10 check-in). **The COST inside-the-span case is fixed** by muffin-deployment#506
+(2026-11-08): a quarter on a 52/53-week calendar matches within 25 days, the nearest row wins, and
+106 Yahoo rows of ten retailers were labelled and derived (read 2026-11-09). The anchor question
+goes to the user only if the re-read finds the "no annual period" case.
 
 ## Why
 

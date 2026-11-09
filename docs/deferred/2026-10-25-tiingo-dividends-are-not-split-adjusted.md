@@ -1,6 +1,6 @@
 # Tiingo's dividends are not split-adjusted, and they inflate total returns
 
-Created 2026-10-25 · Status: **decided 2026-10-25 (the user): retire, and Yahoo's rows replace Tiingo's** on every day Yahoo's documents state; the 133 rows only Tiingo holds stay until the contract (Phase 4 decision 9)
+Created 2026-10-25 · Status: **closed 2026-11-09.** Decided 2026-10-25 (the user): retire, and Yahoo's rows replace Tiingo's on every day Yahoo's documents state; the 133 rows only Tiingo holds stay until the contract (Phase 4 decision 9). Retired in muffin-deployment#464 (410), near-date duplicates replaced in #470, handler deleted in #501; `pending_corporate_actions` is gone. Read 2026-11-09: AVGO's 5y total return is +474.0% against a price return of +425.5% (it was served as +1,140.7%).
 
 ## What was found
 

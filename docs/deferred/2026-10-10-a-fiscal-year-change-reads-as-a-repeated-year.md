@@ -1,6 +1,9 @@
 # A fiscal-year change reads as the same year reported twice
 
-Created 2026-10-10 · Due with Phase 5 (SEC and the fiscal-period model) · Status: decided 2026-10-24,
+Created 2026-10-10 · Due with Phase 5 (SEC and the fiscal-period model) · Status: **closed 2026-11-08.**
+`check_one_period_one_point` keys on fiscal labels (muffin-deployment#496, deployed with #164's
+calendars and #499's retraction trigger) and finds no labelled annual pair closer than a year;
+`KNOWN_DRIFTED_PAIRS` is retired. Passed again 2026-11-09. Was: decided 2026-10-24,
 tripwired; **closes at Phase 5 step 11**, once every SEC filer has a calendar (done 2026-11-02, the
 CIK grid) and the Yahoo labels have drained (~11-06)
 

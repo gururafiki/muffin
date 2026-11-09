@@ -1,6 +1,7 @@
 # muffin-ingest's Dependabot PRs wait unmerged, behind 107 open alerts
 
-Created 2026-10-26 · Status: open
+Created 2026-10-26 · Status: open. Read 2026-11-09: 100 open alerts (10 critical, 40 high, 43
+medium, 7 low) and 13 open Dependabot PRs.
 
 ## Why
 

@@ -1,6 +1,6 @@
 # finviz moved its quote page, and the price-target resource is frozen
 
-Created 2026-11-05, from the firing `muffin-backlog-stalled` alert · Status: **Decided 2026-11-06 (the user): option 1.** Retired in muffin-deployment#494; the Yahoo replacement's design is [the spec](../specs/2026-11-07-analyst-actions-from-yahoo.md), awaiting approval.
+Created 2026-11-05, from the firing `muffin-backlog-stalled` alert · Status: **closed 2026-11-08.** Decided 2026-11-06 (the user): option 1. Retired in muffin-deployment#494; the Yahoo replacement ([the spec](../specs/2026-11-07-analyst-actions-from-yahoo.md), approved 11-08) shipped in muffin-deployment#504/#505, muffin-ingest#166/#167 and muffin-ui#143. `muffin-backlog-stalled` no longer names `pending_price_targets` (the view is gone), and the stock page's newest action is from 2026-11-07.
 
 ## Why
 

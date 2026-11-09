@@ -1040,14 +1040,15 @@ by companies × members rather than periods × metrics. Two of the five facets a
 | `performance.*` | computed from daily bars | **price** returns, dividends excluded |
 | `security_fundamentals.*` | `equity/fundamental/metrics` | **units are mixed within one response** — see §8 |
 | `security_statement.data` | income/balance/cash, one jsonb per period | ~52 line items |
-| `security_statement.currency` | `reported_currency`, **SEC only** | yfinance sends none. Use `security_statement_current.reporting_currency`, which applies the whole precedence once |
-| `security_metric.value` | derived in SQL from `security_statement` | joins `metric_source_field` on the statement's own `source_code` — it never names a provider field |
+| `security_statement.currency` | SEC company facts: the **unit key**; Yahoo (the company lane, since 2026-10-18): each point's `currencyCode`, Yahoo's own spellings mapped (`TRL` → `TRY`) | a code `market.currency` lacks is withheld and counted, never written. Rows the edge wrote before 2026-10-18 may have none. Use `security_statement_current.reporting_currency`, which applies the whole precedence once |
+| `security_metric.value` | derived in SQL from `security_statement` | joins `metric_source_field` on the statement's own `source_code` — it never names a provider field — and **multiplies by its `sign`**: an outflow (`metric.is_outflow`: capex, buybacks, dividends paid) is stored NEGATIVE, and SEC company facts, which state those as positive payments, carry `sign = -1` (2026-11-08) |
 | `security_metric.currency_code` | `security_statement.currency`, or the XBRL **unit key** | the unit key IS the reporting currency — Novo Nordisk's facts sit under `DKK`, Nokia's under `EUR`, TSMC's under `TWD` *and* `USD` |
 | `security_price.grain` | `daily` from `security-prices`, `weekly` from `security-price-history` | the two OVERLAP by design, so a reader must filter; the prune is grain-qualified or it eats the history |
 | `security_share_stats.*_ownership` | `equity/ownership/share_statistics` | **FRACTIONS** — 0.66482 is 66.482%; converted at display, never on write |
 | `security_estimate.recommendation_mean` | `equity/estimates/consensus` | a **1..5 scale where LOWER IS MORE BULLISH** — 2.11 beside "buy" |
 | `security.cik` | SEC `company_tickers.json`, matched on the US ticker | **not unique** — share classes share a filer (GOOG and GOOGL are both 1652044) |
-| `security_corporate_action` | Tiingo daily `divCash` / `splitFactor` | US-listed only; `observed_symbol` records the listing it was seen on |
+| `security_corporate_action` | the price lane's stored Yahoo chart documents (`events=div,split`) since 2026-10-25; Tiingo before | a dividend is **split-adjusted** and in the series' quote currency, like the closes; a split is a ratio (`4:1` is 4.0). Tiingo's dividends were not split-adjusted, which inflated total returns (AVGO 5y +1,140.7%) |
+| `security_price_target` | Yahoo `upgradeDowngradeHistory`, from the company lane's stored summaries, since 2026-11-08; finviz before 2026-11-04 | keyed on `(security_id, source_code, published_at, analyst_company)`: one firm can act twice in a day. A target is in the quote currency (`currency_code`); 0.0 means no target. Read `security_analyst_action`, which serves each company from its best source alone |
 | `fund_holding.weight` | N-PORT `pctVal` | **does not sum to 100** — EWT's own filing sums to 110.38 |
 | `exchange_listing.security_type` | OpenFIGI `securityType2` (coarse) | an ETF reads `Mutual Fund` here |
 | `exchange_listing.figi_security_type` | OpenFIGI `securityType` (fine) | the only one that says `ETP` |

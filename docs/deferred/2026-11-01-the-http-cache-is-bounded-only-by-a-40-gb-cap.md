@@ -88,6 +88,9 @@ restarts http-cache, and the cache manager does the eviction.
   `muffin_volume_bytes`). That reaches 80% in about a month, when buying storage is the next
   decision.
 
+**Read 2026-11-09:** `/mnt/data` at 71.8% by the alert's own measure (100 - avail / size), so the
+first condition below is not met yet; the insider backfill did run (done 2026-11-07).
+
 ## Done when
 
 - `/mnt/data` reads under ~70% by the alert's own measure, and the http-cache volume

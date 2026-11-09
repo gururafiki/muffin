@@ -42,6 +42,9 @@ when it lands. History (2006q1-2026q1) is the step 8 backfill.
    newest.
 3. Then turn the schedule on in code, as `sec_daily_index` was.
 
+**Read 2026-11-09:** the Monday ticks of 11-02 and 11-09 found 2026q2 unpublished and ended
+SUCCESS, with no failed run. What remains is 2026q2 arriving without an operator.
+
 ## Done when
 
 - The schedule is RUNNING in code, a Monday with nothing published produces no failed run, and

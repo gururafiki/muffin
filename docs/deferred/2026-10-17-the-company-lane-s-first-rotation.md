@@ -1,5 +1,8 @@
 # The company lane's first rotation
 
+Status: **closed 2026-10-25** (*The first full rotation, read 2026-10-25*, below): every day's
+counters summed with `throttled 0`, and step 9 retired the edge resources.
+
 ## Why
 
 The `yahoo_companies` schedule is declared RUNNING from muffin-ingest#113 (Phase 4 step 8). Its first
