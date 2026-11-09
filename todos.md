@@ -3695,6 +3695,35 @@ names its provider** is now a guideline for every family.
               the scrape starved by the repair (5.69 GB actual). **The 11-09 check-in also confirms**
               `check_derived_metrics` passes in the scheduled market-verify, and reads alerts
               `--since` the previous check-in.
+            - **Check-in 2026-11-09, read at 14:37 UTC:**
+              1. **Alerts since 01:30: none.**
+              2. **market-verify 11:55, inside the SEC tick: FAILED, on one check.** The view half of
+                 `check_one_period_one_point` got `57014`. `data_defect` as anon and all 26 latency
+                 probes passed under the tick, so the timing question does not go back to the user.
+                 The view clusters a fiscal period across all of a security's metrics, so a
+                 sixteenth of ids read 128,739 annual rows to return 1,000 revenue points (0.85 s
+                 warm, 4.1 s cold, over 8 s under the tick). **muffin-deployment#509**, merged: a
+                 rotating 256th (~40 securities, ~290 points, 51-214 ms). Re-dispatched at 14:45,
+                 it passed (276 rows sampled). `check_derived_metrics` passed with the sign: 2,092
+                 values.
+              3. **The 03:30 company day:**
+                 - 19 of 19 runs SUCCESS, and `yahoo_analyst_action` materialised in each;
+                 - the counters sum: 1,836 summaries = 228 companies with actions + 1,596 without
+                   the module + 12 absent;
+                 - 10,286 actions, 48 changed; 0 retracted, 0 currency withheld, 0 unknown action
+                   codes, 1 with no firm or date;
+                 - Yahoo rows 410,213 -> 410,261 over 3,376 companies. The newest action is
+                   11-07; Yahoo states none over a weekend.
+              4. **The Costco relabels are derived:** 0 underived statements in the whole table,
+                 and all ten retailers' quarters are labelled. COST's quarterly revenue reads 2025Q2
+                 to 2026Q4, one label per quarter.
+              5. **The samples:**
+                 - `muffin-universe` has succeeded since 11-08 17:05 (#500) in 13-37 s. It failed
+                   12 of 17 hours before that.
+                 - `muffin-coverage`: 74.1 s at 17:23 and 102.3 s this morning, against a 300 s
+                   bound (the 11-08 05:23 run failed at the old 120 s).
+              - **Next:** the 11-10 check-in (12:43 UTC, cron f0a1dd22) also reads market-verify's
+                scheduled run inside the SEC tick, now on the 256th sample.
       - [ ] **Check-in 2026-11-07 11:13 UTC (Saturday).**
             - Alerts: `muffin-backlog-flat` and `muffin-backlog-stalled`, the retirement leftovers
               #497 fixes (replayed: `pending_eps_history` FLAT at 309, `pending_price_targets` 2,865

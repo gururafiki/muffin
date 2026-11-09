@@ -5989,6 +5989,12 @@ muffin-deployment#507. Found by investigating a unit-flip alert that had fired o
   The 11-07 check-in read the last 30 minutes of Grafana's log. A check-in reads the log since the
   previous check-in (`--since 24h` or more). The same alert fired again at 00:06 on 11-09 as the
   medians flipped back. That firing is this change landing, not a defect.
+- **A FILTER THE VIEW CANNOT PUSH DOWN COSTS WHAT THE VIEW READS, NOT WHAT THE QUERY RETURNS.**
+  market-verify failed inside the SEC tick on 11-09 (`57014`). `security_metric_series` clusters a
+  fiscal period across all of a security's metrics, so `metric_code=eq.revenue` stays above its
+  windows. A sixteenth of ids read 128,739 annual rows to return 1,000 revenue points (4.1 s cold,
+  over 8 s under load). Only the `security_id` range pushes down, so the sample is now a 256th
+  (muffin-deployment#509). Size a guard's slice by the rows behind the view's windows.
 
 ## Running an OpenSandbox server locally
 
