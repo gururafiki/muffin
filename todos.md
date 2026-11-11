@@ -3747,7 +3747,39 @@ names its provider** is now a guideline for every family.
                 - [muffin-ingest's Dependabot PRs](docs/deferred/2026-10-26-muffin-ingest-s-dependabot-prs-wait-unmerged.md):
                   10 critical, 40 high, 13 PRs open.
               - **Scheduled 2026-11-09 (the user approved the recommendation):**
-                - [ ] **2026-11-10, ~13:17 UTC check-in.** It replaces the 12:43-local one, which
+                - [x] **2026-11-10, ~13:17 UTC check-in. Read 2026-11-11, 15:27-19:45 UTC**
+                      (the session was idle on 11-10, and this machine slept twice during the
+                      read):
+                      1. **Alerts since 11-09 14:38 UTC: none.** 687 Grafana log lines, no
+                         `Sending alerts`, no evaluation or notification error.
+                      2. **market-verify passed inside the SEC tick twice** (11-10 11:29, 11-11
+                         11:17). Slowest anon read: 636 ms (P/E chart, weekly). No timing question
+                         for the user.
+                      3. **The Yahoo label drain**
+                         ([note](docs/deferred/2026-11-02-a-yahoo-calendar-is-observed-not-stated.md)):
+                         unlabelled rows fell to annual 1,306, quarter 903, half 23, each with a
+                         reason. The 62 unvisited securities have calendars. **The "no annual
+                         period" case is one security, VGC.TO**: ten quarters, no annual row, and
+                         Yahoo's own `lastFiscalYearEnd` says 2025-12-31. **Anchor decision for the
+                         user:** accept (recommended), or anchor on `lastFiscalYearEnd`.
+                      4. **The half-year measurement**
+                         ([note](docs/deferred/2026-10-10-the-edge-s-half-years-filed-as-quarters.md)):
+                         12,679 rows over 5,900 securities.
+                         - 9,229 (4,253 securities) are quarters either side of a quarter Yahoo
+                           does not carry, mostly Q3 2025 in China. They are right.
+                         - 1,745 (849) are balance sheets at half-year ends. Right under either
+                           label.
+                         - 1,699 (806) are the edge's `quarter` rows beside the lane's `half` rows:
+                           2,542 rows to repair.
+                         - The lane's cadence flips between visits and leaves both rows (26 + 11
+                           securities).
+                         - **Fix options are in the note, for the user.** Recommended: convert or
+                           delete the duplicates, and have stage 2 retract the twin.
+                      5. **`muffin-coverage` at 05:23:** 102.3, 121.0, 130.9 s on 11-09 to 11-11,
+                         against 300 s. All six runs succeeded. Every pg_cron sample succeeded for
+                         three days (`muffin-universe` max 69.1 s).
+
+                      As scheduled, it replaced the 12:43-local one, which
                       fell inside the SEC tick and predated today's rules. In order:
                       - the alerts since 11-09 14:37 UTC;
                       - market-verify's scheduled run inside the tick, on the 256th sample (#509);

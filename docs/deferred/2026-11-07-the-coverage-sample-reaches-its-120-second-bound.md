@@ -3,7 +3,10 @@
 Created 2026-11-07, from reading `coverage_current` after the insider history · Status: **decided
 2026-11-08 (the user): options 1 and 2, built in muffin-deployment#498.** Open until a week of runs
 finishes well under the new bound. Read 2026-11-09 from `cron.job_run_details`: 74.1 s (11-08
-17:23) and 102.3 s (11-09 05:23) against 300 s. Close after 2026-11-15 if it stays there.
+17:23) and 102.3 s (11-09 05:23) against 300 s. Read 2026-11-11: six runs since, all succeeded.
+The 05:23 run, inside the company lane's window, took 102.3, 121.0 and 130.9 s on 11-09, 11-10
+and 11-11; the 17:23 run took 119.3, 76.7 and 98.1 s. Close after 2026-11-15 if it stays there;
+the 05:23 figure rose 28 s in two days, so read the trend, not only the maximum.
 
 ## Why
 

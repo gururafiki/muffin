@@ -1,11 +1,11 @@
 # A Yahoo calendar is observed, not stated
 
 Created 2026-11-02 · Planned in [the SEC spec](../specs/2026-10-24-sec-family.md) (*Deferred
-notes*) · Status: open; measured 2026-11-07 (below), the 62 unvisited securities re-read ~2026-11-10
-(the 11-10 check-in). **The COST inside-the-span case is fixed** by muffin-deployment#506
+notes*) · Status: open, **waiting on one decision** (the anchor, below). Measured 2026-11-07 and
+again 2026-11-11: the 62 unvisited securities have calendars, and the "no annual period" case is
+**one security** (VGC.TO). **The COST inside-the-span case is fixed** by muffin-deployment#506
 (2026-11-08): a quarter on a 52/53-week calendar matches within 25 days, the nearest row wins, and
-106 Yahoo rows of ten retailers were labelled and derived (read 2026-11-09). The anchor question
-goes to the user only if the re-read finds the "no annual period" case.
+106 Yahoo rows of ten retailers were labelled and derived (read 2026-11-09).
 
 ## Why
 
@@ -67,6 +67,43 @@ Three quarters still appear twice, because Yahoo dates them at the month end (20
 their own columns. The values are identical. A rule matching a Yahoo month-end to the canonical
 period ending in the same month, within ~31 days and with no nearer period of its class, would
 label them. That is a change to `market.label_fiscal_periods`, for the user.
+
+## Measured 2026-11-11 ~15:40 UTC (the 11-10 check-in, read a day late)
+
+Yahoo calendars: 9,308 -> **9,369** over 9,244 securities; SEC calendars 3,619 over 3,417.
+
+| Period type | 2026-11-07 | 2026-11-11 |
+|---|---|---|
+| annual | 2,158 of 179,583 | **1,306** of 179,605 (279 securities) |
+| quarter | 1,912 of 177,987 | **903** of 183,532 (174 securities) |
+| half | 55 of 3,339 | **23** of 3,351 (9 securities) |
+
+Every unlabelled row still has a reason:
+
+| Reason | Annual rows | Quarter rows | Half rows |
+|---|---|---|---|
+| No calendar | 0 | 10 (1 security) | 0 |
+| Off calendar, before the calendar's first period | 706 (181 securities, all SEC calendars) | 10 | 1 |
+| Off calendar, after its last | 303 (27, SEC) | 548 (461 SEC, 87 Yahoo) | 14 |
+| Off calendar, inside the span | 26 (8, SEC) | 287 (285 SEC) | 0 |
+| A superseded period, or one of another class, within 10 days | 271 | 45 | 8 |
+| A canonical period in the window, and a nearer row took the label | 0 | 3 | 0 |
+
+- **The 62 unvisited securities have calendars.** "No calendar" fell from 62 securities to one.
+- **The "no annual period" case exists, once: VGC.TO** (Valor Gold Corp, Canada). It holds ten
+  quarterly rows for 2025-03-31 to 2026-06-30 and no annual row. Yahoo was asked again on
+  2026-11-11 at 04:30 and still serves no annual statement. The stored quoteSummary document does
+  state the year: `lastFiscalYearEnd` 2025-12-31, `mostRecentQuarter` 2026-06-30. A second security
+  has no Yahoo annual row and holds a SEC calendar, so it is labelled.
+- **Off calendar is almost all SEC calendars**, as on 11-07: Yahoo periods outside the span of the
+  filings SEC holds. They stay unlabelled by design, since the SEC calendar replaces Yahoo's for
+  the whole security.
+
+**The anchor decision, for the user.** One security of 9,245 has quarters and no annual period.
+- **Accept (recommended).** Ten rows stay unlabelled until Yahoo serves a year. No code.
+- **Anchor on `lastFiscalYearEnd`.** `calendar_from_periods` would take the stated year end when
+  no annual period exists. It costs a rule and its tests for one company today, and covers any
+  recent listing that arrives the same way.
 
 ## What to do, after the drain
 
