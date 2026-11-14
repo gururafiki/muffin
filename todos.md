@@ -4037,6 +4037,14 @@ Measured 2026-11-09: SEC segment runs fail 17% on `pending_segments` timeouts, a
             handler; `segments.ts` stays while CNINFO, DART and NSE still import it.
       - [ ] [A parser bump re-reads a history raw does not hold](docs/deferred/2026-11-14-a-parser-bump-re-reads-a-history-raw-does-not-hold.md):
             the user's choice before the first `segment_parser.version` bump on Dagster.
+      - [ ] **[An agent-named instance is read as "no instance"](docs/deferred/2026-11-14-an-agent-named-instance-is-read-as-no-instance.md)**
+            (found on the first wave, 2026-11-14 12:52): the edge's name rule rejects
+            `scco-20260930x10q_htm.xml`, `form10-q_htm.xml` and the like, so 10 of 29 filings read
+            "absent"; 7 of 11 carry segments when read. History: 64.7% of agent-filed filings have
+            no rows against 24.2% self-filed. The user's choice: widen now with a re-queue
+            (recommended), new filings only, or after Phase 6.
+      - **First wave, 2026-11-14 12:52 UTC:** 24 runs, all SUCCESS, max 30 s; 29 filings named,
+        19 answered, 10 absent; 311 new rows; 0 retracted, 0 failed, 0 currency unknown; 29 marks.
       - [ ] **2026-11-27:** the daily-index run for Thanksgiving (11-26) ends SUCCESS, claiming
             nothing, with no "A Dagster run failed" alert (muffin-ingest#172).
 - [ ] 4. CNINFO: registry, grid, PDF child process, retention; retire `security-cn-segments` and
