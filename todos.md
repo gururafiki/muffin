@@ -4020,13 +4020,25 @@ Decisions 1–7 by the user, 2026-11-09:
 Measured 2026-11-09: SEC segment runs fail 17% on `pending_segments` timeouts, and China has
 31,169 annual reports unparsed at one a run.
 
-- [ ] 0. Spec, todos, rework table, deferred notes (this commit).
-- [ ] 1. Library port: `facets/segments.py` plus the four regulator modules and providers; the
-      edge checks ported as pytest.
-- [ ] 2. Validation and fixtures; golden parity ≥ 99.9% of rows per regulator, every difference
-      explained.
-- [ ] 3. SEC: `raw_sec_instance`, `sec_segment`, `sec_instances_due`; then retire the edge's
-      `security-segments`.
+- [x] 0. Spec, todos, rework table, deferred notes (this commit).
+- [x] 1. Library port: `facets/segments.py` (muffin-ingest#168, 2026-11-10). The regulator
+      modules are ported at their own steps (4-6), each against its own production rows.
+- [x] 2. Validation and fixtures for SEC: 9,800 of 9,800 production rows, 0 of 2,800
+      differential cases against the edge's TypeScript, five golden instances committed. The
+      other regulators are validated at their steps.
+- [x] 3. SEC: `raw_sec_instance`, `sec_segment`, `sec_instances_due` (muffin-ingest#174, rolled
+      2026-11-14); live subset `changed=0` except 68 Equinor ownership moves equal in value; edge
+      `security-segments` retired (muffin-deployment#511, deployed 11:46 UTC); sensor started
+      (#175). Record in the spec's *Steps 1-3 as built*.
+      - [ ] **2026-11-16 check-in:** the sensor's waves since 11-14 (outcomes summing,
+            `every_sec_filing_was_read` passing), and the Monday 04:00 CIK map on the new SEC
+            client.
+      - [ ] **Step 8 after three clean days (2026-11-17 or later):** delete the SEC segment
+            handler; `segments.ts` stays while CNINFO, DART and NSE still import it.
+      - [ ] [A parser bump re-reads a history raw does not hold](docs/deferred/2026-11-14-a-parser-bump-re-reads-a-history-raw-does-not-hold.md):
+            the user's choice before the first `segment_parser.version` bump on Dagster.
+      - [ ] **2026-11-27:** the daily-index run for Thanksgiving (11-26) ends SUCCESS, claiming
+            nothing, with no "A Dagster run failed" alert (muffin-ingest#172).
 - [ ] 4. CNINFO: registry, grid, PDF child process, retention; retire `security-cn-segments` and
       `cn-filings`; the backlog backfill, with its deferred note.
 - [ ] 5. DART: corp-code registry, grid, `crtfc_key` redacted from raw; retire `kr-filings`.

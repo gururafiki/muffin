@@ -225,6 +225,78 @@ Recorded as each step lands, in sections below this table.
 | 9 | deployment | contract with a drop date: `pending_segments`, `pending_{kr,in,cn}_segments`, `pending_{kr,in}_history`, `pending_cn_filings`, `dart_discovery_cursor`, `security_filer.history_walked_at`, `security.nse_history_walked_at` | proving queries |
 | 10 | all | docs (CLAUDE.md, README, data-ingestion, muffin-ingest family docs), skills (`market-diagnose`, `muffin-dagster-operations`), memory | — |
 
+## Steps 1-3 as built (2026-11-10 to 2026-11-14)
+
+### Step 1: the library port (muffin-ingest#168, merged 2026-11-10)
+
+- **`facets/segments.py` is a regex port, not lxml `iterparse`** as the low-level design planned. A
+  line-for-line port of `segments.ts`, regexes included, is what makes the edge's TypeScript a
+  usable oracle; lxml would read a few malformed instances differently and every difference would
+  then need explaining. lxml stays unused.
+- **Where Python and JavaScript differ by default, the port follows JavaScript:** sums add left to
+  right (`sum()` compensates since Python 3.12), whitespace is JS's set, `\w` is ASCII, two
+  equal-priority axes order by Node 20's `localeCompare` (matched on 25 names), and the 2^18 subset
+  search adds in the edge's order (0.02 s for 18 members).
+- **The regulator modules are ported at their own steps** (CNINFO at 4, DART at 5, NSE at 6), not
+  all in step 1: each is proven against its own production rows when its lane is built.
+- `providers/sec_edgar.fetch_instance` finds the instance as the edge did: `index.json` for sizes
+  (the 32 MB gate), the HTML index when `index.json` names none.
+
+### Step 2: validation (2026-11-10)
+
+| Proof | Result |
+|---|---|
+| Golden parity against production | **9,800 of 9,800** stored rows over 558 SEC filings, re-read past http-cache |
+| Differential against the edge's own TypeScript under Deno | **0 differences** on 2,800 random filings |
+| 20 mutations | caught by the differential 19, by pytest 19 |
+| Golden fixtures | five real instances (AAPL 10-Q, GOOGL 10-Q, CVX 10-K, EQNR 20-F, SCCO 10-K 2018) with the rows the edge produced, committed with a manifest. **They cannot be regenerated once step 8 deletes the edge handlers** |
+
+### Step 3: the SEC lane (muffin-ingest#174, merged and rolled 2026-11-14 11:07 UTC)
+
+- **Assets:** `raw_sec_instance` (stage 1, `sec_filer` grid, pool `sec`) and `sec_segment`
+  (stage 2, pool `sql`), in ONE job, `sec_segments`, rather than `eager()` on stage 2: stage 2
+  must read what stage 1 fetched in the same run, as the SEC filer lane does.
+- **The queue is `security_filing`'s own marks, asked per filer** through the primary key (284 ms
+  for the whole due count, measured; no index needed). A filing is due when it is an accounts
+  form with `is_xbrl` that is unread at the current parser version. **`is_xbrl` is new:** 77,948
+  accounts filings carry `is_xbrl = false` and none has a segment row, so the edge spent two
+  requests on each for nothing.
+- **Raw:** each document row keeps the body whole plus `accession`, `document`, `http_status` and
+  `outcome`, merged on `(accession, document)`.
+- **Stage 2:** one transaction per filing, its filings oldest first so the newest filing owns a
+  period both state; a filing whose parse or write raises is rolled back, left due, and fails the
+  run naming it. Unknown currencies are withheld and counted.
+- **The sensor `sec_instances_due` asks for one wave at a time** (nothing while a run of the job is
+  unfinished), in 50-filer chunks aligned to the grid, with a wave counter in each run key. It
+  **refuses a queue over 2,000 filings**: a parser bump is an operator backfill
+  ([note](../deferred/2026-11-14-a-parser-bump-re-reads-a-history-raw-does-not-hold.md)).
+- **The check `every_sec_filing_was_read`** is ERROR for a filing held a day and never read (a
+  transport failure on every wave leaves no failed run to see), WARN for a re-read behind the
+  parser, and judges from `as_of`, not `filing_date`, so Friday's filings written on Monday are not
+  late on arrival.
+- **Read-only against production before the PR** (every commit rolled back), on the newest filing
+  of AAPL, GOOGL/GOOG, CVX, SCCO and EQNR: 4 answered, 1 absent (Southern Copper's 10-Q, as the
+  edge found), 338 rows, **270 identical**, 0 retracted, 6 marks, and **68 changed: all Equinor's
+  2024 comparatives, equal in value**, moving from its FY2024 20-F to its FY2025 one, because the
+  edge had read those two filings in the other order.
+- **Live tiny subset, 2026-11-14 ~11:30 UTC** (five runs of `sec_segments`, one per filer, each
+  re-reading the newest filing): AAPL 82 rows, CVX 74 and GOOGL/GOOG 80 (two marks), all
+  `changed=0`; SCCO `no_instance`, marked; EQNR 102 rows, `changed=68`, the same ownership moves.
+  `retracted=0` everywhere, outcomes summing, ~24 s a run. Row for row what the read-only drive
+  predicted. The served split (`security_segment_current`, EQNR FY2025: 148.883 bn over six
+  segments, 105.242 bn over seven products) is unchanged.
+- **The edge retired:** muffin-deployment#511 deployed 11:46 UTC (410 from `RETIRED`; pg_cron
+  `muffin-segments` unscheduled). Its last runs: 11:32 ok, 11:37 a `pending_segments` timeout,
+  11:42 the 410.
+- **The sensor started in code:** muffin-ingest#175. Its first tick, counted with the module's own
+  query, asks for 1 filing of 1 filer.
+- **Two other things this step found and fixed:**
+  - `raw_sec_daily_index` failed the day after Veterans Day (11-12), which is correct behaviour:
+    a day is "not published" until the next business day is listed. muffin-ingest#172 ends such a
+    run claiming nothing, as the insider data-set lane already did.
+  - I rolled #172-#174 at 11:07 while the day's `sec_filers` wave was running (it runs every day,
+    Friday's index on Saturday). One run was killed and re-executed (`94c5427d` -> `9dd0dbef`).
+
 ## Risks and rollback
 
 - **Parser drift in the port.** Golden parity per regulator gates each switch; until step 8 a
