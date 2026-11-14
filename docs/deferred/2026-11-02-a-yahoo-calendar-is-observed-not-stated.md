@@ -1,7 +1,7 @@
 # A Yahoo calendar is observed, not stated
 
 Created 2026-11-02 · Planned in [the SEC spec](../specs/2026-10-24-sec-family.md) (*Deferred
-notes*) · Status: open, **waiting on one decision** (the anchor, below). Measured 2026-11-07 and
+notes*) · Status: **closed 2026-11-14: the user chose to accept** (no anchor on `lastFiscalYearEnd`). Measured 2026-11-07 and
 again 2026-11-11: the 62 unvisited securities have calendars, and the "no annual period" case is
 **one security** (VGC.TO). **The COST inside-the-span case is fixed** by muffin-deployment#506
 (2026-11-08): a quarter on a 52/53-week calendar matches within 25 days, the nearest row wins, and

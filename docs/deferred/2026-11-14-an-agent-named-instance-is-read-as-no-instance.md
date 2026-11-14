@@ -1,8 +1,8 @@
 # An instance named by a filing agent is read as "no instance"
 
 Created 2026-11-14 · Phase 6 step 3 ([spec](../specs/2026-11-09-segments-and-regulators.md)) ·
-Status: open, **a decision for the user** (Phase 6 decision 2 deferred widening "later, measured";
-this is the measurement).
+Status: **decided by the user 2026-11-14: widen now and re-queue (option 1).** Phase 6 decision 2
+deferred widening "later, measured"; this was the measurement.
 
 ## Why
 

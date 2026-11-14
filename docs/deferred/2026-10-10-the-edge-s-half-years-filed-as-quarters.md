@@ -1,7 +1,8 @@
 # 3,094 half-years sit in `security_statement` as quarters
 
 Created 2026-10-10 · Due after the edge's `security-quarters` retires (Phase 4 step 9, done
-2026-10-18) · Status: open, **measured 2026-11-11, waiting on the user's choice of fix** (below).
+2026-10-18) · Status: open, **decided by the user 2026-11-14: convert or delete the duplicates, and stage 2 retracts
+the twin** (options 1 and 2 recommended, below). Building.
 
 **The measurement changed what this note is about.** Of 12,679 flagged rows, 73% are quarters
 Yahoo does not carry (the rows around the hole are right), 14% are balance sheets at half-year

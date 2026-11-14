@@ -1,8 +1,9 @@
 # A parser bump re-reads a history that raw does not hold
 
 Created 2026-11-14 · Phase 6 step 3 ([spec](../specs/2026-11-09-segments-and-regulators.md),
-*As built*) · Status: open, **a decision for the user before the first `segment_parser.version`
-bump on Dagster.** Nothing is broken today.
+*As built*) · Status: **decided by the user 2026-11-14: keep every instance whole (option 1).** Open until the
+first `segment_parser.version` bump on Dagster, which must first grow the data volume by ~25-30 GB
+(paid; the free allowance is used). Nothing bumps the version today, so the volume is not grown yet.
 
 ## Why
 
