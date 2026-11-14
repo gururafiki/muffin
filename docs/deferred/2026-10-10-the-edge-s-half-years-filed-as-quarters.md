@@ -1,8 +1,34 @@
 # 3,094 half-years sit in `security_statement` as quarters
 
 Created 2026-10-10 · Due after the edge's `security-quarters` retires (Phase 4 step 9, done
-2026-10-18) · Status: open, **decided by the user 2026-11-14: convert or delete the duplicates, and stage 2 retracts
-the twin** (options 1 and 2 recommended, below). Building.
+2026-10-18) · Status: **closed 2026-11-14**. Decided by the user that day: convert or delete the
+duplicates, and stage 2 retracts the twin (options 1 and 2 below). Built and live, see *Done*.
+
+## Done, 2026-11-14
+
+- **The lane retracts the twin** (muffin-ingest#178, rolled 22:10 UTC).
+  `writers.retract_alternatives` deletes the stored row stating a written row's key under the
+  other alternative. The Postgres I/O manager runs it in the write's own transaction, before the
+  upsert, from `exclusive` metadata; `yahoo_statement` declares `period_type` quarter/half
+  exclusive. Annual rows are never touched. Driven on production rows and rolled back first:
+  NESN.SW 3 twins, CBA.AX 2, 1419.T its 3 wrong halves.
+- **The stored twins are repaired** (muffin-deployment#515, a `market.one_shot` deployed 22:2x).
+  **The class rule differs from the measurement below on purpose.** The measurement split the
+  classes per statement. The repair uses the lane's own `cadence`, which reads the union of a
+  company's period ends across its statements. For 8 securities (half-year balance sheets beside
+  quarter-end income stubs) the two disagree, and a per-statement repair would be undone at the
+  lane's next visit. By that rule:
+  - A1 (1,139 half-yearly securities): 1,978 quarter twins deleted; 528 older quarters re-filed as
+    `half` by insert-and-delete, so the delete trigger retracted their quarter metrics and the
+    derivation read the new rows (0 yfinance statements underived an hour later);
+  - A2 (19 quarterly securities): 59 half twins deleted.
+  - Afterwards: 0 twins of either type. yfinance `quarter` rows 194,034 → 191,528 and `half`
+    3,391 → 3,860. yfinance/derived `quarter` metrics 1,324,934 → 1,305,546.
+- **Done when, checked:** NESN.SW and CBA.AX serve four half-years each and no quarter
+  (`security_statement_current` by symbol), 1419.T serves fourteen quarters, and VOD.L is
+  unchanged.
+- Classes B and C are left as they are (options 3 and 4 below); C stays with the derived family
+  in Phase 7.
 
 **The measurement changed what this note is about.** Of 12,679 flagged rows, 73% are quarters
 Yahoo does not carry (the rows around the hole are right), 14% are balance sheets at half-year

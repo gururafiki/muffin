@@ -3738,8 +3738,11 @@ names its provider** is now a guideline for every family.
                 `docs/data-ingestion.md` (outflow sign, statement currency, corporate actions,
                 analyst actions), and the README's price-targets row (muffin-deployment#510).
               - **Open, with no phase or date owning them:**
-                - [half-years filed as quarters](docs/deferred/2026-10-10-the-edge-s-half-years-filed-as-quarters.md):
-                  12,848 rows over 5,983 securities at a 170-195 day gap;
+                - ~~[half-years filed as quarters](docs/deferred/2026-10-10-the-edge-s-half-years-filed-as-quarters.md)~~
+                  **closed 2026-11-14**: the lane retracts the twin (muffin-ingest#178, rolled
+                  22:10) and a one-shot repaired the stored ones (muffin-deployment#515, deployed
+                  22:2x): 1,978 quarter and 59 half twins deleted, 528 quarters re-filed as half,
+                  0 twins left;
                 - [the legacy market-cap readers](docs/deferred/2026-10-10-the-native-cap-readers-left-on-the-legacy-column.md):
                   five readers and two columns; Phase 4 step 10 passed without it;
                 - [two SEC clients](docs/deferred/2026-11-02-two-sec-clients.md): small, no decision
@@ -4043,6 +4046,27 @@ Measured 2026-11-09: SEC segment runs fail 17% on `pending_segments` timeouts, a
             `scco-20260930x10q_htm.xml`, `form10-q_htm.xml` and the like, so 10 of 29 filings read
             "absent"; 7 of 11 carry segments when read. History: 64.7% of agent-filed filings have
             no rows against 24.2% self-filed. **Decided 2026-11-14: widen now and re-queue.**
+            **Built and running:** muffin-ingest#176 (rolled 14:2x) widens the rule and makes a newer
+            filing keep the rows it holds; muffin-deployment#513 re-queued 35,540 filings as
+            "behind the parser". The re-read runs as paced backfills of `sec_segments` over
+            `grid:sec_filer`:
+            - **pass 1** `rwgskvng` (14:33): 8,521 read, 3,915 with no segments, 136,120 rows,
+              23,906 kept by a newer filing, 26,675 left unasked (byte budget). One run OOM-killed
+              in stage 2 on Principal Financial's raw file;
+            - **pass 2** `cwxxzicl` (17:10, that chunk held back with `--exclude`): 7,452 read,
+              3,558 with no segments, 106,813 rows, 17,496 kept by newer, 17,666 left. Two runs
+              OOM-killed, in stage 1's merge, and one of them left a 272-byte stub of
+              `0001295401.parquet` (removed; its filings were never stamped, so they are re-asked);
+            - **the fix:** muffin-ingest#177 (rolled 22:10) writes one instance per row group, merges
+              group by group into a file renamed over the old, and reads one filing at a time. On
+              Principal Financial's file: 393 MB to read every filing, against 2,829 MB. The 1,504
+              files written as one group were rewritten in place (each checked `equals` before its
+              rename; 0 unreadable after);
+            - **pass 3** `zlahfjut` (22:35, at `--priority -1` so the night outranks it, every chunk
+              included).
+      - [ ] **2026-11-15 ~06:40 UTC:** read pass 3's counters; if filings are still `unasked`,
+            launch pass 4 (`--priority -1`) to end before the 11:00 SEC wave. When the queue is under
+            2,000, the sensor takes over. Then record the totals in the note and close it.
       - **First wave, 2026-11-14 12:52 UTC:** 24 runs, all SUCCESS, max 30 s; 29 filings named,
         19 answered, 10 absent; 311 new rows; 0 retracted, 0 failed, 0 currency unknown; 29 marks.
       - [ ] **2026-11-27:** the daily-index run for Thanksgiving (11-26) ends SUCCESS, claiming

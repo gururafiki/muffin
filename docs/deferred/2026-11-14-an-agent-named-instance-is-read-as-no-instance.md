@@ -50,6 +50,33 @@ have never been read.
 3. **Leave it for after Phase 6.** As decided on 2026-11-09: the port stays as-is, and ~1/3 of new
    accounts filings keep reading as "no instance".
 
+## Progress (2026-11-14)
+
+- **Built:** muffin-ingest#176 (the edge's dated rule first, else the one `*_htm.xml` SEC
+  extracted; a newer filing keeps the rows it holds, counted as `kept_by_newer`), rolled 14:2x.
+  muffin-deployment#513 re-queued 35,540 filings as "behind the parser", so
+  `every_sec_filing_was_read` reports a WARN rather than an ERROR while they drain.
+- **The re-read is a paced backfill** of `raw_sec_instance` + `sec_segment` over `grid:sec_filer`,
+  because the due sensor refuses a queue over 2,000:
+
+  | Pass | Read | No segments | Rows written | Kept by newer | Left unasked |
+  |---|---|---|---|---|---|
+  | 1 `rwgskvng` 14:33 | 8,521 | 3,915 | 136,120 | 23,906 | 26,675 |
+  | 2 `cwxxzicl` 17:10 | 7,452 | 3,558 | 106,813 | 17,496 | 17,666 |
+  | 3 `zlahfjut` 22:35 | running | | | | |
+
+  About 54% of the filings read now carry segments; the rest are single-segment filers, as
+  expected of a queue selected for "no segment rows".
+- **What the re-read found: a filer's raw file was too large to read at once.** Principal
+  Financial's 21 instances are 413 MB of bodies in a 14 MB file written as ONE row group, and
+  Parquet decodes a row group whole. Stage 2 was OOM-killed reading it (2,143 MB peak, against the
+  code location's 2.5 GB), and in pass 2 stage 1's merge was killed twice the same way, one of them
+  leaving a 272-byte stub of `0001295401.parquet`. muffin-ingest#177 (rolled 22:10) writes one
+  instance per row group, merges group by group into a file renamed over the old one, and reads one
+  filing at a time: 393 MB to read every filing of that file. The 1,504 files still in one group
+  were rewritten in place, each checked `equals` before its rename; the stub was removed, and since
+  its chunk's filings were never stamped, they are re-asked.
+
 ## Done when
 
 The user has chosen; if 1 or 2, the rule ships with a test over the agent names above, and for 1

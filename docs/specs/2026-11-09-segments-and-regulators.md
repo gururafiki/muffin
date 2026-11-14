@@ -297,6 +297,26 @@ Recorded as each step lands, in sections below this table.
   - I rolled #172-#174 at 11:07 while the day's `sec_filers` wave was running (it runs every day,
     Friday's index on Saturday). One run was killed and re-executed (`94c5427d` -> `9dd0dbef`).
 
+### After step 3: agent-named instances, and a raw layout (2026-11-14 afternoon and evening)
+
+- **The first wave read 10 of 29 filings as having no instance**, because the edge's name rule
+  rejects names a filing agent gives (`scco-20260930x10q_htm.xml`). The user decided to widen and
+  re-queue: muffin-ingest#176 (the dated rule first, else the one `*_htm.xml` SEC extracted; a
+  newer filing keeps the rows it holds), and muffin-deployment#513 re-queued 35,540 filings as
+  "behind the parser" ([note](../deferred/2026-11-14-an-agent-named-instance-is-read-as-no-instance.md)).
+- **The re-read runs as paced backfills** (the sensor refuses over 2,000 due). Pass 1 read 8,521
+  filings and wrote 136,120 rows; pass 2 read 7,452 and wrote 106,813; pass 3 started 22:35 at
+  priority −1.
+- **One row group per raw file did not survive the re-read.** Principal Financial's instances are
+  413 MB of bodies in a 14 MB file, and Parquet decodes a row group whole: stage 2 was OOM-killed
+  reading it, and stage 1's merge twice more, one kill leaving a corrupt 272-byte file.
+  muffin-ingest#177 adds `row_group_rows` to the Parquet I/O manager (a group-by-group merge into a
+  file renamed over the old one) and `stored_rows_where` (a read pruned by row-group statistics);
+  `raw_sec_instance` writes one instance per group and stage 2 reads one filing at a time: 393 MB
+  for every filing of that file, against 2,829 MB. The 1,504 files still in one group were
+  rewritten in place, each checked `equals` before its rename. This holds for the regulators
+  still to come: a CNINFO PDF or a DART zip kept per filer is the same shape.
+
 ## Risks and rollback
 
 - **Parser drift in the port.** Golden parity per regulator gates each switch; until step 8 a

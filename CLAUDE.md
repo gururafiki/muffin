@@ -6032,6 +6032,47 @@ retired). Record: the Phase 6 spec's *Steps 1-3 as built*.
 - **edgartools costs the code location +77 MB RSS on first import**, now that the N-PORT sensor
   (which runs in that process) asks SEC through `sec_edgar`. Measured in the production image.
 
+### The SEC re-read, a row group, and the half-year repair (2026-11-14 evening)
+
+muffin-ingest#177 and #178, muffin-deployment#515 and #516. Records: the two notes of 2026-11-14 and
+`docs/deferred/2026-10-10-the-edge-s-half-years-filed-as-quarters.md` (closed).
+
+- **A ROW GROUP IS THE UNIT PARQUET DECODES, SO A 14 MB FILE CAN NEED 2 GB.** A merging raw asset
+  that keeps every document of a subject in one file wrote it as ONE row group, so reading any one
+  body decoded all of them. Principal Financial's 21 SEC instances: 413 MB of bodies, 14 MB on disk.
+  Reading the whole file peaked at 2,143 MB, and a streaming `iter_batches` scan still peaked at
+  1,073 MB. Stage 2 was OOM-killed in the 2.5 GB code location, and stage 1's merge twice more. A
+  `dataset` filter does not help with one group either (2,268 MB). `row_group_rows: 1` plus a read
+  that prunes on row-group statistics took it to 393 MB for every filing. **The size on disk says
+  nothing about the memory a read needs**: before a raw asset accumulates large documents per
+  subject, decide its row group.
+- **A FILE WRITTEN IN PLACE IS DESTROYED BY A KILL MID-WRITE.** The old merge called `write_table`
+  on the stored path, and an OOM kill left a 272-byte stub. The history it held was gone, and every
+  later read of that partition raised `Parquet magic bytes not found`. Write beside the file and
+  `os.replace` it, as the new merge does. A kill then leaves the old file.
+- **A REPAIR MUST USE THE RULE THE LANE WILL APPLY NEXT, NOT THE RULE THE MEASUREMENT USED.** The
+  half-year note measured classes per statement; the lane's `cadence` reads a company's period ends
+  across all its statements. For 8 securities they disagree, and a per-statement repair would have
+  been undone at the lane's next visit. Before writing a one-shot, read the lane code that will
+  write those rows next.
+- **RE-FILE BY INSERT AND DELETE WHEN A TRIGGER WATCHES THE DELETE.** Changing `period_type` by
+  update fires neither `security_statement_retract` (delete) nor the requeue trigger (which watches
+  `data` and `as_of`), so the quarter metrics would have stood beside a row that no longer says
+  quarter. Insert the new row and delete the old one, so both triggers do their work.
+- **READ THE CLEAN RUN BEFORE ANY MUTATION RESULT.** All seven mutants of the one-shot read CAUGHT
+  while the clean test failed, because `boolean::text` renders `false`, not the `f` psql displays.
+  And `replay.sh` cannot mutate a migration that a test re-reads with `\i`, because it applies the
+  mutant on its own. `scripts/replay_filemut.sh` copies each mutant over the file. One mutant was
+  then caught by a leftover temp table rather than by the assertion, which proves nothing; the
+  migration now drops it first.
+- **A GraphQL BACKFILL TIES WITH THE PRICE NIGHT.** It carries no `dagster/priority` (0), the same as
+  `nightly_prices` and every automation run, so runs still queued at 00:00 dequeue in creation order
+  with the night's. `dagster_gql.py backfill --priority -1` puts it behind every scheduled run.
+  `--exclude first..last` holds back a chunk that fails every time.
+- **A WHOLE-VIEW JOIN ON `security_statement_current` HUNG PAST 120 s; THE APP'S OWN FILTER TAKES
+  MILLISECONDS.** Joining the view to `symbol_security` for four symbols never returned, while
+  `where symbol = '…'` returned at once. Read a serving view the way the app reads it.
+
 ## Running an OpenSandbox server locally
 
 - **`docker run -d -p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock opensandbox/server:latest`.**
