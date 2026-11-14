@@ -1,9 +1,23 @@
 # muffin-ingest's Dependabot PRs wait unmerged, behind 107 open alerts
 
-Created 2026-10-26 · Status: open. Read 2026-11-09: 100 open alerts (10 critical, 40 high, 43
-medium, 7 low) and 13 open Dependabot PRs. **Scheduled 2026-11-09 (the user): 2026-11-11**, steps 1
-and 2 below (the patch bumps, then Pillow 13 once `pdfplumber` is checked against it). Python 3.14
-(#114) stays a separate decision.
+Created 2026-10-26 · Status: **closed 2026-11-14**: 0 open alerts, from 100 on 2026-11-09.
+
+## Done 2026-11-11 and 2026-11-14
+
+| PR | Bump | How it was checked |
+|---|---|---|
+| #116, #118 | aiohttp 3.14.3 -> 3.14.4 | CI |
+| #121, #155 | filelock 4.0.1 -> 4.2.1 | CI |
+| #122 | setuptools 84.0.0 -> 84.1.0 | CI |
+| #120, #119 | **Pillow 12.3.0 -> 13.0.0**, both lockfiles together | `pdfplumber` 0.11.10 declares `Pillow>=12.2.0`; a PDF built in the test extracted its text and one rect and rendered to PNG through `page.to_image`; library suite 722 passed on Pillow 13 |
+| #171, #170 | **soupsieve 2.9.2 -> 4.0** (opened 11-12), both lockfiles | its only dependant, beautifulsoup4 4.15.0, declares `soupsieve>=1.6.1`; CSS selection including `:has()` and `:-soup-contains()` checked; edgartools imports; library 727 and project 261 passed |
+| #137 | certifi -> 2026.10.18 (project) | CI |
+| #173 | certifi -> 2026.10.23 (library) | Dependabot opened no PR for the library's lockfile, so `uv lock --upgrade-package certifi`, nothing else moved |
+
+Rolled 2026-11-11 20:02 UTC (the first six PRs) and 2026-11-14 11:07 UTC (the rest).
+**Left open, not part of this note:** #114/#156 (Python 3.14/3.15, the user's own decision),
+#46 (edgartools 4 -> 5), #47 (structlog 26), #80 (Dagster 1.13.28 in the local deployment) and
+#165 (actions).
 
 ## Why
 

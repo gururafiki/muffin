@@ -3788,10 +3788,34 @@ names its provider** is now a guideline for every family.
                       - **the half-year measurement** (read-only): split the 12,848 rows into real
                         half-years and quarters missing between Yahoo windows, then propose the fix;
                       - the coverage sample's 05:23 duration.
-                - [ ] **2026-11-11, ~13:17 UTC.** Two SEC clients (a muffin-ingest PR) and the
+                - [x] **2026-11-11, ~13:17 UTC.** Two SEC clients (a muffin-ingest PR) and the
                       Dependabot patch bumps, then Pillow 13 after the `pdfplumber` check. Rolled
                       outside 00:00–02:15, 03:00–06:20 and the SEC tick (11:00–12:30). Python 3.14
-                      (#114) is not touched.
+                      (#114) is not touched. **Done 11-11 19:50-20:02 UTC, read back 11-14:**
+                      - **One SEC client:** muffin-ingest#169, rolled 11-11 20:02. Every N-PORT
+                        sensor tick since asked its 74 searches through `sec-fts`, all `BYPASS
+                        200`; the fund directory ran daily. The CIK map runs Mondays at 04:00, so
+                        its first run on the new client is 11-16
+                        ([note](docs/deferred/2026-11-02-two-sec-clients.md), closed).
+                      - **Dependabot: 100 open alerts to 0.** aiohttp, filelock, setuptools and
+                        Pillow 13 (pdfplumber declares `>=12.2.0`; a PDF rendered) on 11-11;
+                        soupsieve 4.0 (opened 11-12; bs4 declares `>=1.6.1`) and certifi in both
+                        lockfiles on 11-14
+                        ([note](docs/deferred/2026-10-26-muffin-ingest-s-dependabot-prs-wait-unmerged.md),
+                        closed). Python 3.14/3.15, edgartools 5, structlog 26 stay open.
+                      - **Alerts since the roll:** one rule, `muffin-dagster-run-failed`, 11-12
+                        11:00-17:00, for `sec_daily_index` run `19fa4f3c`: the day after Veterans
+                        Day reads "not published" until the next business day is listed, and the
+                        11-13 tick proved the holiday. Correct behaviour failing a run;
+                        **muffin-ingest#172** ends such a run claiming nothing, as the insider
+                        lane already did. Without it, Christmas and New Year's Day (both Fridays)
+                        would each have failed three days running.
+                      - **My error, 11-14 11:07:** I rolled #172-#174 while today's `sec_filers`
+                        wave was running (the SEC filer tick runs every day, Friday's index on
+                        Saturday). My in-flight query printed the runs and the roll was chained
+                        after it in the same command. One run was killed (`94c5427d`, filers
+                        0000045012..0000061986), re-executed as `9dd0dbef` with its range; the
+                        failed-run alert fires until ~17:08.
                 - [ ] **2026-11-16:** close the coverage-sample note if a week of runs stayed well
                       under 300 s.
                 - [ ] **2026-12-07, step 11:** the drop list now includes the legacy

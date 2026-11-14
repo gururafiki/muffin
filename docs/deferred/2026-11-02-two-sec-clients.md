@@ -1,8 +1,25 @@
 # Two SEC clients
 
 Created 2026-11-02 · Planned in [the SEC spec](../specs/2026-10-24-sec-family.md) (*Deferred
-notes*) · Status: open, small, no decision needed. **Scheduled 2026-11-09 (the user): 2026-11-11**, a
-muffin-ingest PR, rolled outside the night windows and the SEC tick
+notes*) · Status: **closed 2026-11-14.** Fixed in muffin-ingest#169 (merged and rolled 2026-11-11
+20:02 UTC): the CIK map and N-PORT's three requests go through `sec_edgar`, and
+`grep -rnE "sec\.gov|efts" muffin_ingest/providers` finds only `sec_edgar.py`.
+
+## What was measured
+
+- **Before the PR**, from a throwaway container on the production image with the branch's library
+  (read-only): 10,405 filers in the CIK map, 28,640 funds in the directory, EWJ's newest primary
+  document byte-identical to the stored raw file, and the same accession under the CIK it embeds
+  raised `SecNotFound`. A full sensor pass, 74 funds, took 14.8 s at 5 requests a second (27 s on
+  a slower pass), against the 60 s sensor evaluation limit; past ~250 funds the sensor needs a
+  cursor.
+- **The code location imports edgartools on the sensor's first tick: +77 MB RSS, once** (697 MiB
+  of 2.5 GiB at the time).
+- **After the roll, to 2026-11-14:** every `new_nport_filings` tick asked 74 searches (9 ticks
+  read in http-cache's log), all `BYPASS 200` under `sec-fts`; the fund directory materialised
+  daily (`BYPASS 200`). No N-PORT filing was new in the window, so the next quarter's filings are
+  the first through `primary_doc`. **The CIK map runs Mondays at 04:00 UTC**, so its first run on
+  the new client is 2026-11-16, read at that day's check-in.
 
 ## Why
 
@@ -34,7 +51,7 @@ Move both onto `sec_edgar.fetch`, keeping their raw shapes. The cache question i
 the EDGAR full-text search should bypass (it answers "what was filed since"), while a filing's
 primary document is immutable and can stay cached.
 
-## Done when
+## Done when (met 2026-11-14, except the N-PORT quarter, which comes when SEC files)
 
 `grep -rn "sec.gov\|efts" muffin_ingest/providers` finds only `sec_edgar.py`, and the N-PORT lane's
 next quarter runs on it with outcomes summing.
