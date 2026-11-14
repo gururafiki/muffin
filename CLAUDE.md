@@ -5996,6 +5996,42 @@ muffin-deployment#507. Found by investigating a unit-flip alert that had fired o
   over 8 s under load). Only the `security_id` range pushes down, so the sample is now a 256th
   (muffin-deployment#509). Size a guard's slice by the rows behind the view's windows.
 
+### Phase 6 step 3: the SEC segment lane goes live (2026-11-14)
+
+muffin-ingest#168 (the port), #174 (the lane), #175 (the sensor), muffin-deployment#511 (the edge
+retired). Record: the Phase 6 spec's *Steps 1-3 as built*.
+
+- **A READ-ONLY DRIVE AGAINST PRODUCTION PREDICTED THE LIVE RUN ROW FOR ROW.** Before the PR, both
+  stages ran through `dg.materialize` in a throwaway container on the production image, with the
+  branch on `PYTHONPATH` and a `Postgres` resource whose connection turns `commit()` into
+  `rollback()`. The upsert's `is distinct from` guard then counts exactly what a real run would
+  change, and nothing persists. It predicted 338 rows, 270 unchanged, 68 changed, 0 retracted; the
+  live runs an hour later wrote exactly that. Cheaper than a local stack, and it reaches the
+  production grants and data a local run cannot.
+- **`changed` COUNTS A MOVE OF OWNER.** The segment key leaves the accession out, so a newer filing
+  restating a period takes the row even with every value equal. All 68 were Equinor's 2024
+  comparatives moving from its FY2024 20-F to its FY2025 one, because the edge had read the two in
+  the other order. **Classify the changed rows before calling a parity run clean or dirty.**
+- **THE SEC FILER WAVE RUNS EVERY DAY, NOT ONLY ON WEEKDAYS:** Saturday's 11:00 tick collects
+  Friday's index, and 11-14's wave was ~75 runs to 12:20. Rolled at 11:07, it killed one run.
+  Run the in-flight check and READ it, then dispatch the roll as a separate step; never chain them.
+  A killed partitioned run is re-run with GraphQL `launchRunReexecution` (`strategy: ALL_STEPS`),
+  which keeps the parent's range and runtime tags.
+- **"NOT PUBLISHED" ON THE DAY AFTER A WEEKDAY HOLIDAY IS CORRECT, AND FAILING ON IT IS A FALSE
+  ALARM.** `raw_sec_daily_index` cannot prove 11-11 (Veterans Day) a holiday until 11-12 is listed,
+  so its 11-12 run failed and "A Dagster run failed" fired for six hours; Christmas and New Year's
+  Day, both Fridays in 2026, would have failed three days each. Third lane to meet this, after the
+  insider data set: **a period the provider has not published ends the run claiming nothing**
+  (`output_required=False`, an observation, the schedule asks again). muffin-ingest#172.
+- **A SENSOR'S FIRST TICK CAN START IN THE DAEMON THE ROLL IS REPLACING, AGAIN.** The segment
+  sensor's tick started at 12:22:37, the new daemon loaded at 12:23, and the tick sat `STARTED`
+  until the next interval. Second occurrence (2026-11-01 was the first). It reads like a hung sensor;
+  wait one interval before diagnosing.
+- **`job_ticks` CANNOT TIME A SENSOR.** The N-PORT sensor's ticks read 0.1-0.3 s while http-cache
+  logged its 74 searches each, at 5 a second. Time a sensor from the provider's or the cache's log.
+- **edgartools costs the code location +77 MB RSS on first import**, now that the N-PORT sensor
+  (which runs in that process) asks SEC through `sec_edgar`. Measured in the production image.
+
 ## Running an OpenSandbox server locally
 
 - **`docker run -d -p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock opensandbox/server:latest`.**
