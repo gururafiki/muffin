@@ -4063,10 +4063,12 @@ Measured 2026-11-09: SEC segment runs fail 17% on `pending_segments` timeouts, a
               files written as one group were rewritten in place (each checked `equals` before its
               rename; 0 unreadable after);
             - **pass 3** `zlahfjut` (22:35, at `--priority -1` so the night outranks it, every chunk
-              included).
-      - [ ] **2026-11-15 ~06:40 UTC:** read pass 3's counters; if filings are still `unasked`,
-            launch pass 4 (`--priority -1`) to end before the 11:00 SEC wave. When the queue is under
-            2,000, the sensor takes over. Then record the totals in the note and close it.
+              included): 75 of 75 runs SUCCESS, no OOM kill; 6,913 read, 3,177 with no segments,
+              119,188 rows, 17,444 kept by newer, **12,322 left unasked**;
+            - **pass 4** `szxovihm` (2026-11-15 13:27, `--priority -1`).
+      - [ ] **2026-11-15 evening:** read pass 4's counters; if filings are still `unasked`, launch
+            pass 5 (`--priority -1`). When the queue is under 2,000, the sensor takes over. Then
+            record the totals in the note and close it.
       - **First wave, 2026-11-14 12:52 UTC:** 24 runs, all SUCCESS, max 30 s; 29 filings named,
         19 answered, 10 absent; 311 new rows; 0 retracted, 0 failed, 0 currency unknown; 29 marks.
       - [ ] **2026-11-27:** the daily-index run for Thanksgiving (11-26) ends SUCCESS, claiming
