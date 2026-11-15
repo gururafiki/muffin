@@ -64,10 +64,12 @@ have never been read.
   | 1 `rwgskvng` 14:33 | 8,521 | 3,915 | 136,120 | 23,906 | 26,675 |
   | 2 `cwxxzicl` 17:10 | 7,452 | 3,558 | 106,813 | 17,496 | 17,666 |
   | 3 `zlahfjut` 22:35 | 6,913 | 3,177 | 119,188 | 17,444 | 12,322 |
-  | 4 `szxovihm` 11-15 13:27 | running | | | | |
+  | 4 `szxovihm` 11-15 13:27 | 5,121 | 1,838 | 106,414 | 15,407 | 7,182 |
+  | 5 `mlhkhrpd` 11-15 23:25 | running | | | | |
 
   Pass 3's 75 runs all succeeded, with 13 instances over the size gate and 8 refused; it was the
-  first pass with no OOM kill. About 54% of the filings read now carry segments; the rest are single-segment filers, as
+  first pass with no OOM kill; pass 4 (75 of 75, 13:25–15:00) the second, with 10 instances over
+  the gate, 16 refused and 1 transport failure. About 54% of the filings read now carry segments; the rest are single-segment filers, as
   expected of a queue selected for "no segment rows".
 - **What the re-read found: a filer's raw file was too large to read at once.** Principal
   Financial's 21 instances are 413 MB of bodies in a 14 MB file written as ONE row group, and

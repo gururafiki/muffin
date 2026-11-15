@@ -4065,10 +4065,18 @@ Measured 2026-11-09: SEC segment runs fail 17% on `pending_segments` timeouts, a
             - **pass 3** `zlahfjut` (22:35, at `--priority -1` so the night outranks it, every chunk
               included): 75 of 75 runs SUCCESS, no OOM kill; 6,913 read, 3,177 with no segments,
               119,188 rows, 17,444 kept by newer, **12,322 left unasked**;
-            - **pass 4** `szxovihm` (2026-11-15 13:27, `--priority -1`).
-      - [ ] **2026-11-15 evening:** read pass 4's counters; if filings are still `unasked`, launch
-            pass 5 (`--priority -1`). When the queue is under 2,000, the sensor takes over. Then
-            record the totals in the note and close it.
+            - **pass 4** `szxovihm` (2026-11-15 13:27–15:00): 75 of 75 SUCCESS, no OOM kill;
+              5,121 read, 1,838 with no segments, 106,414 rows, 15,407 kept by newer, **7,182 left
+              unasked**;
+            - **pass 5** `mlhkhrpd` (2026-11-15 23:25, `--priority -1 --max-runtime 1800`).
+      - [x] **2026-11-15 check-in (read 23:20 UTC):** no alert since the pass-2 OOM tail ended
+            2026-11-14 23:30; the 11-15 night all SUCCESS (prices 2,500 = 2,458 + 8 empty + 34 not
+            askable, throttled 0; company day 1,907 = 1,882 + 25, `alternatives_retracted` 0;
+            0 yfinance quarter/half twins left).
+      - [ ] **2026-11-16 ~07:00 UTC:** read pass 5's counters; if filings are still `unasked`,
+            launch pass 6 (`--priority -1`), outside 11:00–12:30. When fewer than 2,000 are due,
+            the `sec_instances_due` sensor takes over. Then record the totals in the note and
+            close it once `every_sec_filing_was_read` passes.
       - **First wave, 2026-11-14 12:52 UTC:** 24 runs, all SUCCESS, max 30 s; 29 filings named,
         19 answered, 10 absent; 311 new rows; 0 retracted, 0 failed, 0 currency unknown; 29 marks.
       - [ ] **2026-11-27:** the daily-index run for Thanksgiving (11-26) ends SUCCESS, claiming

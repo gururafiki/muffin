@@ -304,9 +304,21 @@ Recorded as each step lands, in sections below this table.
   re-queue: muffin-ingest#176 (the dated rule first, else the one `*_htm.xml` SEC extracted; a
   newer filing keeps the rows it holds), and muffin-deployment#513 re-queued 35,540 filings as
   "behind the parser" ([note](../deferred/2026-11-14-an-agent-named-instance-is-read-as-no-instance.md)).
-- **The re-read runs as paced backfills** (the sensor refuses over 2,000 due). Pass 1 read 8,521
-  filings and wrote 136,120 rows; pass 2 read 7,452 and wrote 106,813; pass 3 started 22:35 at
-  priority −1.
+- **The re-read runs as paced backfills** (the sensor refuses over 2,000 due), each at priority
+  −1 so the nightly lanes outrank it:
+
+  | Pass | Runs | Read | No segments | Rows written | Kept by newer | Left unasked |
+  |---|---|---|---|---|---|---|
+  | 1 `rwgskvng` 11-14 14:33 | 1 OOM | 8,521 | 3,915 | 136,120 | 23,906 | 26,675 |
+  | 2 `cwxxzicl` 11-14 17:10 | 2 OOM | 7,452 | 3,558 | 106,813 | 17,496 | 17,666 |
+  | 3 `zlahfjut` 11-14 22:35 | 75/75 | 6,913 | 3,177 | 119,188 | 17,444 | 12,322 |
+  | 4 `szxovihm` 11-15 13:27 | 75/75 | 5,121 | 1,838 | 106,414 | 15,407 | 7,182 |
+  | 5 `mlhkhrpd` 11-15 23:25 | running | | | | | |
+
+  Every pass since #177 ran without an OOM kill, and every one ended with 0 failed writes and
+  every currency known. A pass is bounded by each run's byte budget, so it reads ~5,000–8,500
+  filings and leaves the rest unasked for the next. The 11-14/15 night ran beside pass 3 and every
+  lane succeeded with its counters summing.
 - **One row group per raw file did not survive the re-read.** Principal Financial's instances are
   413 MB of bodies in a 14 MB file, and Parquet decodes a row group whole: stage 2 was OOM-killed
   reading it, and stage 1's merge twice more, one kill leaving a corrupt 272-byte file.
