@@ -6073,6 +6073,62 @@ muffin-ingest#177 and #178, muffin-deployment#515 and #516. Records: the two not
   MILLISECONDS.** Joining the view to `symbol_security` for four symbols never returned, while
   `where symbol = '…'` returned at once. Read a serving view the way the app reads it.
 
+### The China reader, fixed against the edge (2026-11-15 and 11-16)
+
+muffin-ingest#180, muffin-deployment#517. Record: the Phase 6 spec's *Step 4*.
+
+- **A TABLE RUNS ONTO THE NEXT PAGE IN HALF OF CHINA'S REPORTS, AND A ONE-PAGE READER SERVES THE
+  PART AS THE WHOLE.** Measured over 537 table pages: 256 run onto the next. With no other table to
+  disagree, a partial table's own sum is the only total, so it reconciles to itself: 广州发展's
+  first three industries were served as a full split by the edge. `join_pages` reads the next
+  page below the table page, with the running header, its underline and the folios removed, and
+  the border pair at the break dropped so a cut row is one cell again. Tables found went 1,189 →
+  1,467 and reconciling ones 1,070 → 1,409. **Before trusting a reader that stops at a page, count
+  how often the content does not.**
+- **`multiprocessing` RE-RUNS THE PARENT'S `__main__` FOR EVERY START METHOD THAT DOES NOT FORK.**
+  `spawn` and `forkserver` both call `multiprocessing.spawn.prepare`, which re-imports the main
+  module from its path: under Dagster that is the console script that launched the run, and in a
+  probe without a main guard it is the probe, re-entering itself. Forking the run is worse (threads,
+  database connections). A per-document child is `python -P -m <module>`, the document on stdin,
+  `RLIMIT_AS` set by the child first, one pickled answer on a duplicate of fd 1 with fd 1 pointed at
+  stderr. 0.21 s and 24 MB a start, measured.
+- **CNINFO'S EPOCH MILLISECONDS ARE BEIJING MIDNIGHT**, so read in UTC every announcement date was
+  a day early. Read them in UTC+8.
+- **THE SAME FIGURE CAN END A ROW OR A PAGE, AND ONLY ITS NEIGHBOURS SAY WHICH.**
+  - A folio is a page number *alone on its line*: matching `^\d+$` near the foot also took the `7`
+    of `7、华南区`.
+  - A numbered line is a section heading only when its cell holds no revenue: `(1)燃煤发电及供热业务`
+    is a row.
+  - A one-decimal figure (`62,389.8`, its trailing zero dropped) is whole unless the next line in its
+    column continues it. At a page foot it stays open on a page that prints money to the fen
+    (彤程's `2,320,408,095.5` and the `5` opening the next page).
+- **A HEADING SEEN AGAIN IS ANOTHER YEAR'S TABLE, BUT ONLY ONCE ITS FIRST TABLE HAD A HEADER.**
+  厦门钨业 prints its 2024 tables restated, under the same headings, on the page after its 2025
+  ones, and the page join made them this year's rows. Counting an axis as read at its heading was
+  wrong twice: a section title `(1). 主营业务分行业情况` above the real heading ended the reading
+  before the table, and `主营业务分行业情况的说明` after each table would have ended it before the
+  next. Read is recorded at the header, and only a line ending with the heading counts.
+- **TWO ROWS WITH ONE NAME UNDER ONE PARENT FAIL THE WHOLE UPSERT, AND TABLES DO IT ROUTINELY.**
+  1225263103 lists `其他` twice at one level, and 江苏凤凰 lists `教材` once per industry under
+  numbered group labels that carry no figures. Both rows are needed for the split to reconcile, so
+  they are one member carrying the sum. The duplicate check first read 10 filings and then 0, once
+  the dump recorded `parent_member`. **A parity dump must carry every column of the key**, or its
+  duplicate count describes a different key.
+- **A DELIBERATE TOLERANCE CHANGE READS AS "UNEXPLAINED" TO A CLASSIFIER THAT DOES NOT KNOW IT.**
+  CNINFO's 0.01% (SEC keeps 0.5%) unplaced 14 tables that are 0.1–0.4% short of their total, and
+  they surfaced as the only unexplained partition changes until the explainer named the tolerance.
+  Teach the classifier each rule you change, or "0 unexplained" stops meaning anything.
+- **A FIFTH OF CHINA'S REPORTS DO NOT USE THE MANDATED HEADING.** 143 of 716 state their split as
+  `营业收入构成` (Shenzhen's format: one table, group rows, no cost column). Neither the edge nor
+  this reader reads them; it is the largest coverage gap left
+  ([note](docs/deferred/2026-11-16-a-fifth-of-china-s-reports-state-their-split-as-revenue-composition.md)).
+- **`segment_parser.version` IS SHARED BY EVERY REGULATOR**, so bumping it for one re-queues SEC's
+  whole history too. A one-regulator re-read is a one-shot re-queue of that regulator's filings, as
+  muffin-deployment#517's is.
+- **A MUTATION HARNESS AGES WITH THE CODE IT MUTATES.** Re-running an earlier harness after the code
+  moved found its strings gone (`assert orig.count(a) == 1` failed). That is the harness working:
+  write the mutations for the code as it is now, never trust a stale list.
+
 ## Running an OpenSandbox server locally
 
 - **`docker run -d -p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock opensandbox/server:latest`.**

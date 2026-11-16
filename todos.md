@@ -4083,6 +4083,22 @@ Measured 2026-11-09: SEC segment runs fail 17% on `pending_segments` timeouts, a
             nothing, with no "A Dagster run failed" alert (muffin-ingest#172).
 - [ ] 4. CNINFO: registry, grid, PDF child process, retention; retire `security-cn-segments` and
       `cn-filings`; the backlog backfill, with its deferred note.
+      **Decided 2026-11-15: fix the reader now**, and re-read every report the edge read. Built:
+      muffin-ingest#180 (the lane and the reader) and muffin-deployment#517 (retire both edge
+      resources; re-queue the edge-read reports to parser version 0). Golden parity over 716
+      reports (2026-11-16): 355 of the 516 the edge read carry an edge defect, every difference
+      classified, 0 unexplained partition changes, 0 duplicate keys; with the page join, tables
+      found 1,189 -> 1,467 and reconciling 1,070 -> 1,409. Record in the spec's *Step 4*.
+      - [ ] Merge #180, roll it outside the windows (after 06:20 UTC), then merge and deploy #517.
+      - [ ] Live tiny subset: a few filers through `cninfo_segments`, counters summing, rows read
+            against the PDF, the business-lines section in the browser for Yangtze Power.
+      - [ ] Start `cninfo_retention`, launch backfill pass 1 at `--priority -1`, then start
+            `cninfo_filers_floor` and `cninfo_stock_lists`. Record each pass in
+            [the drain note](docs/deferred/2026-11-15-the-china-segment-backlog-drains-by-backfill.md).
+      - [ ] [A fifth of China's reports state their split as revenue composition](docs/deferred/2026-11-16-a-fifth-of-china-s-reports-state-their-split-as-revenue-composition.md):
+            143 of 716 reports use Shenzhen's `营业收入构成`, read by neither reader (widening).
+      - [ ] [CNINFO reads only the newest search page](docs/deferred/2026-11-15-cninfo-reads-only-the-newest-search-page.md)
+            (widening, page-2 yield to measure).
 - [ ] 5. DART: corp-code registry, grid, `crtfc_key` redacted from raw; retire `kr-filings`.
 - [ ] 6. NSE: grid from `security_nse_filer`; retire `in-filings`.
 - [ ] 7. Grafana `segments.json` re-pointed; market-verify segment checks back.

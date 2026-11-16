@@ -329,6 +329,87 @@ Recorded as each step lands, in sections below this table.
   rewritten in place, each checked `equals` before its rename. This holds for the regulators
   still to come: a CNINFO PDF or a DART zip kept per filer is the same shape.
 
+### Step 4: CNINFO (2026-11-15 and 11-16; muffin-ingest#180, muffin-deployment#517)
+
+**Decided by the user 2026-11-15: fix the reader now** rather than port it as-is (decision 2), and
+read every report the edge read again, so all China segment rows come from one reader. The gate:
+every difference from the edge classified, and ~30 reports checked against the rendered PDF.
+
+**The lane:**
+- `raw_cninfo_stock_list` → `security_cninfo_filer`: CNINFO's three bulk lists (A-shares, Beijing,
+  Hong Kong) map securities to orgIds, weekly (`cninfo_stock_lists`), replacing the edge's
+  per-security lookup. The sensor `new_cninfo_filers` adds `cninfo_filer` keys and ships RUNNING,
+  since it only adds keys.
+- `raw_cninfo_filings` (stage 1, pool `cninfo`) and `cninfo_segment` (stage 2, pool `sql`), one job
+  `cninfo_segments`, as SEC's. A run is bounded by 900 s and 300 MB of reports, taken breadth-first
+  (each filer's first report, then each one's second). `cninfo_filers_floor` is a 30-day hash
+  floor; the backlog drains by backfill
+  ([note](../deferred/2026-11-15-the-china-segment-backlog-drains-by-backfill.md)).
+- **Each PDF is read in a child process** (decision 7): `python -P -m muffin_ingest.facets.cn_child`,
+  the PDF on stdin, `RLIMIT_AS` 768 MB, a 120 s timeout, one pickled answer on a duplicated stdout.
+  `multiprocessing` was tried first and rejected: every start method that does not fork re-runs the
+  parent's `__main__`. Measured: 0.21 s and 24 MB per start; 40–60 MB peak on the 15 largest
+  reports; parse median 0.79 s, p95 2.5 s, max 3.7 s over the golden set with two pages joined.
+- `cninfo_retention` drops read report bodies after 30 days, or oldest first above 5 GB
+  (decision 4); `cninfo_reports_within_cap` checks it; `every_cninfo_report_was_read` is WARN for a
+  re-read behind the parser.
+- **CNINFO's announcement times are epoch milliseconds at Beijing midnight**, so read in UTC every
+  date was a day early. Reports are fetched with `X-Muffin-Cache-No-Store` (served if held, never
+  stored); the search bypasses the cache.
+
+**The reader.** pypdfium2 rebuilds pdf.js's text items from pdfium's characters (pdf.js was the
+edge's engine). Each defect below was found by classifying a difference and confirmed on the
+rendered page:
+
+| Defect | Example | Fix |
+|---|---|---|
+| a money cell on two lines kept as its last line | 储能行业 194.20 for 2,660,336,194.20 | fragments joined per column until complete |
+| the explanation, next section and sales-model table read as rows | a paragraph as a member name | `_TABLE_ENDS` |
+| totals stored beside their parts | 合计, 小计 | dropped when they restate rows; a named total restating nothing is its group's row |
+| a 万元 table stored as yuan | ×10,000 too small | the table's unit, including one at the foot of the previous page |
+| clipped text read | 浙商's running header is a whole other page, clipped | `_clipped_away` |
+| a deduction summed as a part | 南方出版传媒 `减：内部抵销数` | stored negative; a `减：` anywhere starts the name |
+| `其中：` rows and nested rows summed flat | 中信建投, 中远海控 | `parent_member`; `_nested` by the table's own arithmetic |
+| a partial table taken as the target | 钢铁 1225011770, 哈投 | the largest stated grand total, else the total most tables agree on |
+| SEC's 0.5% placing a coincidental subset | five of 1225177612's six products | 0.01% for CNINFO |
+| one-decimal figures read as unfinished | 云天励飞, 中海油服's 百万元 table | whole unless the next line continues them |
+| a numbered row ending the table | 广州发展 `(1)燃煤发电及供热业务` | ends only when its cell holds no revenue |
+| **a table cut by the page break** | 上海隧道's geography short by 澳门 1.25 bn | `join_pages`: the next page read below the table page |
+| a restated prior-year table read as this year's | 厦门钨业 2024 (调整后) | an axis is read once |
+| one member named twice under one parent | 1225263103's two `其他` | one member carrying their sum |
+
+**Golden parity, 716 reports (2026-11-16):** 700 read, 16 over the 12 MB gate. The edge stored rows
+for 516; 355 of them carry at least one edge defect:
+
+| Edge defect | Rows | Reports |
+|---|---|---|
+| a 万元 table stored as yuan (+ cut) | 919 (+15) | 73 (+8) |
+| total rows stored as segments | 422 | 118 |
+| sales-model rows | 385 | 131 |
+| names glued from two lines / cut short | 292 / 62 | 89 / 30 |
+| fragment values (a cell's last line) | 138 | 47 |
+| leading digits lost | 86 | 24 |
+| a margin read as money | 47 | 20 |
+| deductions stored positive | 34 | 9 |
+| cost-analysis rows / junk names | 24 / 29 | 12 / 13 |
+| other misattributions (a following table's products or revenue timing filed under geography) | 85 | 25 |
+
+5,046 rows are identical and 67 identical apart from a stripped `其中：`/`(n)`. 3,233 rows are ours
+only, mostly tables on the second page. Partitions: 1,875 placed now, 84 unplaced now (14 by the
+0.01% tolerance, the rest because the target moved to a stated or agreed total), **0 unexplained**,
+**0 duplicate keys**. Tables found 1,189 → 1,467 with the page join, reconciling 1,070 → 1,409 (96%);
+523 reports have a placed split. The two tables placed before the join and not after were partial
+(an industry table listing four industries with no total, against product and geography tables
+agreeing on 4.62 bn): the old reading served them as whole splits.
+
+**Not read, measured, deferred:**
+- 143 of 716 reports (20%) state their split as `营业收入构成`, Shenzhen's format, and 10 carry only
+  the product or geography heading
+  ([note](../deferred/2026-11-16-a-fifth-of-china-s-reports-state-their-split-as-revenue-composition.md)).
+- Page 1 of each filer's search only, as the edge did
+  ([note](../deferred/2026-11-15-cninfo-reads-only-the-newest-search-page.md)).
+- 6 reports may run past the second page (an upper bound); 16 reports exceed the 12 MB gate.
+
 ## Risks and rollback
 
 - **Parser drift in the port.** Golden parity per regulator gates each switch; until step 8 a
