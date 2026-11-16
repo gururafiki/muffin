@@ -410,6 +410,81 @@ agreeing on 4.62 bn): the old reading served them as whole splits.
   ([note](../deferred/2026-11-15-cninfo-reads-only-the-newest-search-page.md)).
 - 6 reports may run past the second page (an upper bound); 16 reports exceed the 12 MB gate.
 
+**Rollout, 2026-11-16:**
+- **Roll and deploy.** muffin-ingest#180 rolled at 06:52, after the weekly promotion probe and wave
+  and with nothing in flight. muffin-deployment#517 deployed at 07:14:
+  - migration 20261115120000 applied;
+  - the one-shot re-queued **1,422** full reports the edge read (it kept reading until retired,
+    so more than the 1,383 counted on 11-15);
+  - pg_cron `muffin-cn-filings` is gone, and both names answer 410;
+  - the three Dagster tasks kept their 06:52 start.
+- **`new_cninfo_filers`' first tick started in the daemon the roll was replacing** (06:52:29,
+  12 s before the new daemon), and with a 6-hour interval it would have sat `STARTED` until
+  ~12:52. The sensor's own function was run once by hand in the code-location container and its
+  partition request applied: 2,173 keys.
+- **Live subset.** Five filers (Yangtze Power, LONGi, CATL, Gree, Moutai), five runs of 39–61 s:
+  - 5 searches answered; 57 reports named, 56 fetched and 1 over the 12 MB gate;
+  - 56 read, 20 of them with no table (CATL's heading variant among them);
+  - 546 rows, all placed, 6 retracted, 0 failed.
+
+  Yangtze Power's FY2025 split is 境内水电行业 75,661,563,315.43 and 其他行业 10,323,376,439.80, which
+  sum exactly to the reconciled 85,984,939,755.23. Served to `anon` by
+  `security_segment_current` in 34 ms: 87.99% / 12.01%, gross margins 65.79% / 31.54%. The browser
+  check could not run, because Playwright hung and the Chrome extension was not connected.
+- **Registry, run once by hand:** 6,265 listed, 2,173 securities mapped, 0 unmapped, 0 changed
+  from the edge's mapping.
+- **Started:** `cninfo_retention` (every 15 minutes) and `cninfo_stock_lists` (Mondays).
+  **`cninfo_filers_floor` is held STOPPED until the drain is done**: it treats a filer never
+  collected as due, so its first tick would have asked all ~87 chunks at priority 0, ahead of the
+  11:00 SEC wave. The drain is a priority −1 backfill instead (pass 1 `murkjqch`, launched 10:19;
+  [note](../deferred/2026-11-15-the-china-segment-backlog-drains-by-backfill.md)).
+- Both were started through GraphQL, so they are RUNNING only as database state until their
+  `default_status` is changed in code (with the floor's, after the drain).
+
+### Step 5: DART (2026-11-16; muffin-ingest#181)
+
+Ported as-is (decision 2): DART's archives are XBRL, read by the parser SEC's use, so the lane adds
+a provider, a registry and a grid, not a parser.
+
+**The lane:**
+- `raw_dart_corp_codes` → `security_dart_filer`: `corpCode.xml`, one 3.6 MB ZIP naming every filer,
+  with a stock code for 4,016 listed companies, mapped onto Korean equities by their six-digit code.
+  It is weekly (`dart_corp_codes`, Monday 07:50) and **takes 346 s from the node**, which is why
+  both DART schedules carry `DART_RUN` (1,800 s) rather than the 300 s short limit. The edge never
+  fetched it: it timed out twice at 240 s in September, without the cache hop. The sensor
+  `new_dart_filers` adds `dart_filer` keys and ships RUNNING.
+- `raw_dart_filings` (pool `dart`) and `dart_segment` (pool `sql`), one job `dart_segments`, ten
+  filers a run. Each filer's `list.json` is asked fresh (cache bypass), then its annual reports
+  (사업보고서) not read at the current parser version and not held, newest first, in rounds across
+  the run's filers. Archives are immutable and cached for 90 days. `dart_filers_floor` is the
+  30-day hash floor; `every_dart_filing_was_read` is WARN.
+- **DART refuses with HTTP 200**, so the body decides:
+  - `013` (no data) is an answer;
+  - `020` (the daily limit) is a refusal that stops the run and leaves the rest `unasked`;
+  - `014` (no file, sent as XML from an archive endpoint) marks the filing;
+  - any other body is asked again, because it settled nothing.
+- Only annual reports are filed: quarterly and half-year reports have no `11011` archive.
+
+**Golden parity, 769 filings (2026-11-16):**
+- The port re-read 768; the 769th was a dropped connection and was not retried.
+- **21,515 of 21,519 comparable stored rows match (99.98%).**
+- 4,688 more rows the port produces are comparatives whose key a newer filing already owns.
+- **The other 20 rows are two Hyundai Motor filings**, read by the edge at 01:34 and 01:54 UTC on
+  2026-09-06:
+  - Migration 196 added `long_lived_assets` and `goodwill` later that day without a parser bump, so
+    16 rows are long-lived assets the edge never asked for.
+  - Four `total_assets` instants are placed now where the edge left them unplaced.
+  - The edge's own parser, run in Deno on those two instances with today's vocabulary, agrees with
+    the port on all 100 facts (36 + 64, 0 differing).
+
+**Read-only drive, before the PR:** Samsung, SK Gas and Hyundai Motor against production. 3 lists
+answered, 2 archives re-read on request (98 rows), 0 failed, every counter summing. The 48 annual
+reports already read were not fetched.
+
+**The key was in http-cache's access log.** DART takes its key as `?crtfc_key=`, and the default
+log format prints `$request_uri`: 781 lines in the 48 hours to 2026-11-16 06:40, on the node since
+the location was added (2026-09-05). Raw never held it (`redacted`).
+
 ## Risks and rollback
 
 - **Parser drift in the port.** Golden parity per regulator gates each switch; until step 8 a

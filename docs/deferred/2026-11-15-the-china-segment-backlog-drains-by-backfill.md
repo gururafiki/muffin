@@ -34,6 +34,20 @@ every China segment row ends up written by one reader.
    `report_unasked` is not 0.
 3. Record each pass in this note.
 
+4. Once `every_cninfo_report_was_read` is clean, start `cninfo_filers_floor`. It counts a filer
+   never collected as due, so started before the drain, its first tick would ask the whole grid at
+   priority 0, ahead of the SEC wave and the company day.
+
+## Passes
+
+| Pass | Backfill | Launched | Runs | Reports read | No table | Rows | Unasked |
+|---|---|---|---|---|---|---|---|
+| live subset | `ixpuonsh` | 11-16 07:16 | 5 | 56 | 20 | 546 | 0 |
+| 1 | `murkjqch` | 11-16 10:19 | 87 | running | | | |
+
+Pass 1 shares the `sql` pool with SEC re-read pass 6 (`utsvbnmw`), both at priority −1. The DART roll
+at 10:29 interrupted one pass-1 run, `39fee9a6`, which was re-executed as `d207708d`.
+
 ## Done when
 
 `every_cninfo_report_was_read` reports no report behind the parser, and the passes are recorded

@@ -4068,13 +4068,18 @@ Measured 2026-11-09: SEC segment runs fail 17% on `pending_segments` timeouts, a
             - **pass 4** `szxovihm` (2026-11-15 13:27–15:00): 75 of 75 SUCCESS, no OOM kill;
               5,121 read, 1,838 with no segments, 106,414 rows, 15,407 kept by newer, **7,182 left
               unasked**;
-            - **pass 5** `mlhkhrpd` (2026-11-15 23:25, `--priority -1 --max-runtime 1800`).
+            - **pass 5** `mlhkhrpd` (2026-11-15 23:25 – 11-16 06:35, paused behind the night): 75 of
+              75 SUCCESS; 3,272 read, 1,293 with no segments, 59,530 rows, 9,724 kept by newer,
+              **3,915 left unasked** (named 7,199 across only 602 filers: budget-bound);
+            - **pass 6** `utsvbnmw` (2026-11-16 10:19, `--priority -1 --max-runtime 1800`), beside
+              CNINFO pass 1.
       - [x] **2026-11-15 check-in (read 23:20 UTC):** no alert since the pass-2 OOM tail ended
             2026-11-14 23:30; the 11-15 night all SUCCESS (prices 2,500 = 2,458 + 8 empty + 34 not
             askable, throttled 0; company day 1,907 = 1,882 + 25, `alternatives_retracted` 0;
             0 yfinance quarter/half twins left).
-      - [ ] **2026-11-16 ~07:00 UTC:** read pass 5's counters; if filings are still `unasked`,
-            launch pass 6 (`--priority -1`), outside 11:00–12:30. When fewer than 2,000 are due,
+      - [x] **2026-11-16 ~07:00 UTC:** read pass 5's counters; pass 6 launched 10:19.
+      - [ ] **Next:** read pass 6's counters; if filings are still `unasked`, launch pass 7
+            (`--priority -1`), outside 11:00–12:30. When fewer than 2,000 are due,
             the `sec_instances_due` sensor takes over. Then record the totals in the note and
             close it once `every_sec_filing_was_read` passes.
       - **First wave, 2026-11-14 12:52 UTC:** 24 runs, all SUCCESS, max 30 s; 29 filings named,
@@ -4089,17 +4094,31 @@ Measured 2026-11-09: SEC segment runs fail 17% on `pending_segments` timeouts, a
       reports (2026-11-16): 355 of the 516 the edge read carry an edge defect, every difference
       classified, 0 unexplained partition changes, 0 duplicate keys; with the page join, tables
       found 1,189 -> 1,467 and reconciling 1,070 -> 1,409. Record in the spec's *Step 4*.
-      - [ ] Merge #180, roll it outside the windows (after 06:20 UTC), then merge and deploy #517.
-      - [ ] Live tiny subset: a few filers through `cninfo_segments`, counters summing, rows read
-            against the PDF, the business-lines section in the browser for Yangtze Power.
-      - [ ] Start `cninfo_retention`, launch backfill pass 1 at `--priority -1`, then start
-            `cninfo_filers_floor` and `cninfo_stock_lists`. Record each pass in
+      - [x] **2026-11-16:** #180 rolled 06:52; #517 deployed 07:14 (1,422 edge-read reports
+            re-queued; both names 410; `muffin-cn-filings` gone). The grid was seeded by running
+            `new_cninfo_filers` by hand, because its first tick started in the daemon the roll
+            replaced: 2,173 keys.
+      - [x] Live tiny subset (5 filers, `ixpuonsh`): 56 read, 546 rows, 0 failed, counters
+            summing; Yangtze Power's FY2025 split equals its report and is served to `anon` in
+            34 ms. Browser check not run: Playwright hung and the Chrome extension was offline.
+      - [x] `cninfo_retention` and `cninfo_stock_lists` started; registry run by hand (2,173
+            mapped, 0 changed). Backfill pass 1 `murkjqch` launched 10:19 at `--priority -1`.
+      - [ ] Read each pass and launch the next while reports stay unasked; record them in
             [the drain note](docs/deferred/2026-11-15-the-china-segment-backlog-drains-by-backfill.md).
+      - [ ] **After the drain:** start `cninfo_filers_floor` (held, because a never-collected
+            filer counts as due, so its first tick would ask the whole grid at priority 0), and
+            declare all three RUNNING in code.
       - [ ] [A fifth of China's reports state their split as revenue composition](docs/deferred/2026-11-16-a-fifth-of-china-s-reports-state-their-split-as-revenue-composition.md):
             143 of 716 reports use Shenzhen's `营业收入构成`, read by neither reader (widening).
       - [ ] [CNINFO reads only the newest search page](docs/deferred/2026-11-15-cninfo-reads-only-the-newest-search-page.md)
             (widening, page-2 yield to measure).
 - [ ] 5. DART: corp-code registry, grid, `crtfc_key` redacted from raw; retire `kr-filings`.
+      Built: muffin-ingest#181 (rolled 2026-11-16 10:30) and muffin-deployment#518 (retire
+      `kr-filings`; DART's key redacted from http-cache's access log, where 781 lines in 48 hours
+      had carried it). Golden parity: 21,515 of 21,519 comparable rows; the 20 others are two
+      Hyundai Motor filings read before migration 196, which the edge's own parser now agrees with.
+      - [ ] Deploy #518; live subset (Samsung, SK Gas, Hyundai with its two filings re-read); the
+            registry once by hand; the drain by backfill; the floor after it.
 - [ ] 6. NSE: grid from `security_nse_filer`; retire `in-filings`.
 - [ ] 7. Grafana `segments.json` re-pointed; market-verify segment checks back.
 - [ ] 8. Delete the handlers and modules after 3 clean days.
