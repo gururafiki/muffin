@@ -1,8 +1,12 @@
 # The coverage sample reaches its 120-second bound
 
-Created 2026-11-07, from reading `coverage_current` after the insider history · Status: **decided
-2026-11-08 (the user): options 1 and 2, built in muffin-deployment#498.** Open until a week of runs
-finishes well under the new bound. Read 2026-11-09 from `cron.job_run_details`: 74.1 s (11-08
+Created 2026-11-07, from reading `coverage_current` after the insider history · Status: **closed
+2026-11-20.** Decided 2026-11-08 (the user): options 1 and 2, built in muffin-deployment#498. Every
+run from 11-09 to 11-20 succeeded (23 runs): 76.7–176.6 s against the 300 s bound. The rise from
+11-15 to 11-18 (05:23 runs of 130, 160, 162 and 177 s) came with the SEC segment re-read and
+CNINFO's first pass writing `security_segment`, and fell back to 103–138 s once they finished. The
+peak is 59% of the bound. If a sample stops, "An observability sample has stopped arriving" fires.
+Earlier readings: finishes well under the new bound. Read 2026-11-09 from `cron.job_run_details`: 74.1 s (11-08
 17:23) and 102.3 s (11-09 05:23) against 300 s. Read 2026-11-11: six runs since, all succeeded.
 The 05:23 run, inside the company lane's window, took 102.3, 121.0 and 130.9 s on 11-09, 11-10
 and 11-11; the 17:23 run took 119.3, 76.7 and 98.1 s. Close after 2026-11-15 if it stays there;

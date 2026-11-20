@@ -1,7 +1,9 @@
 # A fifth of China's reports state their split as revenue composition
 
 Created 2026-11-16 · Planned in [the Phase 6 spec](../specs/2026-11-09-segments-and-regulators.md),
-step 4 · Status: open, a widening (decision 2: heading variants later, measured)
+step 4 · Status: **the variant is built and live (muffin-ingest#183, rolled 2026-11-20 15:29)**; open
+for the shapes listed under *Left* below. Decided 2026-11-16 (the user): build the variant, gated
+like the first fix, then drain all of China once.
 
 ## Why
 
@@ -52,6 +54,38 @@ The variant is the Shenzhen exchange's format, a different table (1225107435, pa
    by a one-shot migration as step 4's was, and drain them by backfill. Do not bump
    `segment_parser.version`: all regulators share it, so a bump re-queues SEC's whole history too.
 
+## Built and gated (2026-11-16 to 11-20)
+
+muffin-ingest#183 reads `营业收入构成` where no mandated heading is printed within 90 pages: the
+group rows `分行业`/`分产品`/`分地区` start each axis, `分销售模式` ends the reading, a group the reader
+does not know is skipped, and `营业收入合计` is the stated total. Reading the whole population, not a
+sample, found the shapes a 30-report sample had not (see the spec's step 4 for each). The gate, on
+the node over the production image:
+
+- **Every Shenzhen report drain pass 1 fetched (624):** 615 read, 9 with no body. **610 have facts
+  and 609 reconcile in every group**, 6,874 members, 0 duplicate keys, p50 1.9 s a report. The 5
+  with no facts are a bank (three years) and a broker (two years), correctly none. The one partial
+  is Midea FY2023, whose industry and product tables sum to 333.06 bn against a stated 372.04 bn:
+  left unplaced.
+- **Every extracted revenue row against its PDF (6,905):** 6,898 have both their name and figure on
+  the table's pages. The 7 others are 3 names (a ® mark, two names over 40 characters) and 4
+  figures that are right: 科大讯飞 lists 华东地区 under main business and again under 其他业务, which
+  the reader sums into one member, and one figure the text layer prints as `19,455,687,441.`.
+  Pairing: 6,467 of the 6,503 rows whose name sits on a text line have their figure beside it.
+  35 sampled rows read by eye, all correct, including an elimination's minus sign.
+- **The 716 golden reports:** 572 identical to the merged reader, 141 gained (no table before), 0
+  lost, 0 stored figures changed. The 3 still reading nothing are under *Left*.
+
+## Left
+
+- **Brokers** state `营业总收入构成` by business line (财富管理, 自营, 投资银行…) with no group labels;
+  read as nothing (华林证券, 华西证券). Banks state no split.
+- **卓胜微** prints industry, products, regions and sales mode with no group labels at all, each
+  summing to 100%. Inferring the groups from running sums would be guessing the axis names.
+- **The 10 reports carrying only the product or geography heading** (mandated form), and **cost**
+  from the `占公司营业收入或营业利润10%以上` table: not read.
+
 ## Done when
 
-The variant is read and verified on the golden set, or the note is closed with a reason.
+The re-queue (muffin-deployment#520, 757 reports) is drained and the drain note records the yield;
+then close this note, or reopen it for one of the shapes under *Left*.

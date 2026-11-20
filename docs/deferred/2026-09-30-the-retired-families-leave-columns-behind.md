@@ -2,7 +2,8 @@
 
 Created 2026-09-30 · **Drop on or after 2026-10-12** · Status: open; the table half is
 muffin-deployment#479 (2026-10-30), deployed 2026-11-01. The SEC family's section was added
-2026-11-02, for Phase 5's step 11.
+2026-11-02, for Phase 5's step 11, and the regulators' segment walkers' on 2026-11-20 (Phase 6
+step 9, drop on or after 2026-12-20).
 
 **2026-10-30: the tables first, for the disk.** `/mnt/data` reached 78% (alert at 80%) with
 Phase 5's backfills to land, so #479 drops `security_price`, `prices`, `exchange_listing` and
@@ -107,6 +108,24 @@ no schedule and no `cron_resource` row since legacy migration 138; `earnings-his
 replaced it. Its handler is still in `market-refresh/index.ts`, reachable by an admin call and
 guarded in `logic-check.ts`, and it is the only reader of the view. Retiring it (a `-- RETIRES:`
 marker, 410) lets the handler, the view and the column go with step 10 and 11.
+
+### Added 2026-11-20: the regulators' segment walkers (Phase 6)
+
+Phase 6 step 9 (muffin-deployment, 2026-11-20) dropped the seven queue views (`pending_segments`,
+`pending_{kr,in,cn}_segments`, `pending_{kr,in}_history`, `pending_cn_filings`) and the
+`backlog_negative_cache` row for `pending_segments`. Views hold no data, so they went at once. The
+state the edge walkers wrote stays as a backup. **Drop date: 2026-12-20**, 30 days after step 9.
+Measured on production 2026-11-20: no view depends on any of these, and the only function naming one
+(`apply_nse_symbol_map`) does so in a comment.
+
+| Object | Written by (retired) | Rows on 2026-11-20 | Still read by |
+|---|---|---|---|
+| `market.dart_discovery_cursor` | `kr-filings` (retired 2026-11-16) | 1 | nothing (`compare_databases.py` excludes its `updated_at`; remove that line with it) |
+| `security_filer.history_walked_at` | `kr-filings`, `in-filings`, `cn-filings` | 3,244 set | nothing |
+| `security.nse_history_walked_at` | `in-filings` | — | nothing |
+
+`security_filing.segments_parsed_at` and `segments_parser_version` are NOT on this list: the
+Dagster segment lanes read and write them.
 
 The four price columns are classified `symbol_keyed = false` in `market.symbol_cache_classification`,
 so `clear_symbol_caches` no longer clears them. `tests/negative-caches-are-classified.sql` requires

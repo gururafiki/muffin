@@ -4033,11 +4033,12 @@ Measured 2026-11-09: SEC segment runs fail 17% on `pending_segments` timeouts, a
       2026-11-14); live subset `changed=0` except 68 Equinor ownership moves equal in value; edge
       `security-segments` retired (muffin-deployment#511, deployed 11:46 UTC); sensor started
       (#175). Record in the spec's *Steps 1-3 as built*.
-      - [ ] **2026-11-16 check-in:** the sensor's waves since 11-14 (outcomes summing,
-            `every_sec_filing_was_read` passing), and the Monday 04:00 CIK map on the new SEC
-            client.
-      - [ ] **Step 8 after three clean days (2026-11-17 or later):** delete the SEC segment
-            handler; `segments.ts` stays while CNINFO, DART and NSE still import it.
+      - [x] **2026-11-16 check-in, read 2026-11-20:** the sensor's daily waves (13, 11 and 13 runs
+            from 11-18 to 11-20) all SUCCESS; `every_sec_filing_was_read` PASSED at 12:19 on 11-20.
+            The Monday 04:00 `weekly_registries` run (`a4ce365a`) succeeded on the new SEC client:
+            10,404 filers. No segment-lane run has failed since 11-17.
+      - [x] **Step 8, 2026-11-20:** all seven segment handlers and their modules deleted, not only
+            SEC's (muffin-deployment#522), since every lane had three clean days.
       - [ ] [A parser bump re-reads a history raw does not hold](docs/deferred/2026-11-14-a-parser-bump-re-reads-a-history-raw-does-not-hold.md):
             **decided 2026-11-14: keep every instance whole.** Before the first version bump,
             grow the data volume by ~25-30 GB (paid).
@@ -4072,16 +4073,17 @@ Measured 2026-11-09: SEC segment runs fail 17% on `pending_segments` timeouts, a
               75 SUCCESS; 3,272 read, 1,293 with no segments, 59,530 rows, 9,724 kept by newer,
               **3,915 left unasked** (named 7,199 across only 602 filers: budget-bound);
             - **pass 6** `utsvbnmw` (2026-11-16 10:19, `--priority -1 --max-runtime 1800`), beside
-              CNINFO pass 1.
+              CNINFO pass 1: 76 of 77 runs SUCCESS (the NSE roll at 12:27 killed `d824fd21`,
+              re-executed as `ff5cf4ef`); 2,099 read, 884 with no segments, 33,067 rows, 5,720
+              kept by newer, **1,474 left**, under the sensor's 2,000 ceiling, so its daily waves
+              read them (11-18 to 11-20).
       - [x] **2026-11-15 check-in (read 23:20 UTC):** no alert since the pass-2 OOM tail ended
             2026-11-14 23:30; the 11-15 night all SUCCESS (prices 2,500 = 2,458 + 8 empty + 34 not
             askable, throttled 0; company day 1,907 = 1,882 + 25, `alternatives_retracted` 0;
             0 yfinance quarter/half twins left).
       - [x] **2026-11-16 ~07:00 UTC:** read pass 5's counters; pass 6 launched 10:19.
-      - [ ] **Next:** read pass 6's counters; if filings are still `unasked`, launch pass 7
-            (`--priority -1`), outside 11:00–12:30. When fewer than 2,000 are due,
-            the `sec_instances_due` sensor takes over. Then record the totals in the note and
-            close it once `every_sec_filing_was_read` passes.
+      - [x] **Done 2026-11-20:** `every_sec_filing_was_read` passed at 12:19; the note is closed.
+            Southern Copper's 12 10-Qs since 2023 now hold 1,139 rows across 11 of them.
       - **First wave, 2026-11-14 12:52 UTC:** 24 runs, all SUCCESS, max 30 s; 29 filings named,
         19 answered, 10 absent; 311 new rows; 0 retracted, 0 failed, 0 currency unknown; 29 marks.
       - [ ] **2026-11-27:** the daily-index run for Thanksgiving (11-26) ends SUCCESS, claiming
@@ -4103,13 +4105,25 @@ Measured 2026-11-09: SEC segment runs fail 17% on `pending_segments` timeouts, a
             34 ms. Browser check not run: Playwright hung and the Chrome extension was offline.
       - [x] `cninfo_retention` and `cninfo_stock_lists` started; registry run by hand (2,173
             mapped, 0 changed). Backfill pass 1 `murkjqch` launched 10:19 at `--priority -1`.
+      - [x] **Pass 1 cancelled at 11:35 after 11 runs:** 0 of 562 Shenzhen reports gave a row,
+            against 61 of 163 Shanghai ones. **Decided 2026-11-16 (the user): read Shenzhen's
+            `营业收入构成` first, gated like the first fix, then drain China once.**
+      - [x] **The variant:** muffin-ingest#183 (the reader, every mutation caught) and
+            muffin-deployment#520 (re-queue the 757 reports read with no row; 7 of 7 mutations
+            caught). **Gate passed 2026-11-20:** 610 of 615 Shenzhen reports read have facts and
+            609 reconcile in every group (the 5 are a bank and a broker); 6,898 of 6,905 extracted
+            rows have name and figure on the PDF's table pages, the 7 others explained, 35 read by
+            eye; the 716 golden reports 572 identical, 141 gained, 0 lost. #183 merged 15:24 and
+            rolled 15:29; #520 deployed with #523 (dispatched 15:30). Spec: *Step 4b*.
       - [ ] Read each pass and launch the next while reports stay unasked; record them in
             [the drain note](docs/deferred/2026-11-15-the-china-segment-backlog-drains-by-backfill.md).
       - [ ] **After the drain:** start `cninfo_filers_floor` (held, because a never-collected
             filer counts as due, so its first tick would ask the whole grid at priority 0), and
-            declare all three RUNNING in code.
+            declare it RUNNING in code (retention and the stock lists are declared in #183).
       - [ ] [A fifth of China's reports state their split as revenue composition](docs/deferred/2026-11-16-a-fifth-of-china-s-reports-state-their-split-as-revenue-composition.md):
-            143 of 716 reports use Shenzhen's `营业收入构成`, read by neither reader (widening).
+            143 of 716 golden reports, and in the drain **every** Shenzhen report. Being built now
+            (above). Left in the note: the 10 reports carrying only the product or geography
+            heading, and cost from the 10% table.
       - [ ] [CNINFO reads only the newest search page](docs/deferred/2026-11-15-cninfo-reads-only-the-newest-search-page.md)
             (widening, page-2 yield to measure).
 - [ ] 5. DART: corp-code registry, grid, `crtfc_key` redacted from raw; retire `kr-filings`.
@@ -4117,13 +4131,46 @@ Measured 2026-11-09: SEC segment runs fail 17% on `pending_segments` timeouts, a
       `kr-filings`; DART's key redacted from http-cache's access log, where 781 lines in 48 hours
       had carried it). Golden parity: 21,515 of 21,519 comparable rows; the 20 others are two
       Hyundai Motor filings read before migration 196, which the edge's own parser now agrees with.
-      - [ ] Deploy #518; live subset (Samsung, SK Gas, Hyundai with its two filings re-read); the
-            registry once by hand; the drain by backfill; the floor after it.
+      - [x] **2026-11-16:** #518 deployed 10:31–10:44 (`kr-filings` 410); registry run by hand
+            (1,086 Korean equities mapped, +643 on the edge's 443); live subset `zfnkyscb`
+            (Samsung, SK Gas, Hyundai Motor): 100 rows, counters summing.
+      - [x] **Drain, stage 1 pass 1** `zgajhenf` (from 2026-11-16 12:23; the NSE roll killed
+            `a4f3550e`, re-executed as `3925b4ce`): 110 of 111 runs SUCCESS; 1,096 lists answered;
+            7,561 archives named, 3,390 fetched, 173 absent, 1 transport, **3,997 unasked**
+            (byte budget, 533 MB fetched).
+      - [ ] **Stage 1 pass 2** `atpdcjgc` (2026-11-20 15:07, priority −1). Then a `dart_segment`
+            backfill over `grid:dart_filer`; then start `dart_filers_floor` and `dart_corp_codes`.
+      - [ ] **Rotating DART's API key is the user's call:** it sat in http-cache's access log
+            from 2026-09-05 until #518.
 - [ ] 6. NSE: grid from `security_nse_filer`; retire `in-filings`.
-- [ ] 7. Grafana `segments.json` re-pointed; market-verify segment checks back.
-- [ ] 8. Delete the handlers and modules after 3 clean days.
-- [ ] 9. Contract with a drop date: the `pending_*` segment and history views, the DART cursor,
-      the walk cursors.
+      Built: muffin-ingest#182 (rolled 2026-11-16 12:27) and muffin-deployment#519 (deployed
+      11:35–11:47: `in-filings` 410; NSE's API moved to `www.nseindia.in`; the edge's 440
+      placeholder filings deleted). Golden parity 33,409 of 33,409 rows.
+      - [x] Live subset `yzwqxcqm` (RELIANCE, AXISBANK, INFY, HDFCBANK): 4 lists, 46 results
+            filed, 0 re-read (all read at the current parser version), 0 duplicates.
+      - [x] **Drain** `pmneyhxa` (2026-11-16 12:35): 26 of 26 runs SUCCESS; 642 of 642 lists
+            answered, 6,460 results listed, 8 instances named and fetched (4 read, 4 standalone
+            only), `changed` 0, 0 failed.
+      - [x] `nse_filers_floor` started 2026-11-20 15:1x, after a dry run of its next two ticks (19
+            and 16 small runs at 08:20).
+      - [ ] Declare `nse_filers_floor` RUNNING in code (with DART's and CNINFO's after their
+            drains), so a state reset keeps it.
+- [x] 7. Grafana `segments.json` re-pointed; market-verify segment checks back
+      (muffin-deployment#521, merged 2026-11-20 15:01): three panels read `muffin-dagster` (the
+      lanes' `every_*_was_read` checks, rows per hour by regulator, China's PDF bytes against the
+      5 GB cap); market-verify's 9b `check_segments_reconcile.py` and `check_spine_refresh_succeeds.py`
+      restored, both replayed on production first (3,643 splits, served 0.38% against a 1.25%
+      tripwire).
+- [x] 8. Delete the handlers and modules after 3 clean days (muffin-deployment#522, merged 15:05):
+      the seven handlers, `segments.ts`, `xbrl.ts`, `dart.ts`, `in.ts`, `cn.ts`, `cn-pdf.ts` and
+      their checks; the `RETIRED` entries stay, so each still answers 410. Deploy of #521 + #522
+      dispatched 15:06.
+      - [ ] Verify after the deploy: every one of the seven answers 410, no other resource regressed
+            in `refresh_run`, and the three re-pointed panels render.
+- [ ] 9. Contract with a drop date (muffin-deployment#523, open): the seven `pending_*` views drop;
+      `dart_discovery_cursor`, `security_filer.history_walked_at` and `security.nse_history_walked_at`
+      stay until **2026-12-20** ([the retired-columns note](docs/deferred/2026-09-30-the-retired-families-leave-columns-behind.md)).
+      Replayed twice on the node (117 of 117 tests) and dry-run on production. Deploys with #520.
 - [ ] 10. Docs, skills, memory.
 
 **Left for Phases 6 and 6b by Phases 4 and 5.** Read in Phase 6's planning on 2026-11-09; how each

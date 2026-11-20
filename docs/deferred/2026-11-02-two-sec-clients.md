@@ -53,6 +53,12 @@ primary document is immutable and can stay cached.
 
 ## Done when (met 2026-11-14, except the N-PORT quarter, which comes when SEC files)
 
+**Read 2026-11-20:** the Monday 2026-11-16 04:00 `weekly_registries` run (`a4ce365a`) SUCCEEDED on
+the new client: `raw_sec_cik_map` fetched `company_tickers.json` through http-cache's `/sec/`
+location (796,319 bytes) and `security_cik` holds **10,404 filers** (7 securities updated). The
+BYPASS line could not be read, because http-cache's log no longer reaches back to 11-16. What is
+left is the N-PORT quarter: SEC publishes Q3 holdings about 60 days after 09-30.
+
 `grep -rn "sec.gov\|efts" muffin_ingest/providers` finds only `sec_edgar.py`, and the N-PORT lane's
 next quarter runs on it with outcomes summing.
 

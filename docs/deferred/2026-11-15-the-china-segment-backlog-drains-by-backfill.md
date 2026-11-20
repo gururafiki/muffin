@@ -43,10 +43,19 @@ every China segment row ends up written by one reader.
 | Pass | Backfill | Launched | Runs | Reports read | No table | Rows | Unasked |
 |---|---|---|---|---|---|---|---|
 | live subset | `ixpuonsh` | 11-16 07:16 | 5 | 56 | 20 | 546 | 0 |
-| 1 | `murkjqch` | 11-16 10:19 | 87 | running | | | |
+| 1 | `murkjqch` | 11-16 10:19 | 11 of 87, then cancelled | 714 | 643 | 1,232 | 2,773 |
 
-Pass 1 shares the `sql` pool with SEC re-read pass 6 (`utsvbnmw`), both at priority −1. The DART roll
+Pass 1 shared the `sql` pool with SEC re-read pass 6 (`utsvbnmw`), both at priority −1. The DART roll
 at 10:29 interrupted one pass-1 run, `39fee9a6`, which was re-executed as `d207708d`.
+
+**Pass 1 was cancelled at 11:35, after 11 runs (275 filers, 794 reports fetched, 3.34 GB, 37 over
+the 12 MB gate)**, because its counters showed that **0 of 562 Shenzhen reports gave a row** against
+61 of 163 Shanghai ones: Shenzhen prints no mandated heading, only `营业收入构成`. Draining on would
+have marked every Shenzhen report read with nothing in it. The user decided (2026-11-16) to read
+that table first and then drain China once
+([note](2026-11-16-a-fifth-of-china-s-reports-state-their-split-as-revenue-composition.md)).
+The 757 reports already marked read without a row are put back behind the parser by
+muffin-deployment's migration 20261116150000, deployed after the reader rolls.
 
 ## Done when
 

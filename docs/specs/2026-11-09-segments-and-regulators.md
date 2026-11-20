@@ -439,7 +439,47 @@ agreeing on 4.62 bn): the old reading served them as whole splits.
   11:00 SEC wave. The drain is a priority −1 backfill instead (pass 1 `murkjqch`, launched 10:19;
   [note](../deferred/2026-11-15-the-china-segment-backlog-drains-by-backfill.md)).
 - Both were started through GraphQL, so they are RUNNING only as database state until their
-  `default_status` is changed in code (with the floor's, after the drain).
+  `default_status` is changed in code (with the floor's, after the drain). muffin-ingest#183
+  declares them RUNNING.
+
+### Step 4b: Shenzhen's composition table (muffin-ingest#183, muffin-deployment#520; 2026-11-16 to 11-20)
+
+**Why.** Drain pass 1 was cancelled at 11:35 on 11-16, after 11 runs: **0 of 562 Shenzhen reports
+gave a row**, against 61 of 163 Shanghai ones. Shenzhen prints no mandated heading, only
+`营业收入构成`, so the golden set's "20% of reports" was in fact every Shenzhen report, half the
+filers. The user decided (11-16) to read that table first, gated like the first fix, then drain
+China once.
+
+**The reader.** Where no mandated heading is printed within 90 pages, the reader tries each page
+carrying `营业收入构成` as a line of its own. Groups `分行业`/`分产品`/`分地区` start each axis,
+`分销售模式` ends the reading, and an unknown `分…` group is skipped. `营业收入合计` is the stated
+total, and there is no cost column. Shapes found by reading the whole population rather than a
+sample, each with a test built from the report's measured geometry:
+- a figure printed one digit group per item, the pieces gapping and overlapping by ±0.06 pt (Yunda);
+- an elimination's minus flush against its figure, or alone on the line above a wrapped cell;
+- a share label set over two lines (`占营业收`/`入比重`), and a group label centred across the table;
+- Kangxi radicals for ideographs (`营业收⼊构成`), mapped back by NFKC on the radical blocks only;
+- `营业总收入构成` and `营业收入与构成`;
+- a table in 千元 printing whole numbers (Midea), read in yuan;
+- an unknown group (`分行业应用`, 汉威), skipped rather than read as the current axis;
+- an orphan `其中` at the top of a group (安科生物), part of the group;
+- a cover printing `2025 年度报告` rather than `2025年年度报告`, which had dropped readable tables for
+  want of a period (伟星股份, 华利集团).
+
+**The gate**, on the node over the production image (detail in
+[the composition note](../deferred/2026-11-16-a-fifth-of-china-s-reports-state-their-split-as-revenue-composition.md)):
+- **Every Shenzhen report pass 1 fetched (624):** 610 of 615 read have facts, 609 reconcile in
+  every group, 0 duplicate keys, p50 1.9 s. The 5 without facts are a bank and a broker.
+- **Every extracted revenue row against its PDF (6,905):** 6,898 have name and figure on the
+  table's pages, the other 7 are explained, and 35 sampled rows were read by eye.
+- **The 716 golden reports:** 572 identical, 141 gained, 0 lost, 0 stored figures changed.
+
+**Left unread:** brokers' business-line tables, 卓胜微's table with no group labels, the 10 reports
+carrying only a product or geography heading, and cost from the 10% table.
+
+**Rollout, 2026-11-20:** #183 merged 15:24 and rolled 15:29 (two DART stage-1 runs launched during
+the restart failed with `DagsterUserCodeUnreachableError` and were re-executed). #520 re-queues the
+757 reports read with no row, deployed with step 9.
 
 ### Step 5: DART (2026-11-16; muffin-ingest#181)
 
@@ -483,7 +523,120 @@ reports already read were not fetched.
 
 **The key was in http-cache's access log.** DART takes its key as `?crtfc_key=`, and the default
 log format prints `$request_uri`: 781 lines in the 48 hours to 2026-11-16 06:40, on the node since
-the location was added (2026-09-05). Raw never held it (`redacted`).
+the location was added (2026-09-05). Raw never held it (`redacted`). Since muffin-deployment#518 the
+`/dart/` location logs a copy of the URI with the key's value replaced. **Rotating the key is the
+user's call**: the lines already logged are in Docker's log files on the node until they rotate.
+
+**Rollout, 2026-11-16:**
+- muffin-ingest#181 rolled 10:29–10:30; muffin-deployment#518 deployed 10:31–10:44 (migration
+  20261116100000: `kr-filings` answers 410, pg_cron `muffin-kr-filings` unscheduled, the key
+  redacted from the access log).
+- **Registry, run once by hand: 1,086 Korean equities mapped**, 643 more than the edge's 443.
+- **Live subset `zfnkyscb`** (10:49): Samsung Electronics, SK Gas and Hyundai Motor, three runs;
+  100 rows, every counter summing, Hyundai Motor's two filings re-read as requested.
+- **Drain:** stage 1 only (`raw_dart_filings`, pool `dart`), backfill `zgajhenf` at priority −1
+  from 12:23. Stage 1 and 2 are separate backfills because pools are run-granularity: a run holding
+  both would hold `sql` through DART's slow transfers. `dart_segment` over the grid follows, reading
+  what stage 1 holds. `dart_filers_floor` and `dart_corp_codes` stay STOPPED until then.
+
+### Step 6: NSE (2026-11-16; muffin-ingest#182, muffin-deployment#519)
+
+Ported as-is (decision 2): the instances are XBRL, read by the shared parser after the edge's
+normaliser (`in.ts`), ported as `facets/nse.py`.
+
+**The lane:** `raw_nse_filings` (pool `nse`) lists each filer's annual results and fetches every
+consolidated instance not read at the current parser version and not held; `nse_segment` files
+the results in `market.security_filing`, normalises each instance and reads it. The grid
+`nse_filer` takes its keys from `security_nse_filer` (the registries family, by ISIN); 25 filers a
+run; `nse_filers_floor` is the 30-day hash floor (08:20), held STOPPED; `every_nse_filing_was_read`
+is WARN.
+
+**What the provider measured:**
+- **NSE moved its API to `www.nseindia.in`** (a 301 from `.com`), while the archives answer on both
+  hosts identically. The http-cache `nse` location, the edge's `nse()` origin and `settings` follow;
+  links are canonicalised to `nsearchives.nseindia.com`, the form every stored accession has.
+- The cookie handshake answers **403 and sets the cookies anyway**; they are sent as a `Cookie`
+  header. A redirect counts as a refusal (`follow_redirects=False`), so a moved endpoint fails
+  loudly rather than being followed somewhere unexamined.
+- The normaliser names anonymous members, annualises `Four*` contexts, and raises
+  `NotConsolidated` for a standalone instance, which is counted (`standalone`), never read.
+- **NSE lists a result with no XBRL as `…/corporate/xbrl/-`, and the edge filed that link as a
+  filing**, once per company: 440 rows, every one marked read, none an instance, none owning a
+  segment row. The lane files only `.xml` links; migration 20261116120000 deletes the 440 once.
+
+**Golden parity: 33,409 of 33,409 stored rows (100%)**, re-read by the port from the stored
+filings' instances.
+
+**Rollout:**
+- muffin-deployment#519 deployed 11:35–11:47 (migration 20261116120000: `in-filings` answers 410,
+  pg_cron `muffin-in-filings` unscheduled, the placeholders deleted, `/nse/` on `.in`).
+- muffin-ingest#182 rolled 12:26–12:28. It killed two runs in flight (a SEC re-read run and a DART
+  stage-1 run), re-executed at once.
+- **Live subset `yzwqxcqm`** (12:28): RELIANCE, AXISBANK, INFY, HDFCBANK. 4 lists answered,
+  46 results listed and filed, 0 instances named: every result was already read at the current
+  parser version, so the port read nothing again, as decision 2 intends. 46 filings, all canonical,
+  all dated, none duplicated.
+- **Drain:** backfill `pmneyhxa` over all 642 filers at priority −1, from 12:35. 26 of 26 runs
+  succeeded: 642 of 642 lists answered, 6,460 results listed, 8 instances fetched (4 read, 4
+  standalone only), `changed` 0, 0 failed. `nse_filers_floor` was started on 2026-11-20 after a dry
+  run of its next two ticks (19 and 16 small runs at 08:20).
+
+### Step 7: observability (muffin-deployment#521, merged 2026-11-20)
+
+- **Three `segments.json` panels read `muffin-dagster`** instead of the edge's `pending_*` views and
+  `refresh_run`:
+  - *Filings still to read*: the newest `every_*_was_read` check per regulator, never read plus
+    behind the parser, labelled from the check's own name;
+  - *Segment rows written per hour, by regulator*: the `rows` metadata of each `*_segment`
+    materialization, one per (run, asset);
+  - *China's annual-report PDFs held, against the 5 GB cap*: `cninfo_reports_within_cap`'s
+    `held_bytes` and `cap_bytes`.
+- **A dashboard query that pattern-matches `event_logs` scanned 1.5 M materializations and timed
+  out.** The asset keys are matched on Dagster's small `asset_keys` table and handed to the indexed
+  lookup as `asset_key = any(array(…))`: 95 ms.
+- **market-verify's segment checks are back** (9b `check_segments_reconcile.py` and
+  `check_spine_refresh_succeeds.py`, with the spine self-test in `quality.yml`), since segments are
+  Dagster data again (the user's rule of 2026-11-08). Both were replayed on production first: 3,643
+  splits checked, the served rate 0.38% against a 1.25% tripwire, and the spine refreshed 0.1 h
+  before.
+- `check_anon_read_latency.py` probes the stock page's business-lines reads again.
+
+### Step 8: the edge's handlers deleted (muffin-deployment#522, merged 2026-11-20)
+
+No segment-lane run failed from 2026-11-17 to 11-20 (11-16's three failures were the roll and the
+cancelled CNINFO pass), so all seven handlers went at once, not only SEC's:
+- the seven branches of `market-refresh/index.ts` (1,095 lines), their constants and TTLs;
+- `segments.ts`, `xbrl.ts`, `dart.ts`, `in.ts`, `cn.ts`, `cn-pdf.ts` and their six checks;
+- the `logic-check.ts` guards that only covered that code: the shared segment conflict target,
+  `segment_member_class` being read, the read-gated retraction, and the `in-filings` stamp.
+
+The `RETIRED` entries stay, so each resource answers 410 naming its lane. `origins.ts` keeps the
+regulators' hosts because the http-cache guard reads them.
+
+**The first merge was refused** with *"refusing to allow an OAuth App to create or update workflow
+… without `workflow` scope"*. #521 had changed `quality.yml` in the same minute, and GitHub's merge
+would have written a `quality.yml` neither branch held. Rebasing #522 over SSH, so its head already
+held the merged file, let `gh pr merge` through. #521 itself had merged because its branch held
+exactly the file the merge produced.
+
+### Step 9: the contract (muffin-deployment#523, 2026-11-20)
+
+- **Dropped:** `pending_segments`, `pending_{kr,in,cn}_segments`, `pending_{kr,in}_history`,
+  `pending_cn_filings`, and `backlog_negative_cache`'s row for `pending_segments`.
+  `pending_cn_segments` and `pending_kr_history` had sat FLAT since their resources retired, so "A
+  non-empty backlog has been FLAT for a week" fired on them. Dry-run on production in a rolled-back
+  transaction: `backlogs_to_sample` lists only the five live queues, and `backlog_drain` carries
+  none of the seven.
+- **Kept until 2026-12-20:** `dart_discovery_cursor`, `security_filer.history_walked_at` and
+  `security.nse_history_walked_at`
+  ([the retired-columns note](../deferred/2026-09-30-the-retired-families-leave-columns-behind.md)).
+- **Tests:**
+  - five tested only the views and were deleted;
+  - `segments-aggregate-within-a-partition` lost its backlog block;
+  - `india-must-ask-with-nse-s-own-symbol` now asserts on `security_filer.filer_id`, which the NSE
+    lane asks with, so a security NSE does not list must get no filer id.
+
+  Replayed on the node twice: the bundle matches, applying it changes nothing, 117 of 117 tests.
 
 ## Risks and rollback
 

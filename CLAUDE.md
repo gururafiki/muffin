@@ -6129,6 +6129,68 @@ muffin-ingest#180, muffin-deployment#517. Record: the Phase 6 spec's *Step 4*.
   moved found its strings gone (`assert orig.count(a) == 1` failed). That is the harness working:
   write the mutations for the code as it is now, never trust a stale list.
 
+### Shenzhen, Korea and India, and the edge's segment code leaves (2026-11-16 to 11-20)
+
+muffin-ingest#181–#183, muffin-deployment#518–#523. Record: the Phase 6 spec's steps 4–9.
+
+- **A DRAIN'S FIRST RUNS ARE THE CHEAPEST PLACE TO LEARN A READER CANNOT READ HALF THE
+  POPULATION, AND ONLY A COUNT SPLIT BY THAT POPULATION SHOWS IT.** CNINFO pass 1 reported `read`
+  714 and `no_table` 643 after 11 runs, which reads as a reader finding tables in about one report
+  in ten. Split by exchange it was **0 of 562 Shenzhen reports against 61 of 163 Shanghai ones**:
+  Shenzhen prints no mandated heading, only `营业收入构成`. The golden set had said 20% of reports
+  use that table; it is every Shenzhen report, and Shenzhen is half the filers. Draining on would
+  have marked them all read with nothing in them. **Before scaling a lane, split its no-result
+  counter by the population's natural dimension (exchange, market, regulator).**
+- **A READER GATED ON THE WHOLE POPULATION FINDS SHAPES A SAMPLE CANNOT.** Reading all 624 Shenzhen
+  reports pass 1 had fetched, then all 716 golden ones, found eleven shapes a 30-report sample had
+  not: a figure printed one digit group per item; an elimination's minus flush against its figure
+  or alone on the line above; a share label split over two lines; Kangxi radicals for ideographs;
+  `营业总收入构成` and `营业收入与构成`; a table in 千元 printing whole numbers; a group label the
+  reader does not know; an orphan `其中` at the top of a group; and a cover printing `2025 年度报告`
+  rather than `2025年年度报告`, which dropped readable tables for want of a period. After them:
+  610 of 615 Shenzhen reports read have facts (the 5 are a bank and a broker), 609 reconcile in
+  every group, and the golden set changed only by gaining 141 reports.
+- **A FIGURE CAN ARRIVE IN PIECES, AND A READER THAT PLACES ITEMS BY WHERE THEY END CANNOT SEE
+  IT.** Yunda prints `48` `,` `543` `,` … as separate items, gapping and overlapping by 0.06 pt in
+  turn, so the first groups ended left of the amount label and were read as name. Join flush pieces
+  only while they still make a figure, so two cells side by side stay two. **Measure the gaps;
+  "flush" was ±0.06 pt, not 0.**
+- **SOME PDF FONTS DRAW KANGXI RADICALS FOR IDEOGRAPHS** (`营业收⼊构成`, U+2F0A for 入). NFKC maps
+  them back, but applied to all text it also turns full-width brackets and colons into ASCII and
+  renames members read before, so it is applied to the radical blocks (U+2E80–U+2FDF) alone.
+- **A HEADING SEARCH BY TEXT CONTAINMENT PICKS THE PAGE BEFORE THE TABLE.** The phrase appears in
+  prose; read from that page with the next one joined, a table running onto a third page is cut.
+  A candidate page carries the heading as a line of its own.
+- **Left unread, on purpose:** brokers' `营业总收入构成` by business line (no group labels to say
+  which axis), and 卓胜微's table, which prints industry, products, regions and sales mode with no
+  group labels at all, each summing to 100%. Inferring the groups from running sums would be
+  guessing the axis names.
+- **NSE MOVED ITS API TO `www.nseindia.in`** (a 301 from `.com`); the archives answer on both. A
+  redirect counts as a refusal, so the move failed loudly instead of being followed.
+- **NSE LISTS A RESULT WITH NO XBRL AS `…/corporate/xbrl/-`, AND THE EDGE FILED THAT LINK AS A
+  FILING**, once per company: 440 rows marked read that were never instances.
+- **AN API KEY IN A QUERY STRING IS IN THE ACCESS LOG.** DART's `?crtfc_key=` was printed by
+  http-cache's default log format on every request since 2026-09-05 (781 lines in 48 hours); the
+  `/dart/` location now logs a redacted copy of the URI. Rotating the key is the user's call.
+- **A POOL HELD FOR A RUN MAKES A SLOW PROVIDER HOLD `sql` TOO**, so DART's drain runs stage 1
+  alone (pool `dart`) and stage 2 as a separate backfill over what stage 1 holds.
+- **`pkill -f <script>` OVER SSH KILLED THE SSH SESSION ITSELF** (exit 255): the remote command line
+  contained the script's name. Third form of the self-match trap; stop containers by name instead.
+- **A DASHBOARD QUERY THAT PATTERN-MATCHES `event_logs` SCANS 1.5 M MATERIALIZATIONS.** Match the
+  pattern on Dagster's small `asset_keys` table and feed `asset_key = any(array(…))` to the indexed
+  lookup: 95 ms against a timeout.
+- **`gh pr merge` IS REFUSED FOR A WORKFLOW FILE ONLY WHEN THE MERGE WOULD WRITE ONE NEITHER BRANCH
+  HOLDS.** #521 and #522 both edited `quality.yml`; #521 merged, then #522 failed with *"refusing to
+  allow an OAuth App to create or update workflow … without `workflow` scope"*, because GitHub had
+  to produce a third version of the file. Rebasing #522 over SSH (git over SSH is not the OAuth
+  token) so its head held the merged file let the same command through. This also explains why
+  this file's earlier record of that refusal "did not reproduce": it depends on whether `main`
+  moved under the PR, not on the PR.
+- **A RETIRED RESOURCE'S QUEUE VIEW KEEPS AN ALERT RED.** `backlogs_to_sample` samples every
+  `pending_%` view, so the edge's segment queues, unread since their resources retired, sat FLAT and
+  fired "A non-empty backlog has been FLAT for a week" from 11-16 until the contract step dropped
+  them. Retire the view with the resource, or expect the alert.
+
 ## Running an OpenSandbox server locally
 
 - **`docker run -d -p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock opensandbox/server:latest`.**

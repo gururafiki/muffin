@@ -1,8 +1,10 @@
 # An instance named by a filing agent is read as "no instance"
 
 Created 2026-11-14 · Phase 6 step 3 ([spec](../specs/2026-11-09-segments-and-regulators.md)) ·
-Status: **decided by the user 2026-11-14: widen now and re-queue (option 1).** Phase 6 decision 2
-deferred widening "later, measured"; this was the measurement.
+Status: **closed 2026-11-20.** Decided by the user 2026-11-14: widen now and re-queue (option 1).
+Phase 6 decision 2 deferred widening "later, measured"; this was the measurement. Six backfill
+passes and the `sec_instances_due` sensor drained the 35,540 re-queued filings, and
+`every_sec_filing_was_read` passed at 2026-11-20 12:19 (`never_read` 0, `behind_the_parser` 0).
 
 ## Why
 
@@ -66,6 +68,12 @@ have never been read.
   | 3 `zlahfjut` 22:35 | 6,913 | 3,177 | 119,188 | 17,444 | 12,322 |
   | 4 `szxovihm` 11-15 13:27 | 5,121 | 1,838 | 106,414 | 15,407 | 7,182 |
   | 5 `mlhkhrpd` 11-15 23:25 | 3,272 | 1,293 | 59,530 | 9,724 | 3,915 |
+  | 6 `utsvbnmw` 11-16 10:19 | 2,099 | 884 | 33,067 | 5,720 | 1,474 |
+
+  Pass 6: 76 of 77 runs succeeded. The NSE roll at 12:27 killed one, `d824fd21`, re-executed as
+  `ff5cf4ef`. 2 instances refused, 12 transport failures, 0 failed. The 1,474 it left were under
+  the sensor's 2,000 ceiling, so `sec_instances_due` read them in its daily waves (13, 11 and 13
+  runs from 11-18 to 11-20, all SUCCESS).
 
   Pass 3's 75 runs all succeeded, with 13 instances over the size gate and 8 refused; it was the
   first pass with no OOM kill; pass 4 (75 of 75, 13:25–15:00) the second, with 10 instances over
@@ -87,6 +95,9 @@ have never been read.
 
 The user has chosen; if 1 or 2, the rule ships with a test over the agent names above, and for 1
 the re-queue runs and `security_segment` gains rows for Southern Copper's 10-Qs.
+
+**Met 2026-11-20:** Southern Copper's 12 10-Qs since 2023 now hold 1,139 segment rows across 11
+of them, and its four 10-Ks hold 505.
 
 ## Context
 
