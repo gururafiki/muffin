@@ -1,7 +1,7 @@
 # Market data ingestion — how it works
 
-**Status: current as of 2026-09-09; §4 and §5 updated 2026-10-18.** Numbers are measured against
-production, not estimated.
+**Status: current as of 2026-09-09; §4 and §5 updated 2026-10-18; the header and §5's retired list
+2026-11-21.** Numbers are measured against production, not estimated.
 
 > **THIS DESCRIBES THE SYSTEM BEING REPLACED.** Ingestion is moving, family by family, to Dagster
 > assets in the `muffin-ingest` submodule, designed in
@@ -13,13 +13,17 @@ production, not estimated.
 > - **Yahoo company data and the metric derivation** (Phase 4, 2026-10-18): profiles, industries,
 >   fundamentals, share stats and estimates, officers, Yahoo's statements, dividends and splits,
 >   `derive_security_metrics` / `derive_ttm`
->   ([spec](specs/2026-10-10-yahoo-company-data.md)).
+>   ([spec](specs/2026-10-10-yahoo-company-data.md));
+> - **the SEC family** (Phase 5, 2026-11-08): company facts, statements, filings and insider trades
+>   ([spec](specs/2026-10-24-sec-family.md)), with Yahoo's analyst actions and corporate actions;
+> - **segments and the regulators** (Phase 6, 2026-11-14 to 11-16): SEC, CNINFO, DART and NSE
+>   segment parsing and their filing walkers ([spec](specs/2026-11-09-segments-and-regulators.md)).
 >
-> A retired resource answers **410** naming its replacement (§5 lists all 31). This document stays
-> authoritative for what is still on the edge: SEC's statements, XBRL, filings, insider trades and
-> segments; the Korean, Indian and Chinese regulators; macro; earnings, price targets and news;
-> Tiingo's corporate actions until their parity check; and the facets refresh and observability
-> samples.
+> A retired resource answers **410** naming its replacement (§5 lists all 46). This document stays
+> authoritative only for what is still on the edge: macro, the earnings calendar and history,
+> company news, Wikidata industries, the facets refresh and the observability sample (Phases 6b
+> and 7). The sections on segments and the regulators below describe the edge's design, which the
+> Dagster lanes ported as-is.
 
 > **Changed 2026-08-27:** the scheduler moved out of GitHub Actions into **pg_cron** (§4).
 > `market-warmup.yml` no longer exists; `market.cron_resource` is the source of truth for what runs.
@@ -366,8 +370,8 @@ watching — which is why the Track button requires `promoted === true`.
 ### Retired, and where each went
 
 Each answers 410 before the admin gate and names its replacement; `logic-check.ts` holds this
-list equal to the migrations' `-- RETIRES:` markers. Their rows in the table below are kept for
-their history until step 10 of each phase deletes the handlers.
+list equal to the migrations' `-- RETIRES:` markers. Their handlers are deleted (Phase 6's on
+2026-11-20); their rows in the table below are kept as history.
 
 | Resource | Replaced by |
 |---|---|
@@ -402,6 +406,21 @@ their history until step 10 of each phase deletes the handlers.
 | `security-dividends` | Dagster price lane (yahoo_corporate_action) — read market.security_corporate_action |
 | `instrument-profile` | Dagster company lane (yahoo_companies) — read market.instrument_current |
 | `security-metrics` | Dagster derived_security_metrics — read market.security_metric |
+| `security-corporate-actions` | Dagster price lane (yahoo_corporate_action) — read market.security_corporate_action |
+| `security-statements` | SEC statements move to the Dagster SEC lane (Phase 5) — read market.security_statement |
+| `security-kr-segments` | Dagster DART lane (dart_segment) — read market.security_segment_current |
+| `security-in-segments` | Dagster NSE lane (nse_segment) — read market.security_segment_current |
+| `security-segments` | Dagster SEC segment lane (raw_sec_instance → sec_segment) — read market.security_segment_current |
+| `security-cn-segments` | Dagster CNINFO lane (cninfo_segment) — read market.security_segment_current |
+| `cn-filings` | Dagster CNINFO lane (raw_cninfo_filings → cninfo_segment) — read market.security_filing |
+| `kr-filings` | Dagster DART lane (raw_dart_filings → dart_segment) — read market.security_filing |
+| `in-filings` | Dagster NSE lane (raw_nse_filings → nse_segment) — read market.security_filing |
+| `security-price-targets` | finviz moved its quote page; analyst actions move to the Dagster company lane (Yahoo) — read market.security_price_target |
+| `security-xbrl` | Dagster SEC filer lane (sec_statement → derived_security_metrics) — read market.security_metric |
+| `security-filings` | Dagster SEC filer lane (sec_filing) — read market.security_recent_filings |
+| `security-filing-history` | Dagster SEC filer lane (sec_filing) — read market.security_filing |
+| `security-insider` | Dagster SEC Form 4 lane (sec_form4_trade) — read market.security_insider_summary |
+| `security-eps-history` | unscheduled since 2026-08-28; earnings-history (the nasdaq calendar) writes the same table — read market.security_eps_history |
 
 ### The resources as they were
 
