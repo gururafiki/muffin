@@ -6186,6 +6186,11 @@ muffin-ingest#181–#183, muffin-deployment#518–#523. Record: the Phase 6 spec
   token) so its head held the merged file let the same command through. This also explains why
   this file's earlier record of that refusal "did not reproduce": it depends on whether `main`
   moved under the PR, not on the PR.
+- **THE DATA VOLUME GREW 105 → 135 GB ON 2026-11-21, PAID** (muffin-deployment#524, the user's
+  decision), at 88%: http-cache 32 of its 40 GB cap, the database 33 GB, raw 15 GB. One deploy did
+  it online: Terraform updated the volume in place (the plan showed 0 to destroy), and
+  `block_storage`'s rescan plus `resizefs` took the filesystem to 133 GB with Dagster untouched. The
+  free 200 GB allowance was already used, so every further GB is billed (~$0.0425 a month).
 - **A RETIRED RESOURCE'S QUEUE VIEW KEEPS AN ALERT RED.** `backlogs_to_sample` samples every
   `pending_%` view, so the edge's segment queues, unread since their resources retired, sat FLAT and
   fired "A non-empty backlog has been FLAT for a week" from 11-16 until the contract step dropped

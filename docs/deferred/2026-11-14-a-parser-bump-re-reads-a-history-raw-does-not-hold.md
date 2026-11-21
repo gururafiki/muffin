@@ -3,7 +3,9 @@
 Created 2026-11-14 · Phase 6 step 3 ([spec](../specs/2026-11-09-segments-and-regulators.md),
 *As built*) · Status: **decided by the user 2026-11-14: keep every instance whole (option 1).** Open until the
 first `segment_parser.version` bump on Dagster, which must first grow the data volume by ~25-30 GB
-(paid; the free allowance is used). Nothing bumps the version today, so the volume is not grown yet.
+(paid; the free allowance is used). **Grown 105 → 135 GB on 2026-11-21** (muffin-deployment#524),
+earlier than the bump: the user decided on 2026-11-20, with `/mnt/data` at 84% and its alert firing
+since 11-16. Measure the headroom again before the first bump.
 
 ## Why
 

@@ -44,6 +44,8 @@ every China segment row ends up written by one reader.
 |---|---|---|---|---|---|---|---|
 | live subset | `ixpuonsh` | 11-16 07:16 | 5 | 56 | 20 | 546 | 0 |
 | 1 | `murkjqch` | 11-16 10:19 | 11 of 87, then cancelled | 714 | 643 | 1,232 | 2,773 |
+| 2 | `ypvryzgo` | 11-20 15:45 | 87 of 87 (to 22:16) | 7,665 | 809 | 99,054 | 16,796 |
+| 3 | `hqrqmzpi` | 11-21 10:27 | running | | | | |
 
 Pass 1 shared the `sql` pool with SEC re-read pass 6 (`utsvbnmw`), both at priority −1. The DART roll
 at 10:29 interrupted one pass-1 run, `39fee9a6`, which was re-executed as `d207708d`.
@@ -56,6 +58,20 @@ that table first and then drain China once
 ([note](2026-11-16-a-fifth-of-china-s-reports-state-their-split-as-revenue-composition.md)).
 The 757 reports already marked read without a row are put back behind the parser by
 muffin-deployment's migration 20261116150000, deployed after the reader rolls.
+
+**Pass 2, 2026-11-20.** The composition reader passed its gate and rolled at 15:29
+(muffin-ingest#183); #520 deployed at 15:44 and re-queued the 757, leaving **2,001 CNINFO reports
+behind the parser** before the pass started. Pass 2 runs both assets over the whole grid at
+priority −1 with a 30-minute run limit, so the night's lanes outrank it.
+
+Pass 2 read with the composition reader: **809 of 7,665 reports read had no table (10.6%), against
+pass 1's 643 of 714**. 2,173 searches answered; 24,661 reports named, 6,926 fetched, 777 already
+held, 162 over the 12 MB gate; 99,054 rows written (95,076 placed, 4,240 unplaced), 1,715
+retracted, 262 kept by a newer filing, 0 failed, 0 currency unknown. The re-queue drained:
+`every_cninfo_report_was_read` read `behind_the_parser` 1 at the end. It fetched 26.3 GB and
+retention held the PDFs at the 5 GB cap throughout (`cninfo_reports_within_cap` 4.7–5.2 GB).
+16,796 reports are left unasked because a run's budget is in bytes; at ~7,000 a pass, about three
+more passes.
 
 ## Done when
 

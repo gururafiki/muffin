@@ -4041,7 +4041,8 @@ Measured 2026-11-09: SEC segment runs fail 17% on `pending_segments` timeouts, a
             SEC's (muffin-deployment#522), since every lane had three clean days.
       - [ ] [A parser bump re-reads a history raw does not hold](docs/deferred/2026-11-14-a-parser-bump-re-reads-a-history-raw-does-not-hold.md):
             **decided 2026-11-14: keep every instance whole.** Before the first version bump,
-            grow the data volume by ~25-30 GB (paid).
+            grow the data volume by ~25-30 GB (paid). **Grown 105 → 135 GB on 2026-11-21**
+            (muffin-deployment#524, the user's decision of 11-20), at 88%.
       - [ ] **[An agent-named instance is read as "no instance"](docs/deferred/2026-11-14-an-agent-named-instance-is-read-as-no-instance.md)**
             (found on the first wave, 2026-11-14 12:52): the edge's name rule rejects
             `scco-20260930x10q_htm.xml`, `form10-q_htm.xml` and the like, so 10 of 29 filings read
@@ -4115,8 +4116,11 @@ Measured 2026-11-09: SEC segment runs fail 17% on `pending_segments` timeouts, a
             rows have name and figure on the PDF's table pages, the 7 others explained, 35 read by
             eye; the 716 golden reports 572 identical, 141 gained, 0 lost. #183 merged 15:24 and
             rolled 15:29; #520 deployed with #523 (dispatched 15:30). Spec: *Step 4b*.
-      - [ ] Read each pass and launch the next while reports stay unasked; record them in
-            [the drain note](docs/deferred/2026-11-15-the-china-segment-backlog-drains-by-backfill.md).
+      - [x] **Drain pass 2 `ypvryzgo`** (2026-11-20 15:45–22:16): 87 of 87 SUCCESS; 7,665 read,
+            809 with no table (10.6%, against pass 1's 90%), 99,054 rows, 0 failed; the 757
+            re-queued all read; **16,796 never read** (byte budget).
+      - [ ] **Pass 3 `hqrqmzpi`** (2026-11-21 10:27). Read each pass and launch the next while reports stay unasked;
+            record them in [the drain note](docs/deferred/2026-11-15-the-china-segment-backlog-drains-by-backfill.md).
       - [ ] **After the drain:** start `cninfo_filers_floor` (held, because a never-collected
             filer counts as due, so its first tick would ask the whole grid at priority 0), and
             declare it RUNNING in code (retention and the stock lists are declared in #183).
@@ -4138,8 +4142,11 @@ Measured 2026-11-09: SEC segment runs fail 17% on `pending_segments` timeouts, a
             `a4f3550e`, re-executed as `3925b4ce`): 110 of 111 runs SUCCESS; 1,096 lists answered;
             7,561 archives named, 3,390 fetched, 173 absent, 1 transport, **3,997 unasked**
             (byte budget, 533 MB fetched).
-      - [ ] **Stage 1 pass 2** `atpdcjgc` (2026-11-20 15:07, priority −1). Then a `dart_segment`
-            backfill over `grid:dart_filer`; then start `dart_filers_floor` and `dart_corp_codes`.
+      - [x] **Stage 1 pass 2** `atpdcjgc` (2026-11-20 15:07 – 11-21 02:55): 109 SUCCESS (the #183
+            roll interrupted 2, re-executed); 2,380 archives fetched, 245 absent, 3,563 already
+            held, **1,375 unasked**.
+      - [ ] **Stage 1 pass 3** `xqpmoglx` (2026-11-21 10:27). Then a `dart_segment` backfill over
+            `grid:dart_filer`; then start `dart_filers_floor` and `dart_corp_codes`.
       - [ ] **Rotating DART's API key is the user's call:** it sat in http-cache's access log
             from 2026-09-05 until #518.
 - [ ] 6. NSE: grid from `security_nse_filer`; retire `in-filings`.
