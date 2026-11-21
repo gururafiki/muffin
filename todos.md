@@ -4160,8 +4160,9 @@ Measured 2026-11-09: SEC segment runs fail 17% on `pending_segments` timeouts, a
             only), `changed` 0, 0 failed.
       - [x] `nse_filers_floor` started 2026-11-20 15:1x, after a dry run of its next two ticks (19
             and 16 small runs at 08:20).
-      - [ ] Declare `nse_filers_floor` RUNNING in code (with DART's and CNINFO's after their
-            drains), so a state reset keeps it.
+      - [x] `nse_filers_floor` declared RUNNING in code (muffin-ingest#184, merged 2026-11-21
+            10:54, with the README's segment paragraph); rolls at the next quiet moment. DART's and
+            CNINFO's follow after their drains.
 - [x] 7. Grafana `segments.json` re-pointed; market-verify segment checks back
       (muffin-deployment#521, merged 2026-11-20 15:01): three panels read `muffin-dagster` (the
       lanes' `every_*_was_read` checks, rows per hour by regulator, China's PDF bytes against the
