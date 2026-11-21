@@ -4255,11 +4255,44 @@ is handled is in the spec's *Notes inherited from earlier phases*.
 - Every phase: scheduled check-ins live only in the session that made them, so recreate them from
   the dated lines above when a new session starts.
 
-### Phase 6b — macro and events — not started (its own planning session)
+### Phase 6b — macro and events — PLANNED 2026-11-21
 
-`macro-indicators` (49 indicators, healthy), `earnings-calendar` (healthy), `earnings-history`
-(**stalled since 2026-09-06** on the window ending 2016-06-30: openbb 500, 546 windows waiting)
-and `security-news` (46,660 rows, healthy). Measured 2026-11-09.
+Spec: [docs/specs/2026-11-21-macro-and-events.md](docs/specs/2026-11-21-macro-and-events.md).
+
+Measured 2026-11-21:
+- **company news dead since 2026-10-01:** openbb's yfinance news route answers 204, and the edge
+  stamps every company as asked;
+- **`earnings-history` stalled since 09-06:** nasdaq answers `data: null` for 2016-06-28..30 and
+  openbb throws on it;
+- **Yahoo's stored company answers already hold global earnings dates and four quarters of
+  surprises**, unread;
+- macro is healthy (38 series).
+
+Decisions (the user):
+- news from Yahoo RSS, per company, weekly with the company rotation;
+- earnings from both nasdaq and Yahoo;
+- the stock page shows recent quarters' surprises.
+
+- [x] 0. Spec, this section, rework table row 6b.
+- [ ] 1. Validation and fixtures:
+      - nasdaq: past, future and null days; its rate;
+      - RSS: shapes, the throttle signature, URL overlap to project `news_article` at 90 days;
+      - Yahoo earnings from stored raw;
+      - macro's 10 routes in-process.
+      Findings that move a decision go back to the user.
+- [ ] 2. Schema (muffin-deployment):
+      - earnings keys gain the provider;
+      - new columns, `data_source` rows;
+      - `security_earnings_history`, and `security_next_earnings` picking per company;
+      - nginx `nasdaq` and `yahoo-rss` locations.
+- [ ] 3. Library and defs (muffin-ingest): the nasdaq lane; `raw_yahoo_news`, `company_news` and
+      `yahoo_earnings` in the company lane; `defs/macro`. Tests; local tiny run.
+- [ ] 4. Ship, live tiny subsets, parity; retire the four edge resources; schedules on; backfills
+      (nasdaq history from 2012, the Yahoo earnings replay).
+- [ ] 5. Stock page shows recent quarters (muffin-ui).
+- [ ] 6. market-verify `news is current`; Grafana as needed.
+- [ ] 7. Delete the handlers after 3 clean days; contract with a drop date.
+- [ ] 8. Docs, skills, memory.
 
 ### Phases 7-8 — derived and serving, then retirement — not started
 
