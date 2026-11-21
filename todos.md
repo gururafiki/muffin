@@ -4230,6 +4230,13 @@ Measured 2026-11-09: SEC segment runs fail 17% on `pending_segments` timeouts, a
             - #528 was merged earlier. The roll of #187 + #188 at 20:53 found nothing in flight.
             - Close the historical note once the 14 are explained and fixed, and DART and NSE
               read 0.
+            - **The 14 explained, 21:30 UTC** (the note's step 5). The current parser never saw
+              them: they are edge rows on filings the lane cannot read now. 12 were filed under a
+              predecessor CIK, so their instance answers 404 under the current one (Supernus
+              1356576 → 1625297, Navient 1593538 → 2152623). The other 2 are UBS 20-Fs over the
+              32 MB gate. Overall, 116 SEC filings are unreadable, and 23 of them carry 329 edge
+              rows. **Waiting on a decision from the user:** read a filing under its filer's CIK,
+              keep and demote, or retract.
 - [x] 7. Grafana `segments.json` re-pointed; market-verify segment checks back
       (muffin-deployment#521, merged 2026-11-20 15:01): three panels read `muffin-dagster` (the
       lanes' `every_*_was_read` checks, rows per hour by regulator, China's PDF bytes against the
@@ -4295,21 +4302,34 @@ Decisions (the user):
 - the stock page shows recent quarters' surprises.
 
 - [x] 0. Spec, this section, rework table row 6b.
-- [ ] 1. Validation and fixtures:
+- [x] 1. Validation and fixtures:
       - nasdaq: past, future and null days; its rate;
       - RSS: shapes, the throttle signature, URL overlap to project `news_article` at 90 days;
       - Yahoo earnings from stored raw;
       - macro's 10 routes in-process.
-      Findings that move a decision go back to the user.
-- [ ] 2. Schema (muffin-deployment):
-      - earnings keys gain the provider;
+      No decision moved. Recorded in the spec.
+- [x] 2. Schema (muffin-deployment#531, deployed 2026-11-21):
       - new columns, `data_source` rows;
       - `security_earnings_history`, and `security_next_earnings` picking per company;
       - nginx `nasdaq` and `yahoo-rss` locations.
-- [ ] 3. Library and defs (muffin-ingest): the nasdaq lane; `raw_yahoo_news`, `company_news` and
-      `yahoo_earnings` in the company lane; `defs/macro`. Tests; local tiny run.
-- [ ] 4. Ship, live tiny subsets, parity; retire the four edge resources; schedules on; backfills
-      (nasdaq history from 2012, the Yahoo earnings replay).
+      The earnings keys gained the provider in the cutover (#532).
+- [~] 3. Library and defs (muffin-ingest): the nasdaq lane and `yahoo_earnings` (#188), the news
+      lane (#187), both rolled 2026-11-21 20:53. **`defs/macro` is not built yet.**
+- [~] 4. Ship, live tiny subsets, parity; retire the edge resources; schedules on; backfills.
+      Done 2026-11-21:
+      - news live run `rcgqmyup`: 5 companies, counters summing, 16-19 articles each;
+      - nasdaq parity against the edge's stored rows: history 607 identical, and 344 stale calendar
+        rows the edge never retracted;
+      - **muffin-deployment#532 deployed at 21:22**: the earnings keys carry the provider, the news
+        read is on `symbol_security` (anon 112-152 ms, from 234-259), and `earnings-calendar`,
+        `earnings-history` and `security-news` answer 410;
+      - **muffin-ingest#189 rolled at 21:33**: news and `yahoo_earnings` in `yahoo_companies`, and
+        `nasdaq_earnings_window` RUNNING (first tick 11-22 07:10);
+      - backfills at priority −1: `qxbsmxgd` (the Yahoo earnings replay over the grid, no
+        requests), `jylxcmbx` (nasdaq 2012-01-01..2026-11-13), `ppetexuz` (today's window, priority
+        0). The roll killed one DART run and one nasdaq run; both were re-executed (`d838ec1c`,
+        `3b95f56b`).
+      Left: read the three backfills; build macro, check parity, retire `macro-indicators`.
 - [ ] 5. Stock page shows recent quarters (muffin-ui).
 - [ ] 6. market-verify `news is current`; Grafana as needed.
 - [ ] 7. Delete the handlers after 3 clean days; contract with a drop date.

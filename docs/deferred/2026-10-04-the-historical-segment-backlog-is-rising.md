@@ -119,6 +119,48 @@ flat), rather than an 80-security sample:
   partition 0. Why the parser still emits partition 1 for them is being reproduced on the stored
   instances.
 
+**Step 5: why the 14 survive, read 2026-11-21 21:30 UTC.** The current parser never saw them. All
+14 rows date from the edge (`as_of` 08-30 to 09-22) and sit on filings the Dagster lane stamped at
+version 20 this evening. In both cases below, stage 2 calls `file_filing(facts=None)`, which marks
+the filing and writes and retracts nothing (`sec_edgar.fetch_instance`, `segment_tables`).
+
+- **12 are filed under a predecessor CIK** (Supernus 10, Navient 2). `index.json` answers 200 under
+  the security's current CIK and names the instance, but the instance itself answers **404**, so
+  the outcome is `absent`. Checked directly:
+  - Supernus's 2021 Q1 instance: 200 under 1356576, 404 under 1625297;
+  - Navient's 2025 Q2 instance: 200 under 1593538, 404 under 2152623.
+
+  `index.json` echoes whatever CIK the path names, so it cannot reveal the right one. The
+  securities' CIKs follow SEC's own map. `company_tickers.json` (11-16) lists SUPN **and** INDV
+  under 1625297, titled "Supernus, Inc.", and no longer lists 1356576. Navient's 2152623 is its 2025
+  holding company.
+- **2 are over the 32 MB gate** (UBS 20-Fs for 2017 and 2018). The edge read them on 08-30, two days
+  before its own gate existed.
+
+**How many filings this covers.** From every filer's newest raw answer: 116 SEC filings are
+unreadable now.
+
+| Kind | Filings | Filers | Filings carrying rows | Segment rows |
+|---|---|---|---|---|
+| Instance listed, 404 under the current CIK | 42 | 3 (Navient 24, Supernus 14, Real Brokerage 4) | 21 | 321 (304 at a served partition) |
+| Too large | 60 | 28 | 2 (UBS) | 8 |
+| No instance listed | 14 | 14 | 0 | 0 |
+
+Two defects follow:
+- **A 404 at the wrong address is recorded as an absence.** The filing is marked read at the
+  current version, so nothing asks again until the version is bumped. This is "a wrong name is not
+  a missing security", in a new lane.
+- **A filing the lane cannot read keeps whatever the edge wrote.** For 21 of these 23 filings
+  that is the filing's genuine content, read by an older parser. 14 of the served splits among them
+  are non-positive.
+
+**Decision for the user** (asked 2026-11-21): what happens to rows on filings the lane cannot
+read, and whether the lane learns to read a filing under the CIK that filed it.
+- (a) Recommended: record the filer CIK per filing and read each filing from it, so a re-read
+  rewrites these with the current parser; demote the two UBS splits with a one-shot.
+- (b) Keep the rows and demote only the 14 non-positive splits, mirroring #185.
+- (c) Retract every row no current read can reproduce: 329 rows on 23 filings.
+
 ## Done when
 
 The cause of the rise is named. No served revenue split has a non-positive `reconciled_to`. The
