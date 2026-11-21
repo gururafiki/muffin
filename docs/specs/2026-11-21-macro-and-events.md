@@ -1,6 +1,6 @@
 # Phase 6b: macro and events on Dagster
 
-Planned 2026-11-21 · Status: **planned; step 0 done, step 1 (validation) next.**
+Planned 2026-11-21 · Status: **steps 0-1 done 2026-11-21; step 2 (schema) next.**
 Follows [Phase 6](2026-11-09-segments-and-regulators.md). Rework table:
 [the ingestion rework design](../superpowers/specs/2026-09-09-ingestion-rework-design.md), row 6b.
 
@@ -265,4 +265,52 @@ finding goes back to the user.
 
 ## Steps as built
 
-*(Filled in as each rollout step lands, with what it measured.)*
+### Step 1: validation (2026-11-21)
+
+Captured on the node, read-only. The bodies are fixtures for step 3. **No decision moved.**
+
+**nasdaq** (`api.nasdaq.com/api/calendar/earnings?date=`, asked directly):
+
+| Day | Answer |
+|---|---|
+| 2026-10-30, past | 66 rows: `eps "$4.23"`, `surprise "8.46"`, `epsForecast "$3.90"`, `noOfEsts "6"`, `fiscalQuarterEnding "Sep/2026"`, `time "time-not-supplied"` |
+| 2026-11-24, future | 52 rows: forecast, `lastYearRptDt "11/25/2025"`, `lastYearEPS "$2.35"`, no `eps`/`surprise` |
+| 2016-06-29 | `data: null`, `bCodeMessage [{code: 1002, "Earnings Calendar: No record found."}]`: an EMPTY day |
+| 2026-11-21, Saturday | `data` with no rows and no headers: an empty day |
+| 2015-02-03 | 92 rows; `"N/A"` and `""` for missing values |
+
+- **Units:** `surprise` is a **percent string** (8.46 = 8.46%), unlike openbb's fraction. Money
+  arrives as `"$4.23"` strings, and missing values as `"N/A"` or `""`.
+- **Rate:** 50 history days at 0.5 s spacing all answered 200. The server itself is slow (p50
+  2.25 s, max 4.84 s), so the history backfill from 2012 is about 4 hours, paced by the server.
+
+**Yahoo RSS** (`feeds.finance.yahoo.com/rss/2.0/headline?s=`):
+- **Items:** `title`, `link`, `description`, `pubDate`, `guid`. AAPL 18 items, SAP.DE 18,
+  7203.T 16, PTSB.IR 1.
+- **A dead symbol is distinguishable:** ZZQQXX and BDMS-F.BK answer **200 with an empty channel**
+  (description "Latest Financial News for " with no symbol, no channel title). A real company
+  with no news keeps its title ("Yahoo! Finance: PTSB.IR News").
+- **No throttling:** 100 random equities at 1 s spacing all answered 200 (p50 0.22 s).
+- **Volume:** 7.8 items per company, 43 of 100 with none, 773 unique links in 778 items.
+  **0.97 new items per company per week** (97 of 833 within 7 days; median age 25 days).
+  Only 1 company in 100 publishes faster than a weekly visit can capture (the feed holds ~20).
+- **Size at 90 days:** ~100–160 k articles, ~200–300 MB at the stored table's 1.8 KB per article.
+  Well under the 1 GB threshold, so **retention stays 90 days**.
+
+**Yahoo earnings** (2,000 stored `raw_yahoo_summary` answers, no requests):
+- **History:** 63% have quarterly history (4,119 quarters). Every quarter is a month-end date.
+  `surprisePercent` is a **fraction** in 3,361 of 3,361 checked; estimates are missing on 15%.
+- **Next date:** 45% have one, and **61% of those were already past at fetch time**. Yahoo's
+  "next" date often names the last report, so nasdaq's daily calendar stays the source for US
+  dates.
+- **Against nasdaq,** on 1,097 quarters both hold: actual EPS agrees on **65%**, estimates on 50%.
+  The differences include exact factors of 10 (ADR ratios: 0.885 vs 8.85) and different adjusted
+  bases (1.14 vs 0.67). **The serving views therefore choose ONE source per company, never per
+  row**, the analyst-actions rule (muffin-deployment#505); mixing would put two EPS bases in one
+  series.
+
+**macro** (openbb in-process, one series per route): all 10 routes answer.
+- `FRED_API_KEY` is picked up from the environment, and values match what is served.
+- **One served point is no longer published:** `us-unemployment` 2026-10-01 (0.039, written
+  11-12). Today's OECD answer, edge and in-process alike, ends at 09-01, and the edge's upsert
+  cannot retract. **The port retracts within each series' window.**
