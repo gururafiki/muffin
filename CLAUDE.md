@@ -6196,6 +6196,47 @@ muffin-ingest#181–#183, muffin-deployment#518–#523. Record: the Phase 6 spec
   fired "A non-empty backlog has been FLAT for a week" from 11-16 until the contract step dropped
   them. Retire the view with the resource, or expect the alert.
 
+### The historical segment backlog, amendments, and pg_cron headroom (2026-11-21)
+
+muffin-ingest#185; muffin-deployment#526, #527, #529. Records:
+`docs/deferred/2026-10-04-the-historical-segment-backlog-is-rising.md` and
+`docs/deferred/2026-11-09-segment-parsing-is-ported-as-is-and-widened-later.md`.
+
+- **A GUARD THAT SAMPLES "THE MOST RECENTLY WRITTEN" MEASURES WHICHEVER LANE WROTE LAST.** The
+  segment reconcile check read 0 of 6,367 splits disagreeing on 11-21, because every sampled company
+  was Chinese, from that morning's CNINFO drain. Its historical rate had "risen" from 4% to 21%
+  because the edge's drain had moved to older filings, which disagree more (2.1% over-coverage before
+  2016 against 1.0% from 2024, over the whole table). The parser had not changed. It now samples
+  each regulator separately and judges each year band against its own tripwire. **Before believing a
+  rate trend, ask whether the sample's population moved.**
+- **MOST OF WHAT A RECONCILE CHECK CALLS A DISAGREEMENT CAN BE BY DESIGN.** 85% were partial
+  splits: an inherited partition, or a filer disclosing part of itself. They are served on purpose,
+  and the UI names the remainder. Only over-coverage and non-positive splits are defects.
+  Classify before setting a tripwire, or it measures the design.
+- **A REVENUE TOTAL OF ZERO OR LESS IS NOT A TOTAL.** 7,334 revenue groups were reconciled to a
+  target of zero or less, and 11,080 summed to zero or less (8,098 to exactly zero, all-zero members).
+  They sat in 6,593 filings. The parser now refuses both; segment profit is exempt. The re-queue is
+  one-shot.
+- **AMENDMENTS ARE MOSTLY NOT RE-FILINGS.** Measured on 30: every 10-K/A and 40-F/A sampled (10 of 10)
+  was a cover page or Part III, carrying no segment fact. 10-Q/A, 20-F/A, 10-KT and 10-QT carried them
+  1–4 times in 4–6, each as a full re-filing of the period: a sign corrected, or the only XBRL for its
+  year. **Measure a form by fetching it before marking it.** Six instances of eight under 40 KB told
+  the story before any parse.
+- **A PG_CRON JOB'S DURATION WALKS TOWARD ITS BOUND, AND GRAFANA CANNOT SEE IT.** `metrics_ro` gets
+  `permission denied for schema cron`, so the only signal was a sample going stale after a timeout.
+  Measured over 7 days with no failures: quality 58 s of 60, coverage 177 of 300, universe 143,
+  segment spine 126 (11 s through October). `market.cron_job_headroom()` (SECURITY DEFINER, Grafana's
+  role only) reports each job's slowest run in 24 hours against its bound, and an alert fires past
+  two-thirds. **A sample's input grows with the data, so its bound is a date, not a constant.**
+- **`facets-refresh` WAS THE "NEXT CANDIDATE" CLAUDE.md NAMED ON 10-03, AND IT HAD BEEN FAILING FOR
+  THREE WEEKS.** It averaged 6.8–7.2 s against the 8 s RPC ceiling and failed 1–10 times a day from
+  11-01, each failure leaving the screener on the previous hour's spine. Nothing alerted, because
+  the stalled-resource rule needs 12 hours of failure. It now runs from pg_cron and records
+  `facets.duration_ms`. **A named candidate gets a dated check, or it is found by accident.**
+- **A SCATTERED RE-READ OVER A GRID IS CHEAPER AS THE WHOLE GRID.** 1,117 scattered CIKs would have
+  been about as many runs, since Dagster batches only contiguous keys. The whole `grid:sec_filer` is
+  ~75 runs of 50, and a filer with nothing due costs ~40 s.
+
 ## Running an OpenSandbox server locally
 
 - **`docker run -d -p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock opensandbox/server:latest`.**
