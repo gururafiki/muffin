@@ -2,6 +2,8 @@
 
 Recorded 2026-11-02, from the firing `muffin-resource-stalled` alert. **Decided 2026-11-04 (the user):** option 1, retire `security-kr-segments` and `security-in-segments` until Phase 6. **Built in muffin-deployment#489** (deployed 2026-11-04 22:15 UTC; both answer 410, their jobs are gone, and `muffin-resource-stalled` stopped firing): both answer 410 and their pg_cron jobs are removed; the queue views and their three tests stay for Phase 6.
 
+**Closed 2026-11-21.** DART and NSE resumed on Dagster on 2026-11-16 with their own per-filer queues, and Phase 6 step 9 (muffin-deployment#523, deployed 2026-11-20 15:44) dropped `pending_kr_segments`, `pending_in_segments` and `pending_segments`. `muffin-resource-stalled` reads 0 for every segment resource.
+
 ## Why
 
 Two edge resources have failed every run since 2026-11-01, at the PostgREST role's 8 s timeout:

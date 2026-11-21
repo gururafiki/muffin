@@ -1,7 +1,7 @@
 # Raw documents would store API keys that travel in the request URL
 
-Created 2026-09-16 · **Due before the first keyed provider's raw asset merges; next check: the
-first Phase 5–6 keyed provider's raw asset** · Status: open, Yahoo's half done and verified on the node
+Created 2026-09-16 · Status: **closed 2026-11-21.** Yahoo's crumb and DART's `crtfc_key` are
+redacted in their adapters, and a scan of every raw URL on the node finds no credential (below).
 
 ## Why it is deferred
 
@@ -72,3 +72,9 @@ is now a script, `muffin-dagster-operations/scripts/scan_raw_urls.py` (muffin-de
 
 The redaction test is merged, and the first keyed provider's raw files on the node contain no
 credential.
+
+**Met 2026-11-21.** `scan_raw_urls.py` (muffin-dagster-operations) run in a throwaway container from
+the production image, with `DART_API_KEY` and `OPENFIGI_API_KEY` passed by name: every raw file
+under the root read, `crumb=redacted` on all 13,817 Yahoo summary URLs and no other crumb value,
+`crtfc_key` present on **7,343** DART URLs and **no URL containing any key's value** (306 s, 195 MB).
+A new keyed provider still redacts its credential in its adapter and is scanned the same way.

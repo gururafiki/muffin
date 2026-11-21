@@ -1,9 +1,9 @@
 # The segment queue reads the regulator
 
 Created 2026-11-02 · Planned in [the SEC spec](../specs/2026-10-24-sec-family.md) (*Deferred
-notes*) · **For Phase 6** (segments on Dagster) · Status: open; **planned 2026-11-09** in
-[the Phase 6 spec](../specs/2026-11-09-segments-and-regulators.md). Items 1–2 are handled by its
-design (per-filer queues keyed on the regulator); item 3 moved to
+notes*) · **For Phase 6** (segments on Dagster) · Status: **closed 2026-11-21.** Items 1–2 are
+handled by Phase 6's design (per-filer queues keyed on the regulator, and the edge's views dropped
+on 2026-11-20); item 3 lives in
 [the widening note](2026-11-09-segment-parsing-is-ported-as-is-and-widened-later.md) (decision 2)
 
 ## Why
@@ -48,6 +48,10 @@ Three things Phase 5 changed under the segment parsers, which stay on the edge u
 
 Phase 6's spec records each of the three, and the segment lane's queue reads under a second as
 `ingest_rw` at the table's size.
+
+**Met 2026-11-21:** the spec records all three (*Notes inherited from earlier phases*), and the SEC
+lane's due query (`sec_segments.DUE_BY_FILER`) reads in **0.45 s** as `ingest_rw` (best of three,
+read-only) against **1,233,063** filings.
 
 ## Context
 

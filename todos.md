@@ -4163,6 +4163,32 @@ Measured 2026-11-09: SEC segment runs fail 17% on `pending_segments` timeouts, a
       - [x] `nse_filers_floor` declared RUNNING in code (muffin-ingest#184, merged 2026-11-21
             10:54, with the README's segment paragraph); rolls at the next quiet moment. DART's and
             CNINFO's follow after their drains.
+- [ ] **2026-11-21 check-in (read 12:07 UTC).**
+      - Alerts since 10:30: only `muffin-disk-filling` (12 sends), and none in the last 30
+        minutes, so it cleared after #524. `/mnt/data` reads 133G at 68%.
+      - market-verify for 11-21 (44899587796) passed with the restored segment checks. Its sample
+        was all CNINFO, though (1,763 splits, 0 disagree), because it took the most recently
+        written securities. muffin-deployment#526 samples each regulator. The spine refreshed in
+        125,945 ms.
+      - SEC filer wave since 11:00: 55 of 73 SUCCESS at 12:07, none failed; 3 `sec_segments` runs
+        queued.
+      - Drains: CNINFO pass 3 `hqrqmzpi` 11 of 87 SUCCESS, the rest queued behind the wave. DART
+        stage 1 pass 3 `xqpmoglx` 51 of 109.
+      - #184 and #525 were merged at 10:54. muffin-ingest#185 (the parser refusing non-positive
+        revenue splits) was merged 11:47 and its image built. The roll of #184 + #185 waits for the
+        wave.
+      - **Found: four pg_cron jobs walking toward their bounds**, none failed in 7 days:
+        `muffin-quality` 58 s of 60, coverage 177 of 300, universe 143 of 300, segment spine 126 of
+        300 (11 s through October). **And `facets-refresh` failing 1–10 times a day** as an edge
+        RPC under the 8 s ceiling (6.8–7.2 s on success). muffin-deployment#527:
+        - `market.cron_job_headroom()` and the alert "A pg_cron job is nearing its time bound";
+        - quality gets 300 s;
+        - `refresh_facets()` runs from pg_cron, records `facets.duration_ms`, and `facets-refresh`
+          answers 410.
+        - Replayed twice: 120 of 120 tests, 10 mutations caught.
+      - [ ] Roll #184 + #185 after the wave, merge #526 + #527, deploy, then launch the
+            non-positive re-read. Read `facets.duration_ms` and `market.cron_job_headroom()` after
+            the deploy.
 - [x] 7. Grafana `segments.json` re-pointed; market-verify segment checks back
       (muffin-deployment#521, merged 2026-11-20 15:01): three panels read `muffin-dagster` (the
       lanes' `every_*_was_read` checks, rows per hour by regulator, China's PDF bytes against the
@@ -4173,9 +4199,11 @@ Measured 2026-11-09: SEC segment runs fail 17% on `pending_segments` timeouts, a
       the seven handlers, `segments.ts`, `xbrl.ts`, `dart.ts`, `in.ts`, `cn.ts`, `cn-pdf.ts` and
       their checks; the `RETIRED` entries stay, so each still answers 410. Deploy of #521 + #522
       dispatched 15:06.
-      - [ ] Verify after the deploy: every one of the seven answers 410, no other resource regressed
-            in `refresh_run`, and the three re-pointed panels render.
-- [ ] 9. Contract with a drop date (muffin-deployment#523, open): the seven `pending_*` views drop;
+      - [x] Verified 2026-11-21: each of the seven answered 410 on 11-20 15:22 (`refresh_run`), and
+            nothing has called them since. The only other edge failures in 24 hours were
+            `facets-refresh` timeouts, which predate the change (#527 above).
+- [x] 9. Contract with a drop date (muffin-deployment#523, deployed 2026-11-20; the seven views read 0
+      in `pg_views` on 11-21): the seven `pending_*` views drop;
       `dart_discovery_cursor`, `security_filer.history_walked_at` and `security.nse_history_walked_at`
       stay until **2026-12-20** ([the retired-columns note](docs/deferred/2026-09-30-the-retired-families-leave-columns-behind.md)).
       Replayed twice on the node (117 of 117 tests) and dry-run on production. Deploys with #520.

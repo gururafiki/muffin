@@ -55,6 +55,44 @@ not have accepted it.
    total of a split.
 3. Re-derive the historical tripwire from step 1's per-year rates.
 
+## Measured and built, 2026-11-21
+
+**Step 1: the cause is the input mix, not a regression.** Over the whole table (revenue, partition 1,
+flat), rather than an 80-security sample:
+
+| Period year | Over its target | Non-positive | Under its target |
+|---|---|---|---|
+| before 2016 | 2.12% | 3.94% | 16.76% |
+| 2016–19 | 1.36% | 2.26% | 7.56% |
+| 2020–23 | 1.07% | 2.83% | 9.82% |
+| 2024 onward | 0.96% | 2.88% | 6.97% |
+| served | 0.95% | 1.56% | 1.73% |
+
+- The parser was one deterministic function at one version, so a filing's result could not change.
+- Older filings disagree more, and the check's sample (the most recently written securities)
+  followed the edge's drain to older filings.
+- Within each band, rows Dagster wrote disagree 2.8–4.2% of the time against 10.6–22% for rows the
+  edge wrote. These are different populations of filings, not different code.
+- On 11-21 the same sample read **0 of 6,367**, because it was all Chinese companies from that day's
+  CNINFO drain. The sample measured whichever lane wrote last.
+- **85% of what the check called disagreements were partial splits:** a bucket inherits its
+  partition from the bucket placing the most members, or a filer discloses part of itself. Those
+  are served on purpose, and the UI names the remainder.
+
+**Step 2: non-positive targets are refused.**
+- muffin-ingest#185 (merged 2026-11-21) refuses a revenue target of zero or less and unplaces an
+  inherited revenue split totalling zero or less. Segment operating income is untouched, since it
+  legitimately reconciles to a loss.
+- muffin-deployment#526 re-queues the filings holding one: 6,593 (SEC 6,550, DART 37, NSE 6). In a
+  rolled-back dry run, all 4,752 such splits in `security_segment_latest` became stale.
+
+**Step 3: tripwires per year band**, in #526's `check_segments_reconcile.py`:
+- it samples 80 securities per regulator;
+- it fails on any current-parser non-positive split;
+- it fails on over-coverage served above 2.5%, or historical above 4% / 3% / 2.5% / 2.5% by band
+  (about twice the measured rates);
+- it reports under-coverage and never fails on it.
+
 ## Done when
 
 The cause of the rise is named. No served revenue split has a non-positive `reconciled_to`. The
