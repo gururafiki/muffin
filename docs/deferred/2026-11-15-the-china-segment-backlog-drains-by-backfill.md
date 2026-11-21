@@ -73,6 +73,16 @@ retention held the PDFs at the 5 GB cap throughout (`cninfo_reports_within_cap` 
 16,796 reports are left unasked because a run's budget is in bytes; at ~7,000 a pass, about three
 more passes.
 
+**Pass 3 `hqrqmzpi`, 2026-11-21 10:27 to ~20:50.** 87 of 88 runs SUCCESS. The 12:28 roll killed
+one, which was re-executed as `1ddd7cc5` (SUCCESS). 2,173 searches answered; 16,796 reports named,
+5,556 fetched and read, 150 over the 12 MB gate, 1 transport. 641 of the 5,556 read had no table
+(11.5%), 72,551 rows written (69,982 placed, 4,221 unplaced), 1,652 kept by a newer filing,
+0 failed, 0 currency unknown. **11,089 reports were left unasked** by the byte budget (25.6 GB
+fetched). Retention held the PDFs at 5.15 GB of the 5 GiB cap (1,650 held). `/mnt/data` was at
+69% with 40 GB free.
+
+**Pass 4 `rocvlyrc` launched 2026-11-21 20:55**, same assets, priority −1, 30-minute runs.
+
 ## Done when
 
 `every_cninfo_report_was_read` reports no report behind the parser, and the passes are recorded

@@ -93,6 +93,32 @@ flat), rather than an 80-security sample:
   (about twice the measured rates);
 - it reports under-coverage and never fails on it.
 
+**Step 4: the re-read, read 2026-11-21 21:00 UTC (not yet closed).**
+- `hvohykxa` (SEC, `raw_sec_instance` + `sec_segment` over the grid): 75 of 75 SUCCESS, counters
+  summing, 0 failed. 7,899 filings named: 6,491 read, 15 with no instance, 5 too large, and 1,388
+  not held (1,378 unasked under the byte budget, 10 refused). **No SEC filing is left behind the
+  parser (6,550 to 0).** The unasked ones are other due filings (amendments, the regular waves),
+  which `sec_segments_due` reaches.
+- `nwrcalhq` (DART, 32 filers) and `yxhkjyms` (NSE, 4 filers) re-read nothing: all 37 and 6
+  filings were `not_held`. Raw holds no instance for them, so a stage-2-only re-read cannot reach
+  them. DART stage 1 pass 4 (`smfrbgvz`) and an NSE stage 1 + 2 run over the four filers
+  (`pfetfdmg`) were launched at 20:55, priority −1.
+- `check_segments_reconcile.py` against production: **passes** (exit 0). 9 served splits over
+  their target (1.12%, tripwire 2.5%); historical bands at 1.22%, 1.75%, 0.38% and 1.20%.
+- Served non-positive revenue splits: **41 behind the parser** (the DART and NSE filings above)
+  and **14 not**: SEC filings the current parser re-read this evening (version 20) that still
+  serve partition-1 revenue summing to 0 or less:
+  - Supernus: a 2021 10-Q states 2020 comparatives of 0 for three products it did not yet own.
+    Those rows carry partition 1 and the period's other products belong to the 2020 filing, so
+    the newest-filing view serves 0. The split itself, across both filings, reconciles to
+    94,976,000.
+  - Navient: two 2025 10-Qs, a revenue member of 0 at partition 1 (one with `reconciled_to` 0).
+  - 0001610520: two 20-Fs, a one-member negative split against a positive target.
+
+  #185 demotes an inherited revenue split summing to zero or less, so these rows should be at
+  partition 0. Why the parser still emits partition 1 for them is being reproduced on the stored
+  instances.
+
 ## Done when
 
 The cause of the rise is named. No served revenue split has a non-positive `reconciled_to`. The

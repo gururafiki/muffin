@@ -4119,7 +4119,10 @@ Measured 2026-11-09: SEC segment runs fail 17% on `pending_segments` timeouts, a
       - [x] **Drain pass 2 `ypvryzgo`** (2026-11-20 15:45–22:16): 87 of 87 SUCCESS; 7,665 read,
             809 with no table (10.6%, against pass 1's 90%), 99,054 rows, 0 failed; the 757
             re-queued all read; **16,796 never read** (byte budget).
-      - [ ] **Pass 3 `hqrqmzpi`** (2026-11-21 10:27). Read each pass and launch the next while reports stay unasked;
+      - [x] **Pass 3 `hqrqmzpi`** (2026-11-21 10:27 to ~20:50): 87 of 88 SUCCESS (the roll-killed
+            run re-executed as `1ddd7cc5`, SUCCESS); 5,556 read, 641 with no table (11.5%),
+            72,551 rows, 0 failed; **11,089 unasked**. PDFs 5.15 GB of the 5 GiB cap.
+      - [ ] **Pass 4 `rocvlyrc`** (2026-11-21 20:55, priority −1). Read each pass and launch the next while reports stay unasked;
             record them in [the drain note](docs/deferred/2026-11-15-the-china-segment-backlog-drains-by-backfill.md).
       - [ ] **After the drain:** start `cninfo_filers_floor` (held, because a never-collected
             filer counts as due, so its first tick would ask the whole grid at priority 0), and
@@ -4145,8 +4148,11 @@ Measured 2026-11-09: SEC segment runs fail 17% on `pending_segments` timeouts, a
       - [x] **Stage 1 pass 2** `atpdcjgc` (2026-11-20 15:07 – 11-21 02:55): 109 SUCCESS (the #183
             roll interrupted 2, re-executed); 2,380 archives fetched, 245 absent, 3,563 already
             held, **1,375 unasked**.
-      - [ ] **Stage 1 pass 3** `xqpmoglx` (2026-11-21 10:27). Then a `dart_segment` backfill over
-            `grid:dart_filer`; then start `dart_filers_floor` and `dart_corp_codes`.
+      - [x] **Stage 1 pass 3** `xqpmoglx` (2026-11-21 10:27 to ~20:50): 109 of 110 SUCCESS (the
+            roll-killed run re-executed as `6d392689`, SUCCESS); 1,210 archives fetched, 126 absent,
+            6,188 already held, **39 unasked**.
+      - [ ] **Stage 1 pass 4** `smfrbgvz` (2026-11-21 20:55, priority −1). Then a `dart_segment`
+            backfill over `grid:dart_filer`; then start `dart_filers_floor` and `dart_corp_codes`.
       - [ ] **Rotating DART's API key is the user's call:** it sat in http-cache's access log
             from 2026-09-05 until #518.
 - [ ] 6. NSE: grid from `security_nse_filer`; retire `in-filings`.
@@ -4205,10 +4211,25 @@ Measured 2026-11-09: SEC segment runs fail 17% on `pending_segments` timeouts, a
             - 1,822 never-read XBRL filings over 1,068 filers are due, read by `hvohykxa` or the
               sensor ([the widening note](docs/deferred/2026-11-09-segment-parsing-is-ported-as-is-and-widened-later.md),
               closed).
-      - [ ] **18:37 UTC check-in (cron 2c2bb367):** sum the three re-read backfills; count filings
-            still behind the parser and non-positive served splits (must be 0); run the new
-            `check_segments_reconcile.py` against production; read `facets.duration_ms` and the
-            headroom. Then close [the historical backlog note](docs/deferred/2026-10-04-the-historical-segment-backlog-is-rising.md).
+      - [ ] **The 18:13 and 18:37 check-ins, read 20:52-21:10 UTC** (they fired while the session was
+            busy; recorded in [the historical backlog note](docs/deferred/2026-10-04-the-historical-segment-backlog-is-rising.md)
+            and [the China drain note](docs/deferred/2026-11-15-the-china-segment-backlog-drains-by-backfill.md)):
+            - SEC re-read `hvohykxa` 75/75, 0 failed, **SEC behind the parser 6,550 to 0**. DART
+              `nwrcalhq` and NSE `yxhkjyms` read nothing (37 and 6 filings not held). DART stage 1
+              pass 4 `smfrbgvz` and NSE stage 1 + 2 `pfetfdmg` launched 20:55.
+            - `check_segments_reconcile.py` against production passes. **14 served non-positive
+              revenue splits remain on SEC filings the current parser re-read** (Supernus, Navient,
+              0001610520). #185 should demote them; being reproduced on the stored instances.
+            - `facets.duration_ms` 6.6-9.7 s against 300 s. `cron_job_headroom()`: nothing past
+              two-thirds (coverage 156 of 300 s, the segment spine 126).
+            - Alerts since 12:30: `muffin-dagster-run-failed` until ~16:30, for the roll-killed runs.
+              `muffin-dagster-check-regressed` from 12:46 to 19:53: `every_sec_filing_was_read`
+              (ERROR) failed in each of the 115 re-read runs that left instances unasked. A sensor
+              run passed it at 19:54 and the alert cleared. That is the backfill's own state, not a
+              defect.
+            - #528 was merged earlier. The roll of #187 + #188 at 20:53 found nothing in flight.
+            - Close the historical note once the 14 are explained and fixed, and DART and NSE
+              read 0.
 - [x] 7. Grafana `segments.json` re-pointed; market-verify segment checks back
       (muffin-deployment#521, merged 2026-11-20 15:01): three panels read `muffin-dagster` (the
       lanes' `every_*_was_read` checks, rows per hour by regulator, China's PDF bytes against the
