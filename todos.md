@@ -4186,9 +4186,29 @@ Measured 2026-11-09: SEC segment runs fail 17% on `pending_segments` timeouts, a
         - `refresh_facets()` runs from pg_cron, records `facets.duration_ms`, and `facets-refresh`
           answers 410.
         - Replayed twice: 120 of 120 tests, 10 mutations caught.
-      - [ ] Roll #184 + #185 after the wave, merge #526 + #527, deploy, then launch the
-            non-positive re-read. Read `facets.duration_ms` and `market.cron_job_headroom()` after
-            the deploy.
+      - [x] **Done 12:26–13:02 UTC.**
+            - The wave ended 12:26: 73 `sec_filers` and 3 `sec_segments` runs, all SUCCESS.
+            - Rolled #184 + #185 at 12:28 (all three services on `b1722c88`). The roll killed a
+              CNINFO run and a DART run (`b4f392b8`, `441a5b53`), re-executed as `1ddd7cc5` and
+              `6d392689` with the new `dagster_gql.py reexecute` (muffin-deployment#528).
+            - #526 + #527 deployed 12:45. One-shot: 6,593 filings re-queued. `muffin-quality` and
+              `muffin-facets` run with 300 s. `cron_job_headroom()` shows nothing past two-thirds
+              (coverage highest, 136 of 300 s).
+            - Re-read backfills at priority −1, one per regulator:
+              - `hvohykxa`: `raw_sec_instance` + `sec_segment` over `grid:sec_filer`; the filings
+                sit with 1,117 CIKs;
+              - `nwrcalhq`: `dart_segment`, 32 filers;
+              - `yxhkjyms`: `nse_segment`, 4 filers.
+      - [x] **Amendments decided (the user, 12:4x): read 10-Q/A, 20-F/A, 10-KT and 10-QT**; 10-K/A
+            and 40-F/A stay off (0 of 10 sampled carried segments).
+            - muffin-deployment#529 deployed 13:02; muffin-ingest#186 updated the docstring.
+            - 1,822 never-read XBRL filings over 1,068 filers are due, read by `hvohykxa` or the
+              sensor ([the widening note](docs/deferred/2026-11-09-segment-parsing-is-ported-as-is-and-widened-later.md),
+              closed).
+      - [ ] **18:37 UTC check-in (cron 2c2bb367):** sum the three re-read backfills; count filings
+            still behind the parser and non-positive served splits (must be 0); run the new
+            `check_segments_reconcile.py` against production; read `facets.duration_ms` and the
+            headroom. Then close [the historical backlog note](docs/deferred/2026-10-04-the-historical-segment-backlog-is-rising.md).
 - [x] 7. Grafana `segments.json` re-pointed; market-verify segment checks back
       (muffin-deployment#521, merged 2026-11-20 15:01): three panels read `muffin-dagster` (the
       lanes' `every_*_was_read` checks, rows per hour by regulator, China's PDF bytes against the
@@ -4216,19 +4236,22 @@ is handled is in the spec's *Notes inherited from earlier phases*.
     moved from Phase 5 with segments (Phase 5 decision 1);
   - [the price-target lane trusted a cached control](docs/deferred/2026-10-20-the-price-target-lane-trusted-a-cached-control.md),
     which notes that Yahoo's `upgradeDowngradeHistory` already holds the data;
-  - [the historical segment backlog is rising](docs/deferred/2026-10-04-the-historical-segment-backlog-is-rising.md);
+  - [the historical segment backlog is rising](docs/deferred/2026-10-04-the-historical-segment-backlog-is-rising.md):
+    cause named, parser fixed (muffin-ingest#185), filings re-queued and tripwires per band
+    (muffin-deployment#526); closes once the re-read shows no served non-positive split;
   - `earnings-history` stuck at 2016-06-30 ([note](docs/deferred/2026-10-20-a-resource-can-repeat-the-same-failure-for-weeks.md)).
 
 **Left for Phase 6 by Phase 5:**
-  - [the segment queue reads the regulator](docs/deferred/2026-11-02-the-segment-queue-reads-the-regulator.md):
-    key the queue on `disclosure_source_code`; 3,549 amended and transition XBRL filings never
-    asked; size for 1.2 M filings;
-  - [the segment queues time out on the grid's filings](docs/deferred/2026-11-02-the-segment-queues-time-out-on-the-grid-s-filings.md)
-    (the decision on retiring the Korean and Indian parsers until then);
+  - [x] [the segment queue reads the regulator](docs/deferred/2026-11-02-the-segment-queue-reads-the-regulator.md)
+    (closed 2026-11-21): the queue is keyed on the regulator and sized for 1.2 M filings; the
+    amended and transition filings were measured and four forms adopted (#529);
+  - [x] [the segment queues time out on the grid's filings](docs/deferred/2026-11-02-the-segment-queues-time-out-on-the-grid-s-filings.md)
+    (closed 2026-11-21: the edge queues are gone, the lanes ask per filer);
   - [two SEC clients](docs/deferred/2026-11-02-two-sec-clients.md), if N-PORT moves with the
     regulators.
-- Phases 5–6, each keyed provider: redact its credential in the adapter, then scan its raw files
-  ([note](docs/deferred/2026-09-16-raw-request-credentials.md)).
+- [x] Phases 5–6, each keyed provider: redact its credential in the adapter, then scan its raw files
+  ([note](docs/deferred/2026-09-16-raw-request-credentials.md), closed 2026-11-21: 13,817 crumbs
+  redacted, 7,343 DART URLs carrying no key value).
 - Every phase: scheduled check-ins live only in the session that made them, so recreate them from
   the dated lines above when a new session starts.
 

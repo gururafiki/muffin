@@ -1,7 +1,9 @@
 # Segment parsing is ported as-is, and widened later
 
 Created 2026-11-09 · Planned in [the Phase 6 spec](../specs/2026-11-09-segments-and-regulators.md)
-(decision 2) · Status: open, after Phase 6's port
+(decision 2) · Status: **closed 2026-11-21.** Item 1 decided by the user (read 10-Q/A, 20-F/A,
+10-KT and 10-QT; 10-K/A and 40-F/A stay off) and built in muffin-deployment#529. Item 2 moved to
+the composition note.
 
 ## Why
 
@@ -64,6 +66,12 @@ the parser places at least one fact:
 [2026-11-16-a-fifth-of-china-s-reports-state-their-split-as-revenue-composition.md](2026-11-16-a-fifth-of-china-s-reports-state-their-split-as-revenue-composition.md).
 The composition reader has been built and live since 2026-11-20, and that note closes when its
 re-queue drains.
+
+**Decided 2026-11-21 (the user): read the four forms that carry segments.** muffin-deployment#529
+sets `carries_segments` on 10-Q/A, 20-F/A, 10-KT and 10-QT. In a rolled-back dry run on production
+it made 1,822 never-read XBRL filings over 1,068 filers due; 10-K/A and 40-F/A stay off. The SEC
+lane reads them through the running `grid:sec_filer` backfill, or through its sensor once fewer than
+2,000 filings are due. No parser version was bumped, so nothing already read is re-fetched.
 
 ## Done when
 
