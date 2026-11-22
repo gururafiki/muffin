@@ -1,9 +1,10 @@
 # A fifth of China's reports state their split as revenue composition
 
 Created 2026-11-16 · Planned in [the Phase 6 spec](../specs/2026-11-09-segments-and-regulators.md),
-step 4 · Status: **the variant is built and live (muffin-ingest#183, rolled 2026-11-20 15:29)**; open
-for the shapes listed under *Left* below. Decided 2026-11-16 (the user): build the variant, gated
-like the first fix, then drain all of China once.
+step 4 · Status: **closed 2026-11-23.** The variant is built and live (muffin-ingest#183, rolled
+2026-11-20 15:29). The shapes under *Left* are recorded as known gaps in
+[data-coverage.md](../data-coverage.md) § 3.3 rather than built (the user, 2026-11-23). Decided
+2026-11-16 (the user): build the variant, gated like the first fix, then drain all of China once.
 
 ## Why
 
@@ -89,3 +90,6 @@ the node over the production image:
 
 The re-queue (muffin-deployment#520, 757 reports) is drained and the drain note records the yield;
 then close this note, or reopen it for one of the shapes under *Left*.
+
+**Closed 2026-11-23** (the user: close, and record the gaps). The four shapes under *Left* are
+listed in [data-coverage.md](../data-coverage.md) § 3.3. Reopen this note to build one of them.

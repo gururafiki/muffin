@@ -4140,12 +4140,16 @@ Measured 2026-11-09: SEC segment runs fail 17% on `pending_segments` timeouts, a
       - [ ] **After the drain:** start `cninfo_filers_floor` (held, because a never-collected
             filer counts as due, so its first tick would ask the whole grid at priority 0), and
             declare it RUNNING in code (retention and the stock lists are declared in #183).
-      - [ ] [A fifth of China's reports state their split as revenue composition](docs/deferred/2026-11-16-a-fifth-of-china-s-reports-state-their-split-as-revenue-composition.md):
-            143 of 716 golden reports, and in the drain **every** Shenzhen report. Being built now
-            (above). Left in the note: the 10 reports carrying only the product or geography
-            heading, and cost from the 10% table.
-      - [ ] [CNINFO reads only the newest search page](docs/deferred/2026-11-15-cninfo-reads-only-the-newest-search-page.md)
-            (widening, page-2 yield to measure).
+      - [x] [A fifth of China's reports state their split as revenue composition](docs/deferred/2026-11-16-a-fifth-of-china-s-reports-state-their-split-as-revenue-composition.md):
+            143 of 716 golden reports, and in the drain **every** Shenzhen report. Built in #183.
+            **Closed 2026-11-23** (the user): the four shapes left unread (brokers, 卓胜微, the 10
+            product- or geography-only reports, cost from the 10% table) are recorded as known gaps
+            in `docs/data-coverage.md` § 3.3.
+      - [ ] [CNINFO reads only the newest search page](docs/deferred/2026-11-15-cninfo-reads-only-the-newest-search-page.md):
+            **measured 2026-11-23.** Page 2 holds ~8 full reports a filer (162 over 20 filers,
+            2003-2019; ~11,500 across the 1,418 filers with more than page 1). The current reader
+            reads 0 of 5 of them: they state the split in older table forms. **Waiting on a decision
+            from the user:** close, or build a reader for the older forms first.
 - [ ] 5. DART: corp-code registry, grid, `crtfc_key` redacted from raw; retire `kr-filings`.
       Built: muffin-ingest#181 (rolled 2026-11-16 10:30) and muffin-deployment#518 (retire
       `kr-filings`; DART's key redacted from http-cache's access log, where 781 lines in 48 hours
@@ -4171,10 +4175,12 @@ Measured 2026-11-09: SEC segment runs fail 17% on `pending_segments` timeouts, a
             **DART is drained: all 14,081 filings read at the current version, 0 behind.**
       - [ ] **2026-11-22: [a regulator floor visits its whole grid every day](docs/deferred/2026-11-22-a-regulator-floor-visits-its-whole-grid-every-day.md).**
             `dart_filers_floor`'s dry run asks 24 runs a day, i.e. the whole grid, because stage 1
-            has no age check. **Waiting on a decision from the user** before starting it and
-            `dart_corp_codes`.
-      - [ ] **Rotating DART's API key is the user's call:** it sat in http-cache's access log
-            from 2026-09-05 until #518.
+            has no age check. **Decided 2026-11-23 (option 1): stage 1 skips a list younger than
+            29 days.** Built in muffin-ingest#197, which declares `dart_filers_floor` and
+            `dart_corp_codes` RUNNING. Roll it, then verify the first 08:05 UTC floor tick: its runs
+            should read `list_fresh` for nearly every filer and ask DART for almost nothing.
+      - [x] **Rotating DART's API key: decided 2026-11-23, leave it** (the user). It sat in
+            http-cache's access log from 2026-09-05 until #518, which now redacts it.
 - [ ] 6. NSE: grid from `security_nse_filer`; retire `in-filings`.
       Built: muffin-ingest#182 (rolled 2026-11-16 12:27) and muffin-deployment#519 (deployed
       11:35–11:47: `in-filings` 410; NSE's API moved to `www.nseindia.in`; the edge's 440
