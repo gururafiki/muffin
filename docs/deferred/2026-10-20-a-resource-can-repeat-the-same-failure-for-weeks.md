@@ -1,9 +1,21 @@
 # A resource can repeat the same failure for weeks, and no alert sees it
 
-Created 2026-10-20 · Status: open. **Decided 2026-10-20 (the user): no alert.** Each instance is fixed
-when its family leaves the edge: `security-segments` and `earnings-history`, both in Phase 6 (the
-Phase 5 plan moved segments there, with the regulators that share its parser). The
+Created 2026-10-20 · Status: **closed 2026-11-22.** **Decided 2026-10-20 (the user): no alert.** Each
+instance was fixed when its family left the edge: `security-segments` and `earnings-history`, both
+in Phase 6 (the Phase 5 plan moved segments there, with the regulators that share its parser). The
 sweep stays in `market-diagnose` for finding the next one.
+
+**How each closed:**
+- **`security-segments`** retired 2026-11-14 (muffin-deployment#511), and its handler was deleted
+  2026-11-20 (#522). The Dagster SEC segment lane reads per filer and stamps every filing it looked
+  at with `segments_parsed_at` and the parser version, including a filing with no readable
+  instance. So an unreadable filing is asked once per parser version, not every five minutes.
+  `every_sec_filing_was_read` passed on 2026-11-20 and again after the 11-21 re-read.
+- **`earnings-history`** retired 2026-11-21 (#532). The Dagster Nasdaq lane asks one day per
+  partition. For 2016-06-28 and 2016-06-29 it stored Nasdaq's own answer, `{"data": null, …
+  "errorMessage": "Earnings Calendar: No record found."}`, and materialised both days as empty
+  (read 2026-11-22 from the raw files, written 11-21 23:47). The edge had asked for that window 52
+  times a day since 2026-09-06.
 
 ## Why
 

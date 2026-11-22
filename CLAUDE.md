@@ -6301,6 +6301,73 @@ muffin-deployment#531-#533, muffin-ingest#187-#192, muffin-ui#144. Record: the P
   roll-killed CNINFO run, created at 22:06, waited 13 hours behind two backfills whose runs were
   created at 21:26. That is creation order, not a stuck queue.
 
+### Reading what the readers got wrong (2026-11-22)
+
+muffin-ingest#194, #195, #196; muffin-deployment#536, #537. Records:
+`docs/deferred/2026-10-04-the-historical-segment-backlog-is-rising.md` (step 6) and
+`docs/deferred/2026-11-22-some-cninfo-tables-read-the-prior-year-as-revenue.md`.
+
+- **THE FILER IS NAMED ON THE HTML INDEX, AND ONLY THERE.** EDGAR answers `index.json` and
+  `<accession>-index.htm` under any CIK, and serves the documents only under a filer's (the bullet
+  of 11-22 above). `index.json` echoes the CIK the path names. The HTML index prints
+  `<company> (Filer) … CIK=<n>` for each filer, so on a 404 the lane reads it and asks once more
+  under that CIK (#194). It recovered all 42 predecessor-CIK filings: Supernus, Navient, Real
+  Brokerage. Only `Filer` counts: a `Subject` or `Filed by` company holds no documents.
+- **A SPLIT CAN RECONCILE AND STILL BE THE WRONG YEAR.** 16 CNINFO reports stored LAST year's
+  amounts under this year's period, and every split reconciled, because the reader took last
+  year's total as the target too. A column shift that moves the parts and the total together is
+  invisible to reconciliation. The tell was elsewhere: this year's amount and share fused into the
+  member name (`cninfo:其他业务16,327,089.580.36%`). **A money figure inside a name is a column
+  misread, whatever the arithmetic says.**
+- **A LABEL CAN BE SET GLYPH BY GLYPH.** Those 16 print this year's `金额` as two items (`金`,
+  `额`) and last year's as one, and the reader matched the label by its exact text, so the first
+  amount column it found was last year's. `_label_starts` matches a label run across items. Look
+  for that before concluding a table has no header.
+- **A TWO-UP PAGE PRINTS TWO PORTRAIT PAGES ON ONE LANDSCAPE SHEET.** 上海家化 FY2017's cash-flow
+  table sat beside its segment table. Its text joined the member names, and its `说明` ended one
+  table before its first row and the next after its second. Once a table's header is read, only
+  its own horizontal extent belongs to it. The values had reconciled throughout; only the names and
+  the missing tables showed it.
+- **A MANDATED TABLE CAN PRINT WHOLE NUMBERS IN 千元, AND WRAP THEM.** 中国中铁 sets
+  `1,095,921,752` as `1,095,921,7` over `52`. The rule that already read whole figures in the
+  composition table had been scoped to it alone, so the mandated table yielded nothing, and the
+  prose after it was read as rows. A whole figure has to be judged with what its column already
+  holds, not one fragment at a time.
+- **GATE A READER CHANGE BY DIFFING ITS OUTPUT, ONE CHANGE AT A TIME.** Each rule was run over the
+  782 reports held on the node (716 golden, 44 Shenzhen, the 22) beside the previous version. The
+  letter-spacing rule changed exactly the 16 it was for and 0 of the other 766. Running the readers
+  in parallel throwaway containers from the production image, with the branch on `PYTHONPATH`, took
+  ~20 minutes for 782 PDFs; `/tmp/claude-fused/gate.py` is the harness.
+- **A RULE WRITTEN FROM THE FAILING CASES IS TOO BROAD UNTIL THE PASSING ONES HAVE BEEN READ.**
+  The first composition prose rule ended a table at any CJK text past the share label. It fixed
+  its three reports and cut two golden ones short. 9900007107's page footer (`第 15 页 / 共 202
+  页`, several items, so `join_pages` keeps it) sits between its products and regions. 粤高速
+  repeats its column header where the table runs onto the next page. Prose is text that starts
+  in the name column and runs across to the next label; a footer, a repeated header and a column
+  label all start right of it. One rule now serves both tables. The gate over the 760 golden
+  reports found both losses, and no fixture could have.
+- **A READER FIX MAY RECOVER MORE THAN THE CASE IT WAS WRITTEN FOR, SO RE-QUEUE THE NO-RESULT
+  ROWS TOO.** The whole-number rule, written for 中国中铁, made 8 of the 35 golden reports that
+  had read into no facts yield reconciling splits: 中国神华, 中国国航, 工业富联, all large and in
+  千元 or 百万元. Production held 4,147 full reports read into no rows, so the re-queue takes them
+  as well (4,198 in all). Count a reader change's gains among the no-result reports, not only its
+  fixes among the broken ones.
+- **A MUTATION THAT SURVIVES CAN MEAN THE RULE IS MORE ELABORATE THAN IT NEEDS TO BE.** The
+  two-up right edge was first a chain of header labels to the table's last column. A mutation
+  placing it at the cost label survived, because the reader reads only the name, revenue and cost
+  columns. So the edge became one line, a gutter past the cost label. The remaining survivor (the
+  edge's exact value) is equivalent anywhere from 110 to 870 pt.
+- **A FLOOR THAT REQUESTS ALIGNED CHUNKS VISITS THE WHOLE GRID DAILY, AND ONLY AN AGE CHECK IN THE
+  ASSET MAKES THAT CHEAP.** SEC learned this on 11-03 and its asset checks age. The three regulator
+  lanes copied the chunking but not the check: `nse_filers_floor` has run 16-19 runs a day since
+  11-20, and `dart_filers_floor`'s dry run asked 24 a day (its whole grid), where a 30-day floor
+  should cost 1/30 of that. The dry run before starting a floor is what showed it. Count the
+  FILERS a tick will ask the provider about, not only the runs.
+- **A FIXTURE IN A RE-QUEUE TEST MUST RESPECT THE TABLE'S KEY.** `security_segment`'s key omits
+  the accession, so two fixture reports with the same member, metric and period collided. The
+  clean run failed on a duplicate key and every mutation read "CAUGHT" for that reason. Read the
+  clean run first (this file already says so); it is the only thing that catches this.
+
 ## Running an OpenSandbox server locally
 
 - **`docker run -d -p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock opensandbox/server:latest`.**

@@ -4122,8 +4122,17 @@ Measured 2026-11-09: SEC segment runs fail 17% on `pending_segments` timeouts, a
       - [x] **Pass 3 `hqrqmzpi`** (2026-11-21 10:27 to ~20:50): 87 of 88 SUCCESS (the roll-killed
             run re-executed as `1ddd7cc5`, SUCCESS); 5,556 read, 641 with no table (11.5%),
             72,551 rows, 0 failed; **11,089 unasked**. PDFs 5.15 GB of the 5 GiB cap.
-      - [ ] **Pass 4 `rocvlyrc`** (2026-11-21 20:55, priority −1). Read each pass and launch the next while reports stay unasked;
-            record them in [the drain note](docs/deferred/2026-11-15-the-china-segment-backlog-drains-by-backfill.md).
+      - [x] **Pass 4 `rocvlyrc`** (2026-11-21 20:55 to 11-22 07:51): 86 of 88 SUCCESS; 5,251 read,
+            737 with no table; **5,442 unasked**. Recorded in [the drain note](docs/deferred/2026-11-15-the-china-segment-backlog-drains-by-backfill.md).
+      - [ ] **Pass 5 `zrndydmg`** (2026-11-22 11:00, priority −1): queued behind the SEC wave until
+            15:12, then 3-4 min a run; 16 of 88 done at 16:30 UTC. Read it and launch the next pass
+            while reports stay unasked.
+      - [ ] **2026-11-22: the 22 fused-name reports, read correctly** ([the note](docs/deferred/2026-11-22-some-cninfo-tables-read-the-prior-year-as-revenue.md),
+            the user's decision): muffin-ingest#196 (five reader rules, gated on 782 held reports:
+            the 22 fixed, 8 golden gains, 0 losses after the prose rule was unified) and
+            muffin-deployment#537 (re-queue: the 22, China Eastern, and every full report read
+            into no rows, 4,198 over 1,381 filers). Roll #196, deploy #537, then a pass over the
+            CNINFO grid re-reads them; verify no fused name and no unplaced-by-sign split remains.
       - [ ] **After the drain:** start `cninfo_filers_floor` (held, because a never-collected
             filer counts as due, so its first tick would ask the whole grid at priority 0), and
             declare it RUNNING in code (retention and the stock lists are declared in #183).
@@ -4151,8 +4160,15 @@ Measured 2026-11-09: SEC segment runs fail 17% on `pending_segments` timeouts, a
       - [x] **Stage 1 pass 3** `xqpmoglx` (2026-11-21 10:27 to ~20:50): 109 of 110 SUCCESS (the
             roll-killed run re-executed as `6d392689`, SUCCESS); 1,210 archives fetched, 126 absent,
             6,188 already held, **39 unasked**.
-      - [ ] **Stage 1 pass 4** `smfrbgvz` (2026-11-21 20:55, priority −1). Then a `dart_segment`
-            backfill over `grid:dart_filer`; then start `dart_filers_floor` and `dart_corp_codes`.
+      - [x] **Stage 1 pass 4** `smfrbgvz` (2026-11-21 20:55 to 22:21): 109 of 111 SUCCESS; 1,096
+            lists answered; 71 archives fetched, 7,624 held, 5 absent, **0 unasked**: stage 1 has
+            drained.
+      - [ ] **Stage 2 `glylcvjp`** (`dart_segment` over `grid:dart_filer`, launched 2026-11-22
+            ~16:52 UTC, priority −1; queued behind CNINFO pass 5). Read its counters.
+      - [ ] **2026-11-22: [a regulator floor visits its whole grid every day](docs/deferred/2026-11-22-a-regulator-floor-visits-its-whole-grid-every-day.md).**
+            `dart_filers_floor`'s dry run asks 24 runs a day, i.e. the whole grid, because stage 1
+            has no age check. **Waiting on a decision from the user** before starting it and
+            `dart_corp_codes`.
       - [ ] **Rotating DART's API key is the user's call:** it sat in http-cache's access log
             from 2026-09-05 until #518.
 - [ ] 6. NSE: grid from `security_nse_filer`; retire `in-filings`.
@@ -4235,8 +4251,9 @@ Measured 2026-11-09: SEC segment runs fail 17% on `pending_segments` timeouts, a
               predecessor CIK, so their instance answers 404 under the current one (Supernus
               1356576 → 1625297, Navient 1593538 → 2152623). The other 2 are UBS 20-Fs over the
               32 MB gate. Overall, 116 SEC filings are unreadable, and 23 of them carry 329 edge
-              rows. **Waiting on a decision from the user:** read a filing under its filer's CIK,
-              keep and demote, or retract.
+              rows. **Decided 2026-11-22 (the user): read under the filer's CIK.** muffin-ingest#194
+              read all 42; muffin-deployment#536 unplaced UBS's 8 rows; 0 placed revenue rows on
+              any source now reconcile to a non-positive total. The note is closed.
 - [x] 7. Grafana `segments.json` re-pointed; market-verify segment checks back
       (muffin-deployment#521, merged 2026-11-20 15:01): three panels read `muffin-dagster` (the
       lanes' `every_*_was_read` checks, rows per hour by regulator, China's PDF bytes against the
@@ -4260,14 +4277,15 @@ Measured 2026-11-09: SEC segment runs fail 17% on `pending_segments` timeouts, a
 **Left for Phases 6 and 6b by Phases 4 and 5.** Read in Phase 6's planning on 2026-11-09; how each
 is handled is in the spec's *Notes inherited from earlier phases*.
 - Phase 6 (regulators, segments, events):
-  - `security-segments` stuck on one filing ([note](docs/deferred/2026-10-20-a-resource-can-repeat-the-same-failure-for-weeks.md)),
-    moved from Phase 5 with segments (Phase 5 decision 1);
-  - [the price-target lane trusted a cached control](docs/deferred/2026-10-20-the-price-target-lane-trusted-a-cached-control.md),
-    which notes that Yahoo's `upgradeDowngradeHistory` already holds the data;
+  - [x] `security-segments` stuck on one filing ([note](docs/deferred/2026-10-20-a-resource-can-repeat-the-same-failure-for-weeks.md),
+    closed 2026-11-22), moved from Phase 5 with segments (Phase 5 decision 1);
+  - [x] [the price-target lane trusted a cached control](docs/deferred/2026-10-20-the-price-target-lane-trusted-a-cached-control.md)
+    (closed 2026-11-08: analyst actions come from Yahoo's `upgradeDowngradeHistory`);
   - [the historical segment backlog is rising](docs/deferred/2026-10-04-the-historical-segment-backlog-is-rising.md):
     cause named, parser fixed (muffin-ingest#185), filings re-queued and tripwires per band
     (muffin-deployment#526); closes once the re-read shows no served non-positive split;
-  - `earnings-history` stuck at 2016-06-30 ([note](docs/deferred/2026-10-20-a-resource-can-repeat-the-same-failure-for-weeks.md)).
+  - [x] `earnings-history` stuck at 2016-06-30 (same note, closed 2026-11-22: the Dagster lane stored
+    Nasdaq's "No record found" for 06-28 and 06-29 and moved on).
 
 **Left for Phase 6 by Phase 5:**
   - [x] [the segment queue reads the regulator](docs/deferred/2026-11-02-the-segment-queue-reads-the-regulator.md)
@@ -4354,9 +4372,13 @@ Decisions (the user):
       SAP.DE re-rendered against production at 11:38: "Last earnings 21 Oct 2026 · Last quarter
       beat by 3.1%", no estimate beside the past date. Toyota and Apple render as before; Apple's
       Sep 2026 quarter waits on `jylxcmbx` reaching day 2026-10-29.
-      Left (check-in 2026-11-22 12:53 UTC): `brjffoqa`'s counters (`past_without_estimate`); after
-      `jylxcmbx`, AAPL's stale Nasdaq row dated 2026-11-02 (beside the real 10-29, both 1.98, one
-      of the 344 the edge never retracted) must be gone and its Sep 2026 quarter present.
+      **`brjffoqa` done, 139 of 139 SUCCESS** (read 12:30): 13,816 documents = 6,298 dated + 7,308
+      undated + 131 absent + 79 too old, 0 unreadable; **3,990 of the 6,298 dated reports (63%)
+      had a date already past when Yahoo answered, and lost the next quarter's estimate**
+      (`calendar_changed` 3,964); 28,574 quarters of history, 805 without an actual.
+      **`jylxcmbx` re-asked 10-29 and 11-02 (read 16:00):** AAPL has one Nasdaq row, 2026-11-02;
+      it was the 10-29 row that Nasdaq no longer lists, so the duplicate resolved the other way from
+      my guess. Its Sep 2026 quarter is served: 2.05 against 1.98, a 3.54% beat, reported 11-02.
 - [x] 5. Stock page shows recent quarters (muffin-ui#144, deployed 11-21 22:22).
 - [x] 6. market-verify `news is current` (muffin-deployment#534, deployed 11-22 11:29): links
       published in the last 3 days, floor 100. The dispatched run at 11:30 passed with 1,277.

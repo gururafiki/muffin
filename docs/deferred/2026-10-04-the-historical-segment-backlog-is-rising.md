@@ -1,7 +1,7 @@
 # The historical segment backlog is rising, and some splits are accepted against no revenue
 
-Created 2026-10-04 · Status: open, belongs to the segments family (Phase 6). **Planned 2026-11-09:** the restored
-`segments_reconcile` check measures it (spec step 7); changing the parser rule is decided after.
+Created 2026-10-04 · Status: **closed 2026-11-22** (step 6 below). Belonged to the segments family
+(Phase 6).
 
 ## Why
 
@@ -160,6 +160,19 @@ read, and whether the lane learns to read a filing under the CIK that filed it.
   rewrites these with the current parser; demote the two UBS splits with a one-shot.
 - (b) Keep the rows and demote only the 14 non-positive splits, mirroring #185.
 - (c) Retract every row no current read can reproduce: 329 rows on 23 filings.
+
+**Step 6, 2026-11-22: decided (a), built and verified.**
+- muffin-ingest#194 reads a filing under its filer's CIK. On a 404, the lane reads the HTML index
+  (`<accession>-index.htm`), which names each `(Filer)` and its CIK, and asks once more under that
+  CIK. Rolled 2026-11-22. A `reread` of the 42 filings read all 42: Navient 24, Supernus 14, Real
+  Brokerage 4, the last listed by SEC under Real REMAX Group's 2136387.
+- muffin-deployment#536 unplaced UBS's 8 rows on the two 20-Fs over the gate (one-shot
+  `ubs-too-large-rows-unplaced-2026-11-22`).
+- Re-measured the same day: **0 placed revenue rows on any source are reconciled against a total of
+  zero or less**, and UBS's two filings hold no placed row.
+- China's own case (China Eastern FY2020, a split placed with no target) is re-read by
+  muffin-deployment#537 after muffin-ingest#196 rolls
+  ([its note](2026-11-22-some-cninfo-tables-read-the-prior-year-as-revenue.md)).
 
 ## Done when
 

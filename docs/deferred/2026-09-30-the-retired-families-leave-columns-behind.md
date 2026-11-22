@@ -154,11 +154,35 @@ For a table, use `pg_depend` on the table's oid for views, and grep `muffin-ui/s
 ## What to do
 
 1. Stage 1d first, so `coverage_current` and `security_facet_status` read `security_price_span`.
+   **Done** (20261003160000).
 2. Remove `contradicted_negative_cache` from `data_defect`, and `last_report_date` from
-   `sample_universe`.
-3. Re-run the query above. Then one migration drops the columns and tables, removes the four
-   classification rows, and regenerates `schemas/` from CI's artifact.
-4. Take the size back: `security_price` alone is 5.3 GB on a 100 GB data volume.
+   `sample_universe`. **Done in the migration of step 3.** `sample_universe` had already been
+   reading `tracked_fund_latest.last_report_date`, which is derived from `fund_holding`; the
+   proving query matched the name on another relation's column.
+3. Re-run the query above. Then one migration drops the columns and tables, removes the
+   classification rows, and regenerates `schemas/` from CI's artifact. **2026-11-22:
+   20261122160000** drops the 21 `security` columns of the price, universe and Yahoo company
+   families, plus `tracked_fund.last_report_date`, and removes 17 classification rows. The tables
+   went in #479. Re-measured that day: the readers were exactly as listed above.
+4. Take the size back: `security_price` alone is 5.3 GB on a 100 GB data volume. **Done in #479.**
+
+### Moved to 2026-12-07, with Phase 5's step 11
+
+Measured 2026-11-22, while writing step 3:
+
+- **`currency.history_missing_at`**: muffin-ingest's FX lane reads it (`facets/fx.py`,
+  `ASKABLE_CURRENCIES`). That read was written after this note's 09-30 measurement. The column's
+  one mark is from 2026-08-21, past its 30 days, so the read passes every currency. Remove the read
+  in muffin-ingest first, then drop the column.
+- **`security.corporate_actions_missing_at`**: its writer, Tiingo's `security-corporate-actions`,
+  retired on 2026-10-25 (muffin-deployment#464).
+- **`clear_symbol_caches`, its trigger `security_provider_symbol_clears_caches` and
+  `symbol_cache_classification`**: after step 3 the function clears only
+  `corporate_actions_missing_at`. Once that column goes, the function clears nothing, so the
+  trigger, the function, the classification view and `tests/negative-caches-are-classified.sql` go
+  together with `statement_currency_missing_at` and `xbrl_missing_at`.
+  `wikidata_missing_at` is ISIN-keyed and live (the edge's `security-wikidata-industries`), so the
+  classification's last purpose ends with the trigger.
 
 ## Done when
 
