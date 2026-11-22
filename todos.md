@@ -4351,12 +4351,18 @@ Decisions (the user):
       priority 0) was launched over the grid; it queues behind the SEC wave. The three failed
       `jylxcmbx` runs were all killed by rolls ("interrupted by an image roll") and all three are
       re-executed (`3b95f56b` SUCCESS, `5cc9b459` and `68d0d707` queued).
-      Left: read `brjffoqa`'s counters (`past_without_estimate`), re-render SAP.DE.
+      SAP.DE re-rendered against production at 11:38: "Last earnings 21 Oct 2026 · Last quarter
+      beat by 3.1%", no estimate beside the past date. Toyota and Apple render as before; Apple's
+      Sep 2026 quarter waits on `jylxcmbx` reaching day 2026-10-29.
+      Left (check-in 2026-11-22 12:53 UTC): `brjffoqa`'s counters (`past_without_estimate`); after
+      `jylxcmbx`, AAPL's stale Nasdaq row dated 2026-11-02 (beside the real 10-29, both 1.98, one
+      of the 344 the edge never retracted) must be gone and its Sep 2026 quarter present.
 - [x] 5. Stock page shows recent quarters (muffin-ui#144, deployed 11-21 22:22).
 - [x] 6. market-verify `news is current` (muffin-deployment#534, deployed 11-22 11:29): links
       published in the last 3 days, floor 100. The dispatched run at 11:30 passed with 1,277.
       Grafana needs nothing: the Dagster row shows the new jobs and checks by itself.
-- [ ] 7. Delete the handlers after 3 clean days; contract with a drop date.
+- [ ] 7. Delete the handlers after 3 clean days; contract with a drop date. Readiness check-in
+      2026-11-25 09:07 UTC (macro's first scheduled tick is 11-23, so 11-25 is its third day).
 - [~] 8. Docs, skills, memory. Done 11-22: CLAUDE.md section; `market-refresh-routine`,
       `market-diagnose`, `market-health`, `muffin-dagster-operations` (muffin-deployment#535);
       `docs/data-ingestion.md` (header, providers, the retired table now 51), `docs/data-coverage.md`;
