@@ -4148,8 +4148,9 @@ Measured 2026-11-09: SEC segment runs fail 17% on `pending_segments` timeouts, a
       - [ ] [CNINFO reads only the newest search page](docs/deferred/2026-11-15-cninfo-reads-only-the-newest-search-page.md):
             **measured 2026-11-23.** Page 2 holds ~8 full reports a filer (162 over 20 filers,
             2003-2019; ~11,500 across the 1,418 filers with more than page 1). The current reader
-            reads 0 of 5 of them: they state the split in older table forms. **Waiting on a decision
-            from the user:** close, or build a reader for the older forms first.
+            reads 0 of 5 of them: they state the split in older table forms. **Decided 2026-11-23
+            (the user): build the older readers, gated, then walk page 2 once per filer.** Started
+            the same day: classify the layouts first.
 - [ ] 5. DART: corp-code registry, grid, `crtfc_key` redacted from raw; retire `kr-filings`.
       Built: muffin-ingest#181 (rolled 2026-11-16 10:30) and muffin-deployment#518 (retire
       `kr-filings`; DART's key redacted from http-cache's access log, where 781 lines in 48 hours

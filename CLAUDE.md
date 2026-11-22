@@ -6368,6 +6368,32 @@ muffin-ingest#194, #195, #196; muffin-deployment#536, #537. Records:
   clean run failed on a duplicate key and every mutation read "CAUGHT" for that reason. Read the
   clean run first (this file already says so); it is the only thing that catches this.
 
+### The regulator floors check the list's age (2026-11-23)
+
+muffin-ingest#197, decided by the user 2026-11-23.
+
+- **A SKIPPED LIST MUST STILL PLAN THE FILER'S REPORTS.** Stage 1 skips a list younger than
+  `list_max_age_days` (29). It then plans from the stored list, not only from `security_filing`.
+  Otherwise a list that stage 1 fetched and stage 2 never filed (a failed run) would leave its new
+  reports unasked until the list next expired. Each lane has a test that runs stage 1 alone, then
+  the full job, and expects the reports fetched.
+- **An age check is only as good as the answer it ages.** An absent list, an NSE gateway page and a
+  DART walk cut short by a transport failure are asked again at any age.
+- **A TEST PARAMETRISED ON THE CONSTANT IT TESTS CANNOT CATCH A CHANGE TO IT.** Setting the
+  threshold to `FLOOR_DAYS` passed while the cases read `raw.LIST_MAX_AGE_DAYS`. Pinning the case to
+  the property ("an hour short of a floor period is due") caught it.
+- **THE DRAINS LEFT EVERY LIST THE SAME AGE, SO THE FLOORS WILL COME DUE TOGETHER.** All 1,086 DART
+  lists were 1.1 days old, NSE's 0.6-6.4 and CNINFO's under 1.1. Each grid comes due over 2-3 days
+  around 2026-12-19..21 and stays clustered, as SEC's did after its backfill. This is "a bulk event
+  creates a synchronised wave one TTL later" again. **Read the stored ages before predicting a
+  floor's daily cost**; my "~1/30 of the grid a day" was the steady state of a spread grid, which
+  no drained grid is.
+- **A REGULATOR'S OLDER REPORTS USE OLDER TABLE FORMS.** CNINFO's page 2 holds ~8 full reports a
+  filer from 2003-2019. The current reader reads 0 of 5 of them, because they print the split as
+  `主营业务分产品情况表` with `主营业务收入` columns (2005) or as a combined `分行业或分产品` table
+  (2008). Before walking any regulator's history, read a few of its oldest documents with the
+  current reader. ([note](docs/deferred/2026-11-15-cninfo-reads-only-the-newest-search-page.md))
+
 ## Running an OpenSandbox server locally
 
 - **`docker run -d -p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock opensandbox/server:latest`.**
