@@ -4124,15 +4124,19 @@ Measured 2026-11-09: SEC segment runs fail 17% on `pending_segments` timeouts, a
             72,551 rows, 0 failed; **11,089 unasked**. PDFs 5.15 GB of the 5 GiB cap.
       - [x] **Pass 4 `rocvlyrc`** (2026-11-21 20:55 to 11-22 07:51): 86 of 88 SUCCESS; 5,251 read,
             737 with no table; **5,442 unasked**. Recorded in [the drain note](docs/deferred/2026-11-15-the-china-segment-backlog-drains-by-backfill.md).
-      - [ ] **Pass 5 `zrndydmg`** (2026-11-22 11:00, priority −1): queued behind the SEC wave until
-            15:12, then 3-4 min a run; 16 of 88 done at 16:30 UTC. Read it and launch the next pass
-            while reports stay unasked.
+      - [x] **Pass 5 `zrndydmg`** (2026-11-22 11:00 to 19:58, priority −1): 87 of 88 SUCCESS (the
+            failed run re-executed); 4,627 read, 1,221 with no table, 44 too large; **885 reports
+            and 20 searches unasked**, 1 search refused.
+      - [ ] **Pass 6 `pjbieqdr`** (2026-11-22 ~22:45 UTC, priority −1, the new reader): 5,388
+            reports behind the parser and 8,340 full reports never read. Check-in 2026-11-23 10:17 CET.
       - [ ] **2026-11-22: the 22 fused-name reports, read correctly** ([the note](docs/deferred/2026-11-22-some-cninfo-tables-read-the-prior-year-as-revenue.md),
             the user's decision): muffin-ingest#196 (five reader rules, gated on 782 held reports:
             the 22 fixed, 8 golden gains, 0 losses after the prose rule was unified) and
             muffin-deployment#537 (re-queue: the 22, China Eastern, and every full report read
-            into no rows, 4,198 over 1,381 filers). Roll #196, deploy #537, then a pass over the
-            CNINFO grid re-reads them; verify no fused name and no unplaced-by-sign split remains.
+            into no rows, 4,198 over 1,381 filers in the dry run). #196 rolled 22:21 UTC, #537 and
+            #538 deployed 22:4x (re-queued **5,388**: pass 5's 1,221 no-table reads came after the
+            dry run). Pass 6 re-reads them; verify no fused name and no unplaced-by-sign split
+            remains (check-in 11-23).
       - [ ] **After the drain:** start `cninfo_filers_floor` (held, because a never-collected
             filer counts as due, so its first tick would ask the whole grid at priority 0), and
             declare it RUNNING in code (retention and the stock lists are declared in #183).
@@ -4163,8 +4167,8 @@ Measured 2026-11-09: SEC segment runs fail 17% on `pending_segments` timeouts, a
       - [x] **Stage 1 pass 4** `smfrbgvz` (2026-11-21 20:55 to 22:21): 109 of 111 SUCCESS; 1,096
             lists answered; 71 archives fetched, 7,624 held, 5 absent, **0 unasked**: stage 1 has
             drained.
-      - [ ] **Stage 2 `glylcvjp`** (`dart_segment` over `grid:dart_filer`, launched 2026-11-22
-            ~16:52 UTC, priority −1; queued behind CNINFO pass 5). Read its counters.
+      - [x] **Stage 2 `glylcvjp`** (2026-11-22, done 20:38): 109 of 109 SUCCESS, nothing to read.
+            **DART is drained: all 14,081 filings read at the current version, 0 behind.**
       - [ ] **2026-11-22: [a regulator floor visits its whole grid every day](docs/deferred/2026-11-22-a-regulator-floor-visits-its-whole-grid-every-day.md).**
             `dart_filers_floor`'s dry run asks 24 runs a day, i.e. the whole grid, because stage 1
             has no age check. **Waiting on a decision from the user** before starting it and

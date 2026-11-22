@@ -89,8 +89,15 @@ written (65,610 placed, 5,152 unplaced), 2,589 kept by a newer filing, 0 failed,
 unknown. **5,442 reports were left unasked** by the byte budget (22.2 GB fetched). The raw store
 held 4.1 GB at 11-22 10:58; `/mnt/data` was at 69% with 40 GB free.
 
-**Pass 5 `zrndydmg` launched 2026-11-22 11:00**, same assets, priority −1, 30-minute runs. At
-roughly half of what is left per pass, this or a sixth pass should drain it.
+**Pass 5 `zrndydmg`, 2026-11-22 11:00 to 19:58** (queued behind the SEC wave until 15:12). 87 of 88
+runs succeeded; the failed one was re-executed. 2,177 searches answered, 1 refused, 20 unasked;
+5,638 reports named, 4,633 fetched, 44 over the gate, **885 unasked**. Stage 2 read 4,627, of which
+1,221 had no table; 47,407 rows written (47,546 placed, 3,036 unplaced).
+
+**Pass 6 `pjbieqdr`, launched 2026-11-22 ~22:45 UTC**, same assets, priority −1, on the reader of
+muffin-ingest#196. Beside the drain's remainder (8,340 full reports never read) it reads the 5,388
+reports muffin-deployment#537 re-queued: the 22 fused-name reports, China Eastern FY2020, and every
+full report read into no rows, which includes pass 5's 1,221.
 
 ## Done when
 

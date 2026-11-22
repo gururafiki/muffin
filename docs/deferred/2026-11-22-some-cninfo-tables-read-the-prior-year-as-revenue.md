@@ -1,8 +1,9 @@
 # Some CNINFO tables read the prior year as revenue
 
 Created 2026-11-22 · Found while checking the segment reconcile rule on production · Status:
-**decided 2026-11-22 (read them correctly); reader in muffin-ingest#196, re-queue in
-muffin-deployment#537**
+**decided 2026-11-22 (read them correctly). The reader (muffin-ingest#196) rolled 22:21 UTC; the
+re-queue (muffin-deployment#537) deployed the same evening and moved 5,388 reports; CNINFO pass 6
+`pjbieqdr` is re-reading them.**
 
 ## Why
 
@@ -56,7 +57,21 @@ total of zero or less.
 - **The whole-number rule recovers more than 中国中铁.** 8 of the 35 golden reports that read into no
   facts now read reconciling splits (中国神华, 中国国航, 工业富联).
 - **muffin-deployment#537** re-queues the 22, China Eastern, and every full report read into no
-  rows: 4,198 reports over 1,381 filers, counted by a production dry run.
+  rows: 4,198 reports over 1,381 filers in the dry run, and **5,388 when deployed**, because CNINFO
+  pass 5 read 1,221 more reports into no rows in between.
+
+## The final gate (2026-11-22)
+
+Over all 782 reports held on the node, against the old reader: 30 changed, the 22 and 8 golden
+gains, and no loss. Fused names went from 22 to 0. Of the 22:
+
+- 20 read every revenue row placed against this year's total. The examples above now reconcile to
+  4,518.6 m, 6,785.8 m and 1,079.0 m.
+- 中国中铁's two years each leave one `其中` child unplaced, a partial disclosure of `其他`.
+- 紫光股份 (000938) FY2020 leaves its product split unplaced. Its `合并抵消` (elimination) is printed
+  as a POSITIVE 6,191,422,475.21 with a positive share (10.37%), and the split reconciles only with
+  it negative. No sign is printed, so none is read; inferring one from the name would be a guess.
+  Its regions and industry are placed.
 
 ## Also found, not yet classified
 
