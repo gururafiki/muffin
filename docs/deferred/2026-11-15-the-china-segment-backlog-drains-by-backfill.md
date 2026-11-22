@@ -81,7 +81,16 @@ one, which was re-executed as `1ddd7cc5` (SUCCESS). 2,173 searches answered; 16,
 fetched). Retention held the PDFs at 5.15 GB of the 5 GiB cap (1,650 held). `/mnt/data` was at
 69% with 40 GB free.
 
-**Pass 4 `rocvlyrc` launched 2026-11-21 20:55**, same assets, priority −1, 30-minute runs.
+**Pass 4 `rocvlyrc`, 2026-11-21 20:55 to 11-22 07:51.** 86 of 88 runs succeeded. The 22:05 roll
+killed one, whose re-execution `84d25752` is queued behind the earnings backfills at the same
+priority. 2,148 searches answered; 10,881 reports named, 5,251 fetched and read, 188 over the
+12 MB gate, 0 refused, 0 transport. 737 of the 5,251 read had no table (14.0%). 68,173 rows were
+written (65,610 placed, 5,152 unplaced), 2,589 kept by a newer filing, 0 failed, 0 currency
+unknown. **5,442 reports were left unasked** by the byte budget (22.2 GB fetched). The raw store
+held 4.1 GB at 11-22 10:58; `/mnt/data` was at 69% with 40 GB free.
+
+**Pass 5 `zrndydmg` launched 2026-11-22 11:00**, same assets, priority −1, 30-minute runs. At
+roughly half of what is left per pass, this or a sixth pass should drain it.
 
 ## Done when
 

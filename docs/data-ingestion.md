@@ -1,7 +1,7 @@
 # Market data ingestion — how it works
 
 **Status: current as of 2026-09-09; §4 and §5 updated 2026-10-18; the header and §5's retired list
-2026-11-21.** Numbers are measured against production, not estimated.
+2026-11-22.** Numbers are measured against production, not estimated.
 
 > **THIS DESCRIBES THE SYSTEM BEING REPLACED.** Ingestion is moving, family by family, to Dagster
 > assets in the `muffin-ingest` submodule, designed in
@@ -17,12 +17,15 @@
 > - **the SEC family** (Phase 5, 2026-11-08): company facts, statements, filings and insider trades
 >   ([spec](specs/2026-10-24-sec-family.md)), with Yahoo's analyst actions and corporate actions;
 > - **segments and the regulators** (Phase 6, 2026-11-14 to 11-16): SEC, CNINFO, DART and NSE
->   segment parsing and their filing walkers ([spec](specs/2026-11-09-segments-and-regulators.md)).
+>   segment parsing and their filing walkers ([spec](specs/2026-11-09-segments-and-regulators.md));
+> - **macro and events** (Phase 6b, 2026-11-21/22): company news from Yahoo's RSS feed, earnings
+>   from Nasdaq and Yahoo, and macro through openbb in-process
+>   ([spec](specs/2026-11-21-macro-and-events.md)).
 >
-> A retired resource answers **410** naming its replacement (§5 lists all 46). This document stays
-> authoritative only for what is still on the edge: macro, the earnings calendar and history,
-> company news, Wikidata industries, the facets refresh and the observability sample (Phases 6b
-> and 7). The sections on segments and the regulators below describe the edge's design, which the
+> The facets refresh and the observability samples moved to pg_cron jobs (2026-11-21). A retired
+> resource answers **410** naming its replacement (§5 lists all 51). This document stays
+> authoritative only for what is still on the edge: Wikidata industries and the observability
+> resources (Phase 7). The sections on segments and the regulators below describe the edge's design, which the
 > Dagster lanes ported as-is.
 
 > **Changed 2026-08-27:** the scheduler moved out of GitHub Actions into **pg_cron** (§4).
@@ -200,8 +203,8 @@ The app should never join five tables on a phone.
 | **Tiingo** | `api.tiingo.com/tiingo/daily/<sym>/prices` | `TIINGO_TOKEN` | hourly allocation, caps **unique symbols** | corporate actions |
 | **Yahoo search** | `query2.finance.yahoo.com/v1/finance/search` | keyless | — | ISIN → home-market symbol |
 | **Wikidata** `/sparql` | `query.wikidata.org` | keyless (descriptive UA) | concurrency-limited, 60 s query timeout | `security-wikidata-industries` |
-| ↳ **FRED** (through openbb) | `FRED_API_KEY` (already configured) | — | international macro by explicit series id | `macro-indicators` |
-| ↳ **OECD / federal_reserve** (through openbb) | keyless | — | CPI, GDP, unemployment, yield curve, EFFR, SOFR | `macro-indicators` |
+| ↳ **FRED** (through openbb) | `FRED_API_KEY` (already configured) | — | international macro by explicit series id | Dagster `macro_daily` since 2026-11-22 (openbb in-process) |
+| ↳ **OECD / federal_reserve** (through openbb) | keyless | — | CPI, GDP, unemployment, yield curve, EFFR, SOFR | Dagster `macro_daily` since 2026-11-22 (openbb in-process) |
 
 ### Every one of those goes through the cache first (2026-08-25)
 
@@ -421,6 +424,11 @@ list equal to the migrations' `-- RETIRES:` markers. Their handlers are deleted 
 | `security-filing-history` | Dagster SEC filer lane (sec_filing) — read market.security_filing |
 | `security-insider` | Dagster SEC Form 4 lane (sec_form4_trade) — read market.security_insider_summary |
 | `security-eps-history` | unscheduled since 2026-08-28; earnings-history (the nasdaq calendar) writes the same table — read market.security_eps_history |
+| `earnings-calendar` | Dagster earnings lanes (raw_nasdaq_earnings → nasdaq_earnings, yahoo_earnings) — read market.security_next_earnings |
+| `earnings-history` | Dagster earnings lanes (nasdaq_earnings, yahoo_earnings) — read market.security_earnings_history |
+| `security-news` | Dagster news lane (raw_yahoo_news → company_news) — read market.security_news |
+| `macro-indicators` | Dagster macro lane (raw_macro_series → macro_observation) — read market.macro_current |
+| `facets-refresh` | pg_cron muffin-facets runs market.refresh_facets() as postgres, off the 8 s RPC ceiling — read market.security_facets |
 
 ### The resources as they were
 
@@ -1297,7 +1305,10 @@ not a concept. The ISO rows are derived from `market.countries`, so only regions
 hand.
 
 **Add a macro series** (no deploy): a row in `market.macro_indicator` — route, provider, params and
-`unit`. The `macro-indicators` resource drives whatever it finds; there is no list in code.
+`unit`. The Dagster sensor `new_macro_series` adds an enabled row as a partition within a minute,
+and `macro_daily` (07:40 UTC) asks it from then on; there is no list in code. The route must be one
+of `MACRO_ROUTES` in muffin-ingest's `providers/openbb.py`, which refuses an unknown route or
+parameter rather than walking `obb` by name.
 **Drive the id first and check the DATE of the newest observation**, not just that rows come back:
 FRED retires series, and a retired id is indistinguishable from a live one until you ask.
 `unit` holds `percent`, `index`, or a **three-letter currency code** where the value is money —

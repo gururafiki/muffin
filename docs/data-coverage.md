@@ -277,8 +277,10 @@ strangers.
 `market.macro_indicator` is a control table — adding a series is a row, never a migration — with
 `market.macro_observation` and the `macro_current` serving view. **49 series across 14 countries**:
 OECD CPI/GDP/unemployment, federal_reserve yield curve/EFFR/SOFR, FRED 10y yields and unemployment,
-and yfinance gold/WTI/BTC/S&P 500. Driven by `macro-indicators` (6-hour TTL); **2,137 observations**
-on the first production run.
+and yfinance gold/WTI/BTC/S&P 500. Driven by the edge's `macro-indicators` (6-hour TTL) until
+2026-11-22, and since then by the Dagster `macro_daily` lane (07:40 UTC, one partition per enabled
+series, openbb in-process); **2,137 observations** on the edge's first production run, and 2,146 of
+the Dagster lane's first 2,147 points identical to what the edge had stored.
 
 Observations key on **(indicator, date, dimension)** because a yield curve is a term structure —
 flattening it would make the "curve" whichever maturity was written last.

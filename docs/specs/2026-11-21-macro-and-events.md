@@ -314,3 +314,40 @@ Captured on the node, read-only. The bodies are fixtures for step 3. **No decisi
 - **One served point is no longer published:** `us-unemployment` 2026-10-01 (0.039, written
   11-12). Today's OECD answer, edge and in-process alike, ends at 09-01, and the edge's upsert
   cannot retract. **The port retracts within each series' window.**
+
+### Steps 2-4: schema, lanes, cutover (2026-11-21)
+
+**Shipped:**
+- muffin-deployment#531: the schema (new columns, `security_earnings_history`, the next date picked
+  per company, the `yahoo-rss` and `nasdaq` cache locations).
+- muffin-ingest#187 and #188: the news and earnings lanes.
+- muffin-deployment#532: the cutover. The earnings keys carry the provider, `security_news` joins
+  `symbol_security`, and `earnings-calendar`, `earnings-history` and `security-news` answer 410.
+- muffin-ingest#189: news and Yahoo earnings join `yahoo_companies`, and the nasdaq window runs.
+- muffin-ingest#190: the macro lane.
+
+**What the live runs found:**
+- **News** (`rcgqmyup`, five companies): every counter sums, 16-19 articles a company,
+  `news_is_current` passes. The first run pruned 18 articles older than 90 days.
+- **The nasdaq window** (`ppetexuz`, 11-14..12-12): 29 days asked, 21 answered and 8 empty
+  (weekends). It retracted **344** calendar rows, exactly the stale rows the parity found the edge
+  never retracted, and wrote 128 quarters of history.
+- **Anon reads after the cutover:** the news read went from 234-259 ms to 112-152 ms; the next
+  date 55 ms; the earnings history 82 ms.
+- **Macro, read-only parity on production before shipping** (`branch_on_node.sh`, stage 1 for
+  real): 37 of 38 enabled series answered (`jp-cpi` never has), and 2,146 of 2,147 points match
+  the edge's (the other is that day's bitcoin). No inserts. 18 retractions: weekend and Labor Day
+  gold and oil bars that Yahoo no longer returns, some repeating Friday's close.
+- **OECD's newest month can come and go.** `us-unemployment` 2026-10-01 was absent from OECD's
+  answer in the afternoon and present again by 22:00. Retracting within the window therefore makes
+  the newest point disappear on a day OECD omits it and return when it is back. That is honest to
+  the provider. The edge kept a point for ever once it had seen it.
+
+**Design points settled while building:**
+- **Macro raw merges, so an empty answer replaces nothing.** A replacing manager writes its
+  "collected nothing" marker over a partition that got no rows.
+- **A snapshot route retracts only within its own dates.** A 400-day window on the yield curve
+  would delete every earlier curve.
+- **A provider's exception can quote the URL it asked for, and FRED's carries `api_key=`.** Every
+  logged error passes through `openbb.redacted()`, and the test reads the run's whole event log,
+  since a run result's events hold no log lines.

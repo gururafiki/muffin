@@ -4313,8 +4313,8 @@ Decisions (the user):
       - `security_earnings_history`, and `security_next_earnings` picking per company;
       - nginx `nasdaq` and `yahoo-rss` locations.
       The earnings keys gained the provider in the cutover (#532).
-- [~] 3. Library and defs (muffin-ingest): the nasdaq lane and `yahoo_earnings` (#188), the news
-      lane (#187), both rolled 2026-11-21 20:53. **`defs/macro` is not built yet.**
+- [x] 3. Library and defs (muffin-ingest): the nasdaq lane and `yahoo_earnings` (#188), the news
+      lane (#187), both rolled 2026-11-21 20:53; the macro lane (#190), rolled 11-22 10:52.
 - [~] 4. Ship, live tiny subsets, parity; retire the edge resources; schedules on; backfills.
       Done 2026-11-21:
       - news live run `rcgqmyup`: 5 companies, counters summing, 16-19 articles each;
@@ -4330,10 +4330,37 @@ Decisions (the user):
         0). The roll killed one DART run and one nasdaq run; both were re-executed (`d838ec1c`,
         `3b95f56b`).
       Left: read the three backfills; build macro, check parity, retire `macro-indicators`.
-- [ ] 5. Stock page shows recent quarters (muffin-ui).
-- [ ] 6. market-verify `news is current`; Grafana as needed.
+      Done 2026-11-21 22:00 to 11-22 11:00:
+      - **the macro lane (muffin-ingest#190)**: read-only parity 2,146 of 2,147 points identical;
+        live run on gold (276 points, 9 weekend bars retracted); full run 37 of 38 answered
+        (`jp-cpi` empty, as on the edge). The schedule went RUNNING in #191. That roll failed on a
+        containerd layer error at 22:23 (nothing changed) and succeeded on retry at 10:52, so
+        macro's first scheduled tick is 11-23 07:40.
+      - **`macro-indicators` retired (muffin-deployment#533)**, deployed 11-22.
+      - **first scheduled day of news and Yahoo earnings** (`yahoo_companies`, 03:31-04:58, 20
+        runs, all SUCCESS): news 1,979 companies (1,593 answered, 229 empty, 130 unknown symbols,
+        27 not askable, no throttle), 14,510 articles, `news_is_current` passing; Yahoo earnings
+        1,342 dated reports and 5,024 quarters. The first nasdaq window tick (07:11) passed.
+      - **the stock page shows recent quarters (muffin-ui#144)**, deployed 11-21 22:22. Rendered
+        against production for AAPL (nasdaq), SAP.DE and 7203.T (Yahoo).
+      - **That render found a defect**: Yahoo's stale date beside the next quarter's estimate
+        (SAP "Last earnings 21 Oct · Was expected 1.98", against 1.83). muffin-ingest#192 drops the
+        estimate when the date is past on the day Yahoo answered. The replay's queued half (68
+        runs) was cancelled; a full replay follows the roll.
+      Done 2026-11-22 11:12: **#192 rolled**, and the Yahoo earnings replay `brjffoqa` (39 runs,
+      priority 0) was launched over the grid; it queues behind the SEC wave. The three failed
+      `jylxcmbx` runs were all killed by rolls ("interrupted by an image roll") and all three are
+      re-executed (`3b95f56b` SUCCESS, `5cc9b459` and `68d0d707` queued).
+      Left: read `brjffoqa`'s counters (`past_without_estimate`), re-render SAP.DE.
+- [x] 5. Stock page shows recent quarters (muffin-ui#144, deployed 11-21 22:22).
+- [x] 6. market-verify `news is current` (muffin-deployment#534, deployed 11-22 11:29): links
+      published in the last 3 days, floor 100. The dispatched run at 11:30 passed with 1,277.
+      Grafana needs nothing: the Dagster row shows the new jobs and checks by itself.
 - [ ] 7. Delete the handlers after 3 clean days; contract with a drop date.
-- [ ] 8. Docs, skills, memory.
+- [~] 8. Docs, skills, memory. Done 11-22: CLAUDE.md section; `market-refresh-routine`,
+      `market-diagnose`, `market-health`, `muffin-dagster-operations` (muffin-deployment#535);
+      `docs/data-ingestion.md` (header, providers, the retired table now 51), `docs/data-coverage.md`;
+      muffin-ingest README (#193). Left: the contract's columns and views, after step 7.
 
 ### Phases 7-8 — derived and serving, then retirement — not started
 

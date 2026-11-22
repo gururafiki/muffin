@@ -6237,6 +6237,70 @@ muffin-ingest#185; muffin-deployment#526, #527, #529. Records:
   been about as many runs, since Dagster batches only contiguous keys. The whole `grid:sec_filer` is
   ~75 runs of 50, and a filer with nothing due costs ~40 s.
 
+### Phase 6b: earnings, news and macro leave the edge (2026-11-21/22)
+
+muffin-deployment#531-#533, muffin-ingest#187-#192, muffin-ui#144. Record: the Phase 6b spec's
+*Steps as built*.
+
+- **EDGAR LISTS A FILING'S DIRECTORY UNDER ANY CIK AND SERVES ITS DOCUMENTS ONLY UNDER A FILER'S.**
+  `index.json` answered 200 under the security's current CIK and named the instance, while the
+  instance itself answered 404. Checked directly: Supernus's 2021 Q1 instance answers 200 under
+  1356576 and 404 under 1625297; Navient's 2025 Q2 instance answers 200 under 1593538 and 404 under
+  2152623. A company that changes CIK (a merger, a new holding company, a redomicile) therefore has
+  its older filings recorded as "no instance" and stamped at the current parser version, so nothing
+  re-asks. That is "a wrong name is not a missing security", in a new lane. Measured over every
+  filer's newest raw answer: 116 SEC filings unreadable now, 42 of them filed under a predecessor
+  CIK (Navient, Supernus, Real Brokerage), 60 over the 32 MB gate, 14 with no instance listed.
+  `index.json` echoes whatever CIK the path names, so it cannot reveal the right one.
+  [note](docs/deferred/2026-10-04-the-historical-segment-backlog-is-rising.md), step 5.
+- **SEC'S OWN TICKER MAP CAN FILE TWO COMPANIES' TICKERS UNDER ONE CIK, AND THEN IT IS RIGHT.**
+  `company_tickers.json` (11-16) lists SUPN and INDV under 1625297, titled "Supernus, Inc.", and no
+  longer lists 1356576. Of 36 CIKs two securities share, 34 are one company under two lines
+  (share classes, ADR and ordinary) and two are different names: Supernus/Indivior, which follows
+  SEC, and SoftBank Corp./SoftBank Group, where SEC's map files the telco's OTC line under the
+  group. Read SEC's map before calling a shared CIK a defect.
+- **A SERVING VIEW THAT PIVOTS ONE ROW PER MEMBER TAKES `max()` ACROSS METRICS.**
+  `security_segment_current.reconciled_to` is the largest target among a member's metrics, so a
+  negative operating-income total can stand in for a missing revenue one. My first count of
+  "non-positive served splits" read it as revenue's target and reported four that were not. Read a
+  split's target from `security_segment` with `metric_code = 'revenue'`.
+- **YAHOO'S `calendarEvents` PAIRS THE LAST REPORT'S DATE WITH THE NEXT QUARTER'S ESTIMATE.** The
+  date stays until the company sets the next one; `earningsAverage`, `Low`, `High` and
+  `revenueAverage` are always the current, unreported quarter's. SAP's answer of 11-19: date
+  2026-10-21, average 1.98 = `earningsTrend` `0q`, against the October report's own 1.83. Found by
+  rendering the stock page against production ("Last earnings 21 Oct · Was expected 1.98"), not by
+  any test. muffin-ingest#192 drops the estimate when the date is past on the day Yahoo answered,
+  in the exchange's zone. Validation had measured 61% of Yahoo's dates as past at fetch time and
+  drawn the right conclusion for the date ("nasdaq stays the source for US dates"), but never asked
+  what the estimate beside it was for.
+- **RENDER A DATA FEATURE AGAINST PRODUCTION BEFORE CALLING IT DONE, even with every check green.**
+  The smoke's fixture held a consistent date and estimate, so it could not show the mismatch above.
+  The live-data harness (serve `dist/`, proxy `/supabase` to the public host with a User-Agent,
+  write `runtime-config.js` straight from the node) took five minutes.
+- **A PROVIDER'S EXCEPTION CAN QUOTE THE URL IT ASKED FOR, AND FRED PUTS ITS KEY IN THE URL.** The
+  macro lane passes every logged error through `openbb.redacted()`. A test asserting a secret never
+  reaches the logs must read `instance.all_logs(run_id)`: a run result's events hold no log lines,
+  so the first version passed with the redaction deleted.
+- **A SCHEDULE OR SENSOR CONTEXT BUILT WITHOUT `with` BROKE 58 TESTS IN LATER FILES, AGAIN.** Every
+  file passed alone; the full suite failed with "Attempted to resolve undefined DagsterInstance
+  weakref". Recorded on 2026-10-04 and repeated anyway, so it is now in the skill's pitfalls, where
+  test-writing guidance is read.
+- **`EXPLAIN` IN A READ-ONLY TRANSACTION CHECKS A WRITER'S SQL AGAINST THE REAL TABLE.** It plans a
+  DML statement without running it. The macro lane's upsert and windowed retraction were checked
+  that way, beside a parity that counted what stage 2 would write: 2,146 of 2,147 points identical,
+  no inserts, 18 retractions of weekend bars Yahoo no longer returns.
+- **OECD'S NEWEST MONTH CAN COME AND GO.** `us-unemployment` 2026-10-01 was absent from OECD's
+  answer in the afternoon and present again by 22:00. The macro lane retracts within each answer's
+  window, so that point now disappears on a day OECD omits it. The edge kept a point for ever once
+  it had seen it.
+- **A CONTAINERD LAYER CAN FAIL TO EXTRACT WITH THE DISK HALF EMPTY.** The roll's pull died with
+  `failed to Lchown … no such file or directory` at 54 GB free; the roll refused rather than keep
+  the old image, and a retry the next morning succeeded. This file already says a pull failure must
+  never be silent; it held.
+- **A RETRIED RUN QUEUES BEHIND EVERYTHING ALREADY QUEUED AT ITS PRIORITY.** A re-execution of a
+  roll-killed CNINFO run, created at 22:06, waited 13 hours behind two backfills whose runs were
+  created at 21:26. That is creation order, not a stuck queue.
+
 ## Running an OpenSandbox server locally
 
 - **`docker run -d -p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock opensandbox/server:latest`.**
