@@ -4211,6 +4211,16 @@ Measured 2026-11-09: SEC segment runs fail 17% on `pending_segments` timeouts, a
       - [x] **2026-11-23: market-verify failed at 13:26** on `security_filing: HTTP 500 57014`:
             the segment guard filtered 1.24 M filings by accession alone, no index leading on it.
             muffin-deployment#540 asks through the primary key (exit 0 in 15 s on production).
+      - [ ] **2026-11-23: the coverage sample ran past its 300 s bound at 17:23 on 11-22 and 11-23**
+            (mornings 136, 149, 183 s), and the cron-headroom alert fired 144 times in 24 h. Its
+            presence flags are index-only scans, and the update-heavy tables' visibility maps were
+            stale: `security_filing` made 610,736 heap fetches in 1.24 M rows (9.4 s warm, 122.8 s
+            cold); after a hand VACUUM (11 s), 71 heap fetches and 0.26 s. A rewrite to per-security
+            probes was tried and measured slower (>475 s against 308 s), so it was dropped.
+            **muffin-deployment branch `update-heavy-tables-stay-visible`:** 2% autovacuum
+            thresholds on `security_filing`, `security_metric` (1.34 M dead, 35% all-visible),
+            `security_segment`, `security_statement`, `fiscal_period`. Then read `muffin-coverage`,
+            `muffin-universe` (244 s) and `muffin-segment-spine` (242 s) for a few days.
 - [ ] 6. NSE: grid from `security_nse_filer`; retire `in-filings`.
       Built: muffin-ingest#182 (rolled 2026-11-16 12:27) and muffin-deployment#519 (deployed
       11:35–11:47: `in-filings` 410; NSE's API moved to `www.nseindia.in`; the edge's 440
