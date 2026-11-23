@@ -4127,8 +4127,9 @@ Measured 2026-11-09: SEC segment runs fail 17% on `pending_segments` timeouts, a
       - [x] **Pass 5 `zrndydmg`** (2026-11-22 11:00 to 19:58, priority −1): 87 of 88 SUCCESS (the
             failed run re-executed); 4,627 read, 1,221 with no table, 44 too large; **885 reports
             and 20 searches unasked**, 1 search refused.
-      - [ ] **Pass 6 `pjbieqdr`** (2026-11-22 ~22:45 UTC, priority −1, the new reader): 5,388
-            reports behind the parser and 8,340 full reports never read. Check-in 2026-11-23 10:17 CET.
+      - [x] **Pass 6 `pjbieqdr`** (2026-11-22 ~22:45 UTC to 11-23, priority −1, the new reader):
+            87 runs SUCCESS. 5,388 reports had been behind the parser and 8,340 full reports never
+            read.
       - [ ] **2026-11-22: the 22 fused-name reports, read correctly** ([the note](docs/deferred/2026-11-22-some-cninfo-tables-read-the-prior-year-as-revenue.md),
             the user's decision): muffin-ingest#196 (five reader rules, gated on 782 held reports:
             the 22 fixed, 8 golden gains, 0 losses after the prose rule was unified) and
@@ -4153,12 +4154,16 @@ Measured 2026-11-09: SEC segment runs fail 17% on `pending_segments` timeouts, a
             - [x] Classified 55 old reports: FY2010-2014 are mostly one combined
                   `分行业、产品` table (16 of 31) or a table per axis (8), and FY2006 and earlier
                   vary too much to read.
-            - [ ] **muffin-ingest#199 (draft):** reads the older forms only when the current ones give
-                  nothing, plus the history walk (`history_pages`). 16 of 16 local old reports read.
-                  The gate over the node's 837 PDFs is running.
-            - [ ] **Then:** merge and roll. A one-shot migration re-queues the CNINFO full reports
-                  read into no rows, and repairs [the wrong-year reports](docs/deferred/2026-11-23-cninfo-reports-filed-under-the-wrong-year.md)
-                  (234 found). Run the history backfill with `history_pages: 3`.
+            - [x] **muffin-ingest#199:** reads the older forms only when the current ones give
+                  nothing, plus the history walk (`history_pages`). Gated over the node's 837 PDFs:
+                  no losses, no value changed. Merged and **rolled 2026-11-23 19:54 UTC** with #197.
+            - [ ] **muffin-deployment#539** (merged 20:07, deploying): deletes the misdated reports'
+                  rows and re-queues them, their companies' other full reports and every full
+                  report read into no rows. Dry run on production: 3,332 rows deleted; 236 + 1,623
+                  + 4,672 re-queued (6,924 queued over 1,645 securities). Guard proven by 8
+                  mutations on the node. **Then:** drain by backfill over `grid:cninfo_filer`, with
+                  `history_pages: 3` so the same pass walks the older search pages; re-run the lag
+                  query from [the wrong-year note](docs/deferred/2026-11-23-cninfo-reports-filed-under-the-wrong-year.md).
             - [ ] **2026-11-23: [some CNINFO tables state yuan over figures in ten thousands](docs/deferred/2026-11-23-some-cninfo-tables-state-yuan-over-figures-in-ten-thousands.md).**
                   25 reports' splits are stored at 1/10,000: the filer's own unit line is wrong
                   (航天长峰 FY2025). Neither reader fixes them. A decision for the user: check the
@@ -4190,10 +4195,18 @@ Measured 2026-11-09: SEC segment runs fail 17% on `pending_segments` timeouts, a
             `dart_filers_floor`'s dry run asks 24 runs a day, i.e. the whole grid, because stage 1
             has no age check. **Decided 2026-11-23 (option 1): stage 1 skips a list younger than
             29 days.** Built in muffin-ingest#197, which declares `dart_filers_floor` and
-            `dart_corp_codes` RUNNING. Roll it, then verify the first 08:05 UTC floor tick: its runs
-            should read `list_fresh` for nearly every filer and ask DART for almost nothing.
+            `dart_corp_codes` RUNNING. **Rolled 2026-11-23 19:54 UTC**; GraphQL reads both RUNNING
+            and `cninfo_filers_floor` STOPPED. Verify the first 08:05 UTC floor tick (11-24): its
+            runs should read `list_fresh` for nearly every filer and ask DART for almost nothing.
       - [x] **Rotating DART's API key: decided 2026-11-23, leave it** (the user). It sat in
             http-cache's access log from 2026-09-05 until #518, which now redacts it.
+      - [ ] **2026-11-23: [some DART splits carry a wrong reconciliation target](docs/deferred/2026-11-23-some-dart-splits-carry-a-wrong-reconciliation-target.md).**
+            Five FY2025 Korean splits exceed `reconciled_to` by up to 16× (HL Mando: 9.45 T won of
+            regions against a stored 1.02 T). The splits read right; the target is wrong. Inside
+            the guard's tripwire (0.98% of 817 served). Investigate on HL Mando's instance.
+      - [x] **2026-11-23: market-verify failed at 13:26** on `security_filing: HTTP 500 57014`:
+            the segment guard filtered 1.24 M filings by accession alone, no index leading on it.
+            muffin-deployment#540 asks through the primary key (exit 0 in 15 s on production).
 - [ ] 6. NSE: grid from `security_nse_filer`; retire `in-filings`.
       Built: muffin-ingest#182 (rolled 2026-11-16 12:27) and muffin-deployment#519 (deployed
       11:35–11:47: `in-filings` 410; NSE's API moved to `www.nseindia.in`; the edge's 440
