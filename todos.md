@@ -4157,13 +4157,16 @@ Measured 2026-11-09: SEC segment runs fail 17% on `pending_segments` timeouts, a
             - [x] **muffin-ingest#199:** reads the older forms only when the current ones give
                   nothing, plus the history walk (`history_pages`). Gated over the node's 837 PDFs:
                   no losses, no value changed. Merged and **rolled 2026-11-23 19:54 UTC** with #197.
-            - [ ] **muffin-deployment#539** (merged 20:07, deploying): deletes the misdated reports'
+            - [ ] **muffin-deployment#539** (merged 20:07, **deployed 20:3x**, the one-shot recorded
+                  exactly the dry run's counts): deletes the misdated reports'
                   rows and re-queues them, their companies' other full reports and every full
                   report read into no rows. Dry run on production: 3,332 rows deleted; 236 + 1,623
                   + 4,672 re-queued (6,924 queued over 1,645 securities). Guard proven by 8
                   mutations on the node. **Then:** drain by backfill over `grid:cninfo_filer`, with
                   `history_pages: 3` so the same pass walks the older search pages; re-run the lag
                   query from [the wrong-year note](docs/deferred/2026-11-23-cninfo-reports-filed-under-the-wrong-year.md).
+                  **Pass 7 `pinzrvsc`** launched 2026-11-23 ~20:35 UTC over the 2,173-filer grid,
+                  priority −1, `history_pages: 3`. Read its history counters and the lag query after.
             - [ ] **2026-11-23: [some CNINFO tables state yuan over figures in ten thousands](docs/deferred/2026-11-23-some-cninfo-tables-state-yuan-over-figures-in-ten-thousands.md).**
                   25 reports' splits are stored at 1/10,000: the filer's own unit line is wrong
                   (航天长峰 FY2025). Neither reader fixes them. A decision for the user: check the
