@@ -4159,6 +4159,10 @@ Measured 2026-11-09: SEC segment runs fail 17% on `pending_segments` timeouts, a
             - [ ] **Then:** merge and roll. A one-shot migration re-queues the CNINFO full reports
                   read into no rows, and repairs [the wrong-year reports](docs/deferred/2026-11-23-cninfo-reports-filed-under-the-wrong-year.md)
                   (234 found). Run the history backfill with `history_pages: 3`.
+            - [ ] **2026-11-23: [some CNINFO tables state yuan over figures in ten thousands](docs/deferred/2026-11-23-some-cninfo-tables-state-yuan-over-figures-in-ten-thousands.md).**
+                  25 reports' splits are stored at 1/10,000: the filer's own unit line is wrong
+                  (航天长峰 FY2025). Neither reader fixes them. A decision for the user: check the
+                  split against the company's revenue (recommended), refuse it, or leave it.
 - [ ] 5. DART: corp-code registry, grid, `crtfc_key` redacted from raw; retire `kr-filings`.
       Built: muffin-ingest#181 (rolled 2026-11-16 10:30) and muffin-deployment#518 (retire
       `kr-filings`; DART's key redacted from http-cache's access log, where 781 lines in 48 hours
