@@ -4169,8 +4169,9 @@ Measured 2026-11-09: SEC segment runs fail 17% on `pending_segments` timeouts, a
                   priority −1, `history_pages: 3`. Read its history counters and the lag query after.
             - [ ] **2026-11-23: [some CNINFO tables state yuan over figures in ten thousands](docs/deferred/2026-11-23-some-cninfo-tables-state-yuan-over-figures-in-ten-thousands.md).**
                   25 reports' splits are stored at 1/10,000: the filer's own unit line is wrong
-                  (航天长峰 FY2025). Neither reader fixes them. A decision for the user: check the
-                  split against the company's revenue (recommended), refuse it, or leave it.
+                  (航天长峰 FY2025). Neither reader fixes them. **Decided 2026-11-23 (the user):
+                  check the split against the company's revenue**; read the table as 万元 when its
+                  total × 10,000 is within ~1% of that year's revenue, then re-queue the 25.
 - [ ] 5. DART: corp-code registry, grid, `crtfc_key` redacted from raw; retire `kr-filings`.
       Built: muffin-ingest#181 (rolled 2026-11-16 10:30) and muffin-deployment#518 (retire
       `kr-filings`; DART's key redacted from http-cache's access log, where 781 lines in 48 hours
