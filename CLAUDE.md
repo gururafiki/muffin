@@ -6394,6 +6394,47 @@ muffin-ingest#197, decided by the user 2026-11-23.
   (2008). Before walking any regulator's history, read a few of its oldest documents with the
   current reader. ([note](docs/deferred/2026-11-15-cninfo-reads-only-the-newest-search-page.md))
 
+### China's older reports, and a year read from the wrong line (2026-11-23)
+
+muffin-ingest#199 (rolled 19:54 UTC), muffin-deployment#539 and #540.
+
+- **A KEY WITHOUT THE ACCESSION LETS A MISDATED REPORT OVERWRITE A REAL YEAR, AND A RE-READ CANNOT
+  UNDO IT.** The CNINFO reader dated a report by the first year it found before `年度报告`. It
+  missed covers that letter-space the title (`2010 年 年 度 报 告`) or write the year in Chinese
+  numerals (`二零二五年年度报告`, with `〇`, `○` or `零` for zero), and then took a later mention of
+  last year's report. 234 reports were filed two or more years early (紫光股份's FY2025 as FY2024).
+  `security_segment` omits the accession, so each one overwrote its company's real rows for that
+  year. The writer never overwrites a key a newer filing holds (`_held_by_newer`), so the real
+  report, re-read first, would find its keys held and be marked read with its rows gone. The repair
+  deletes the misdated rows **before** the re-queue, which is what their own re-read would retract,
+  and makes the drain's order irrelevant. Dry run on production: 3,332 rows deleted, 6,924 reports
+  re-queued over 1,645 securities.
+- **A FIXTURE'S "CORRECT" ROW MUST BE CORRECT BY THE RULE UNDER TEST.** The repair's first replay
+  failed clean: the sibling meant to be a correct report was filed in 2024 with rows at 2022, a lag
+  of two, so the repair rightly treated it as misdated. The first mutation run read CAUGHT for that
+  reason. This file already says "read the clean run before any mutation result"; it caught this.
+- **A CLAUSE THE FIXTURE NEVER NEEDS IS A CLAUSE NO MUTATION CAN TEST.** The selection's source
+  filter survived its mutation because the later clauses covered for it. The case where it matters
+  is a company with an SEC filing whose comparative-year rows lag two years beside a correct CNINFO
+  report: without the filter, that report is re-queued as a sibling. Adding that company made the
+  filter load-bearing (8 of 8 caught).
+- **A GUARD THAT FILTERS ON A NON-LEADING KEY COLUMN BECOMES A FULL SCAN AS THE TABLE GROWS.**
+  `check_segments_reconcile.py` read parser versions with `security_filing?accession_number=in.(…)`.
+  No index leads on the accession, so at 1,240,755 rows (the SEC CIK grid) one chunk of 60 took
+  7.2 s cold, and market-verify failed at 13:26 on `57014`. The rows the guard holds carry
+  `security_id`, so it now asks through the primary key: exit 0 in 15 s. Fourth form of "a guard's
+  read must be cheap by construction", after offset paging (10-29), `order=fetched_at` (11-03) and
+  the sample walk by recency. Its sample walk (`order=as_of.desc` with offset over 2.2 M segment
+  rows, 262 ms a page warm) is the next candidate.
+- **A FILER'S OWN UNIT LINE CAN BE WRONG, AND THE TABLE ALONE CANNOT SAY SO.** 航天长峰 heads a
+  table `单位：元` over figures its own text states in 万元, so 25 splits are stored at 1/10,000. A
+  rule over the table cannot separate that from a small company; only the company's revenue can
+  ([note](docs/deferred/2026-11-23-some-cninfo-tables-state-yuan-over-figures-in-ten-thousands.md)).
+- **A SPLIT CAN BE RIGHT WHILE ITS STORED TARGET IS WRONG, NOW IN DART TOO.** Re-running the guard
+  found five FY2025 Korean splits over their `reconciled_to` by up to 16×: HL Mando's regions sum to
+  9.45 T won, its revenue, against a stored 1.02 T. That is GE Vernova's shape (recorded above) in a
+  second regulator ([note](docs/deferred/2026-11-23-some-dart-splits-carry-a-wrong-reconciliation-target.md)).
+
 ## Running an OpenSandbox server locally
 
 - **`docker run -d -p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock opensandbox/server:latest`.**
