@@ -4149,8 +4149,16 @@ Measured 2026-11-09: SEC segment runs fail 17% on `pending_segments` timeouts, a
             **measured 2026-11-23.** Page 2 holds ~8 full reports a filer (162 over 20 filers,
             2003-2019; ~11,500 across the 1,418 filers with more than page 1). The current reader
             reads 0 of 5 of them: they state the split in older table forms. **Decided 2026-11-23
-            (the user): build the older readers, gated, then walk page 2 once per filer.** Started
-            the same day: classify the layouts first.
+            (the user): build the older readers, gated, then walk page 2 once per filer.**
+            - [x] Classified 55 old reports: FY2010-2014 are mostly one combined
+                  `分行业、产品` table (16 of 31) or a table per axis (8), and FY2006 and earlier
+                  vary too much to read.
+            - [ ] **muffin-ingest#199 (draft):** reads the older forms only when the current ones give
+                  nothing, plus the history walk (`history_pages`). 16 of 16 local old reports read.
+                  The gate over the node's 837 PDFs is running.
+            - [ ] **Then:** merge and roll. A one-shot migration re-queues the CNINFO full reports
+                  read into no rows, and repairs [the wrong-year reports](docs/deferred/2026-11-23-cninfo-reports-filed-under-the-wrong-year.md)
+                  (234 found). Run the history backfill with `history_pages: 3`.
 - [ ] 5. DART: corp-code registry, grid, `crtfc_key` redacted from raw; retire `kr-filings`.
       Built: muffin-ingest#181 (rolled 2026-11-16 10:30) and muffin-deployment#518 (retire
       `kr-filings`; DART's key redacted from http-cache's access log, where 781 lines in 48 hours
