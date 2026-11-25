@@ -6439,8 +6439,8 @@ muffin-ingest#199 (rolled 19:54 UTC), muffin-deployment#539 and #540.
 
 ### Phase 6b's contract, and two more ways a cover misdates a report (2026-11-25)
 
-muffin-deployment#541 and #542 (deployed 11:33), muffin-ingest#200 (rolled 10:47) and #201,
-muffin-deployment#543.
+muffin-deployment#541 and #542 (deployed 11:33), muffin-ingest#200 (rolled 10:47), #201 (21:35)
+and #202 (22:38), muffin-deployment#543, #544 and #545.
 
 - **A FALLING ANSWER RATE THROUGH A ROTATION CAN BE THE POPULATION, NOT THE PROVIDER.** Over the
   company rotation's first four days, the share of companies answered fell from 80% (11-22) to 27%
@@ -6465,6 +6465,13 @@ muffin-deployment#543.
   pages, made 67 reports hold a placed revenue split under 10 m yuan, 42 of them FY2007-2011.
   #200's check against stored revenue rescales such a split once the year is right, and #201
   reads the unit as printed.
+- **A SERIES THAT NEVER ANSWERS IS NOT NECESSARILY A RETIRED ID: READ THE CATALOGUE ROW.** I
+  wrote "the retired FRED id" about `jp-cpi` for four days. The row asks OECD's `economy/cpi`, and
+  OECD's Japan series ends at 2021-06 while other countries are current. BIS's `WS_LONG_CPI` fills
+  it (muffin-ingest#202, muffin-deployment#545): keyless, monthly, equal to OECD's change for
+  Germany, Korea and the US to six decimals, in percent. **BIS states an absence as a 404 carrying
+  SDMX error code 100**, for an unknown country, an unknown unit and a window past the newest month
+  alike.
 - **A STALE VISIBILITY MAP MAKES AN INDEX-ONLY SCAN READ THE HEAP.** `muffin-coverage` passed its
   300 s bound on two evenings. Its presence flags are index-only scans over update-heavy tables,
   and `security_filing` made 610,736 heap fetches in 1.24 M rows: 122.8 s cold. After a hand

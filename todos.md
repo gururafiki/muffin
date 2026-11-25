@@ -4380,7 +4380,7 @@ is handled is in the spec's *Notes inherited from earlier phases*.
 - Every phase: scheduled check-ins live only in the session that made them, so recreate them from
   the dated lines above when a new session starts.
 
-### Phase 6b — macro and events — PLANNED 2026-11-21, DONE 2026-11-25 except the `jp-cpi` decision
+### Phase 6b — macro and events — PLANNED 2026-11-21, DONE 2026-11-25
 
 Spec: [docs/specs/2026-11-21-macro-and-events.md](docs/specs/2026-11-21-macro-and-events.md).
 
@@ -4479,12 +4479,19 @@ Decisions (the user):
       rolled back). **Deployed 2026-11-25 11:33** (with #541): `20261125100000` applied; the four
       objects gone; `earnings-calendar`, `earnings-history`, `security-news` and
       `macro-indicators` answer 410; the Dagster containers kept their 10:46 start.
+- [x] **jp-cpi from BIS (2026-11-25).** Decided (the user): find a monthly source, then BIS for
+      Japan only. OECD's Japan CPI ends at 2021-06 and FRED's monthly ones are empty after 2023;
+      BIS's `WS_LONG_CPI` is keyless and current to 2026-09, and equals OECD for DE, KR and US to six
+      decimals. muffin-ingest#202 (rolled 22:38) and muffin-deployment#545 (deployed 22:52, `/bis/`
+      location, the row moved). Live run `rbjovovf`: answered 1, 12 points, `macro_current` serves
+      2.097902% for 2026-09. **Read 11-26 07:40's `macro_daily`: `macro_series_fresh` should pass on
+      38 of 38.** The roll killed pass 8's `1e7a6aba`, re-executed as `f9aed7d5`.
 - [x] 8. Docs, skills, memory. Done 11-22: CLAUDE.md section; `market-refresh-routine`,
       `market-diagnose`, `market-health`, `muffin-dagster-operations` (muffin-deployment#535);
       `docs/data-ingestion.md` (header, providers, the retired table now 51), `docs/data-coverage.md`;
       muffin-ingest README (#193). Done 11-25: `market-health` on `pending_news` (in #542), the
       unclassified-backlogs paragraph of `docs/data-ingestion.md`, the spec's step 7, CLAUDE.md.
-      **Phase 6b is done** except one decision, `jp-cpi` (step 7).
+      **Phase 6b is done.** `jp-cpi` resolved the same day (below).
 
 ### Phases 7-8 — derived and serving, then retirement — not started
 

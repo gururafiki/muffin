@@ -380,7 +380,8 @@ Captured on the node, read-only. The bodies are fixtures for step 3. **No decisi
     as first written here: it is OECD's `economy/cpi` for Japan, which ends at 2021-06 (measured 2026-11-25: Germany, Korea and the UK
     answer to 2026-09/10 in the same call; FRED's Japanese monthly CPI series are empty after 2023, and
     its only current one, the World Bank's annual figure, ends at 2025). A check that fails for a known reason is one nobody reads: the series
-    is to be replaced or disabled (a decision for the user).
+    is to be replaced or disabled (a decision for the user). **Decided 2026-11-25: find a monthly
+    source, then BIS for Japan only** (see *jp-cpi from BIS* below).
   - **A `PLANNED` asset-check execution per partition** remains for every range run of the
     nasdaq window (29 a run), beside the one evaluation Dagster records. That is how Dagster 1.13
     plans a check over a partition range, not a check that never ran.
@@ -397,3 +398,40 @@ Captured on the node, read-only. The bodies are fixtures for step 3. **No decisi
 
   The six backlogs that never had a `backlog_negative_cache` row have all left with their
   resources. The four `pending_%` views that remain all have one.
+
+## jp-cpi from BIS (2026-11-25)
+
+The user chose to find a monthly source over disabling the series or using a yearly one, then BIS
+for Japan only. muffin-ingest#202 (rolled 22:38) and muffin-deployment#545.
+
+- **Where a current Japanese CPI exists, measured 2026-11-25:**
+  - OECD's `economy/cpi` for Japan ends at 2021-06;
+  - FRED's monthly series (`CPALTT01JPM659N`, `JPNCPIALLMINMEI`, `CPGRLE01JPM659N`,
+    `JPNCPICORMINMEI`, `CPALCY01JPM661N`) are empty after 2023, and its only current one is the World
+    Bank's annual `FPCPITOTLZGJPN` (2025: 3.17%);
+  - OECD's own SDMX dataflow `DF_PRICES_ALL` answers `NoRecordsFound` for Japan monthly;
+  - the production image carries no IMF provider for openbb;
+  - **BIS's `WS_LONG_CPI` carries Japan monthly to 2026-09 (2.097902), keyless**, one GET per series in
+    ~0.12 s.
+- **BIS measures what OECD measures.** For Germany, Korea and the US its year-on-year change equals
+  OECD's to six decimals (DE 2026-09: 3.262643 against 0.03262643), stated in percent rather than a
+  fraction. The UK differs (3.45 against OECD's rounded 3.6), which is one reason BIS is not a second
+  source for every country.
+- **BIS states an absence as HTTP 404 carrying SDMX error code 100**, "No data for data query", for
+  an unknown country, an unknown unit and a window past the newest month alike. `providers.bis.fetch`
+  returns `None` for it, and any other non-200 is a refusal. A 404 is never cached, so it is asked
+  again.
+- **Shape:**
+  - stage 1 stores BIS's CSV answer whole as one document row in `raw_macro_series`;
+  - stage 2 (`facets.macro.sdmx_csv_rows`) reads each period as its first day and applies
+    `UNIT_MULT`;
+  - the catalogue row names BIS's path with the dataflow in it (`/api/v1/data/WS_LONG_CPI`) and
+    `params {"key": "M.JP.771"}`, which `bis.series_key` checks before asking;
+  - `value_is_fraction = false`: left as a fraction, `macro_current` would serve 2.10% as 209.79%,
+    which the guard `japan-s-cpi-is-asked-of-bis-in-percent.sql` refuses.
+- **Verified before shipping:**
+  - five ingest mutations caught;
+  - three schema mutations caught on the node replay;
+  - the branch's provider driven against the real endpoint from the production image (12 points);
+  - `openresty -t` on the rendered config, unchanged, edited and broken.
+
