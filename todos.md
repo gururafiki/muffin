@@ -4168,6 +4168,15 @@ Measured 2026-11-09: SEC segment runs fail 17% on `pending_segments` timeouts, a
                   query from [the wrong-year note](docs/deferred/2026-11-23-cninfo-reports-filed-under-the-wrong-year.md).
                   **Pass 7 `pinzrvsc`** launched 2026-11-23 ~20:35 UTC over the 2,173-filer grid,
                   priority −1, `history_pages: 3`. Read its history counters and the lag query after.
+                  **Read 2026-11-25:** 87 of 87 runs SUCCESS (11-23 20:32 to 11-24 10:27, ~5 min a
+                  run). A range run carries one metadata dict on its 25 partitions, so its sums are
+                  25×; per pass: ~1,836 history pages answered, 138 unasked, 7 refused; ~6,490
+                  reports fetched (~19 GB), ~10,200 unasked by the byte budget, 22 too large.
+                  **Behind the parser now: 25,240 annual reports over 1,804 filers** (23,521 never
+                  read, 21,484 of them FY2000-2019 from the history walk; 1,719 re-queued and not
+                  yet fetched). At ~6,500 a pass that is about four more passes (~14 h each, on the
+                  `cninfo` pool at priority −1). http-cache keeps the PDFs (365 d) inside its 40 GB
+                  cap; raw keeps ≤5 GB (read reports are pruned every 15 min).
             - [ ] **2026-11-23: [some CNINFO tables state yuan over figures in ten thousands](docs/deferred/2026-11-23-some-cninfo-tables-state-yuan-over-figures-in-ten-thousands.md).**
                   25 reports' splits are stored at 1/10,000: the filer's own unit line is wrong
                   (航天长峰 FY2025). Neither reader fixes them. **Decided 2026-11-23 (the user):
@@ -4445,7 +4454,10 @@ Decisions (the user):
       alert from these lanes. The share of companies answered falls through the rotation (news
       80% -> 27%, dated 68% -> 13%, 11-22 -> 11-25): those days walk the grid's tail, 3-11% US and
       newly promoted, whose stored news and calendar shares match. `macro_series_fresh` (WARN)
-      fails daily on `jp-cpi` alone, the retired FRED id (37 of 38), a gate nobody can act on:
+      fails daily on `jp-cpi` alone (37 of 38), a gate nobody can act on. It is NOT a retired FRED
+      id, as first written here: it is OECD's `economy/cpi` for Japan, which ends at 2021-06 (measured 2026-11-25: Germany, Korea and the UK
+      answer to 2026-09/10 in the same call; FRED's Japanese monthly CPI series are empty after 2023, and
+      its only current one, the World Bank's annual figure, ends at 2025):
       **for the user, replace the series or disable it.** **muffin-deployment#542** deletes the
       four handlers and drops `pending_news`, `security_earnings_surprise`,
       `earnings_history_cursor`, `security.news_fetched_at` (replay clean, production dry run

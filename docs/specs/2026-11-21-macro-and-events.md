@@ -67,7 +67,7 @@ success:
 
 | Resource | Runs / 14 d | Failed | Avg | Note |
 |---|---|---|---|---|
-| macro-indicators | 723 (671 skipped by TTL) | 0 | 34.9 s | 37 of 38 answered; `jp-cpi` "no data" (retired FRED id) |
+| macro-indicators | 723 (671 skipped by TTL) | 0 | 34.9 s | 37 of 38 answered; `jp-cpi` "no data" (OECD's Japan CPI ends at 2021-06) |
 | earnings-calendar | 724 (653 skipped) | 0 | 0.7 s | 781 rows fetched, 312 matched to tracked companies |
 | earnings-history | 723 | 0 | 0.2 s | stalled at 2016-06-30 (`failed: 1`, `ok`) |
 | security-news | 723 | 0 | 1.7 s | articles stopped 10-01; `pending_news` reads 0 |
@@ -376,8 +376,10 @@ Captured on the node, read-only. The bodies are fixtures for step 3. **No decisi
     The 11-24 and 11-25 slices walk the grid's tail (positions 9,026-13,125 of 14,348): 3-11% US
     and newly promoted listings, whose stored news and calendar shares (21%, 12-15%) match the
     answer rates. Throttling would show as refusals, and there were 2-3 a day.
-  - **`macro_series_fresh` (WARN) fails every day on `jp-cpi` alone**, the retired FRED id the
-    parity already named. A check that fails for a known reason is one nobody reads: the series
+  - **`macro_series_fresh` (WARN) fails every day on `jp-cpi` alone.** It is not a retired FRED id,
+    as first written here: it is OECD's `economy/cpi` for Japan, which ends at 2021-06 (measured 2026-11-25: Germany, Korea and the UK
+    answer to 2026-09/10 in the same call; FRED's Japanese monthly CPI series are empty after 2023, and
+    its only current one, the World Bank's annual figure, ends at 2025). A check that fails for a known reason is one nobody reads: the series
     is to be replaced or disabled (a decision for the user).
   - **A `PLANNED` asset-check execution per partition** remains for every range run of the
     nasdaq window (29 a run), beside the one evaluation Dagster records. That is how Dagster 1.13
