@@ -6425,7 +6425,9 @@ muffin-ingest#199 (rolled 19:54 UTC), muffin-deployment#539 and #540.
   `security_id`, so it now asks through the primary key: exit 0 in 15 s. Fourth form of "a guard's
   read must be cheap by construction", after offset paging (10-29), `order=fetched_at` (11-03) and
   the sample walk by recency. Its sample walk (`order=as_of.desc` with offset over 2.2 M segment
-  rows, 262 ms a page warm) is the next candidate.
+  rows, 262 ms a page warm) was the next candidate, and failed market-verify on 11-24. Since
+  muffin-deployment#544 (11-25) each regulator's sample is drawn from `security_filer` on a daily
+  rotation and kept to securities the segment spine holds: ~10 s for the whole guard.
 - **A FILER'S OWN UNIT LINE CAN BE WRONG, AND THE TABLE ALONE CANNOT SAY SO.** 航天长峰 heads a
   table `单位：元` over figures its own text states in 万元, so 25 splits are stored at 1/10,000. A
   rule over the table cannot separate that from a small company; only the company's revenue can

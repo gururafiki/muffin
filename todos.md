@@ -4177,11 +4177,22 @@ Measured 2026-11-09: SEC segment runs fail 17% on `pending_segments` timeouts, a
                   yet fetched). At ~6,500 a pass that is about four more passes (~14 h each, on the
                   `cninfo` pool at priority −1). http-cache keeps the PDFs (365 d) inside its 40 GB
                   cap; raw keeps ≤5 GB (read reports are pruned every 15 min).
+                  **Pass 8 `pxnppftu`** launched 2026-11-25 21:48 UTC, same shape as pass 7, after
+                  muffin-ingest#201 rolled (21:35) and muffin-deployment#543 re-queued 67 + 11
+                  (21:44, as the dry run). The night under pass 7 matched one without it (prices
+                  ended 02:28 against 02:30).
             - [ ] **2026-11-23: [some CNINFO tables state yuan over figures in ten thousands](docs/deferred/2026-11-23-some-cninfo-tables-state-yuan-over-figures-in-ten-thousands.md).**
                   25 reports' splits are stored at 1/10,000: the filer's own unit line is wrong
                   (航天长峰 FY2025). Neither reader fixes them. **Decided 2026-11-23 (the user):
                   check the split against the company's revenue**; read the table as 万元 when its
                   total × 10,000 is within ~1% of that year's revenue, then re-queue the 25.
+                  **Built:** muffin-ingest#200 (rolled 11-25 10:47) rescales a split by 10,000 or
+                  1,000 when that lands it inside 0.3-1.2× the company's stored annual revenue;
+                  #201 (rolled 21:35) reads `单位（万元）` without a colon and dates a cover whose
+                  stock code runs into its year (`0020532010`) by the last plausible year.
+                  muffin-deployment#543 (deployed 21:44) re-queued 67 reports with a split under
+                  10 m yuan and 11 dated after their publication. Pass 8 re-reads them; then
+                  re-run the tiny-split and lag queries.
 - [ ] 5. DART: corp-code registry, grid, `crtfc_key` redacted from raw; retire `kr-filings`.
       Built: muffin-ingest#181 (rolled 2026-11-16 10:30) and muffin-deployment#518 (retire
       `kr-filings`; DART's key redacted from http-cache's access log, where 781 lines in 48 hours
@@ -4235,6 +4246,10 @@ Measured 2026-11-09: SEC segment runs fail 17% on `pending_segments` timeouts, a
             four of the five within minutes (`security_segment` 11:17, `security_filing` and
             `security_statement` 11:19, `security_metric` 11:22; `fiscal_period` last on 11-24).
             Read the 17:23 coverage run and the next two days' `cron.job_run_details`.
+            **Read 2026-11-25 21:40:** the 17:23 run took **61 s** (the two evenings before hit the
+            300 s bound); 05:23 had taken 196 s, before the deploy. `muffin-cron-headroom` stopped
+            firing at 19:xx, when the 11-24 failure left its 24 h window. The spine's slowest run
+            in 24 h is 199 s of 300, just under the alert's two-thirds: watch it.
 - [ ] 6. NSE: grid from `security_nse_filer`; retire `in-filings`.
       Built: muffin-ingest#182 (rolled 2026-11-16 12:27) and muffin-deployment#519 (deployed
       11:35–11:47: `in-filings` 410; NSE's API moved to `www.nseindia.in`; the edge's 440
