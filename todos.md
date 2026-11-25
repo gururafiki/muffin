@@ -4433,8 +4433,18 @@ Decisions (the user):
 - [x] 6. market-verify `news is current` (muffin-deployment#534, deployed 11-22 11:29): links
       published in the last 3 days, floor 100. The dispatched run at 11:30 passed with 1,277.
       Grafana needs nothing: the Dagster row shows the new jobs and checks by itself.
-- [ ] 7. Delete the handlers after 3 clean days; contract with a drop date. Readiness check-in
-      2026-11-25 09:07 UTC (macro's first scheduled tick is 11-23, so 11-25 is its third day).
+- [ ] 7. Delete the handlers after 3 clean days; contract with a drop date. **Readiness read
+      2026-11-25: clean.** Every `yahoo_companies` (82), `nasdaq_earnings_window` (4) and
+      `macro_daily` (3) run since 11-22 SUCCESS; news and earnings counters sum every day;
+      `news_is_current` and `nasdaq_window_is_current` pass; market-verify's news count 905; no
+      alert from these lanes. The share of companies answered falls through the rotation (news
+      80% -> 27%, dated 68% -> 13%, 11-22 -> 11-25): those days walk the grid's tail, 3-11% US and
+      newly promoted, whose stored news and calendar shares match. `macro_series_fresh` (WARN)
+      fails daily on `jp-cpi` alone, the retired FRED id (37 of 38), a gate nobody can act on:
+      **for the user, replace the series or disable it.** **muffin-deployment#542** deletes the
+      four handlers and drops `pending_news`, `security_earnings_surprise`,
+      `earnings_history_cursor`, `security.news_fetched_at` (replay clean, production dry run
+      rolled back). Deploy, then the proving queries.
 - [~] 8. Docs, skills, memory. Done 11-22: CLAUDE.md section; `market-refresh-routine`,
       `market-diagnose`, `market-health`, `muffin-dagster-operations` (muffin-deployment#535);
       `docs/data-ingestion.md` (header, providers, the retired table now 51), `docs/data-coverage.md`;
