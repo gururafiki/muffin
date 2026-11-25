@@ -351,3 +351,37 @@ Captured on the node, read-only. The bodies are fixtures for step 3. **No decisi
 - **A provider's exception can quote the URL it asked for, and FRED's carries `api_key=`.** Every
   logged error passes through `openbb.redacted()`, and the test reads the run's whole event log,
   since a run result's events hold no log lines.
+
+### Steps 5-7: the stock page, the guard, the contract (2026-11-21..25)
+
+- **Step 5** shipped in muffin-ui#144 (deployed 11-21 22:22): the stock page shows the last eight
+  quarters' EPS against the estimate, read from `security_earnings_history`.
+- **Step 6** shipped in muffin-deployment#534 (deployed 11-22 11:29): market-verify counts news
+  links published in the last 3 days, floor 100.
+- **Step 7, readiness read 2026-11-25:**
+  - all `yahoo_companies` (82), `nasdaq_earnings_window` (4) and `macro_daily` (3) runs since 11-22
+    SUCCESS, with the news and earnings counters summing;
+  - `news_is_current` and `nasdaq_window_is_current` pass, and market-verify's news count read 905;
+  - no alert from these lanes fired.
+- **Shipped in muffin-deployment#542:**
+  - the four handlers leave `market-refresh` (1,377 → 898 lines), with what only they used
+    (`symbolList`, `fetchWithIsolation`, `openbbFetcher`, `extractMacroPoints`, two constants,
+    and `isolation-check.ts`);
+  - their `RETIRED` entries stay, so each still answers 410 naming its lane;
+  - `20261125100000` drops `pending_news`, `security_earnings_surprise`,
+    `earnings_history_cursor` and `security.news_fetched_at`.
+- **What the readiness read found:**
+  - **The share answered falls through the rotation, and that is the population.** News went from
+    80% of companies answered (11-22) to 27% (11-25), and Yahoo earnings dates from 68% to 13%.
+    The 11-24 and 11-25 slices walk the grid's tail (positions 9,026-13,125 of 14,348): 3-11% US
+    and newly promoted listings, whose stored news and calendar shares (21%, 12-15%) match the
+    answer rates. Throttling would show as refusals, and there were 2-3 a day.
+  - **`macro_series_fresh` (WARN) fails every day on `jp-cpi` alone**, the retired FRED id the
+    parity already named. A check that fails for a known reason is one nobody reads: the series
+    is to be replaced or disabled (a decision for the user).
+  - **A `PLANNED` asset-check execution per partition** remains for every range run of the
+    nasdaq window (29 a run), beside the one evaluation Dagster records. That is how Dagster 1.13
+    plans a check over a partition range, not a check that never ran.
+  - **The edge no longer calls openbb-api.** muffin-ingest imports openbb in-process and
+    muffin-agent uses openbb-mcp, so whether the REST service still has a consumer is a question
+    for Phase 8.
