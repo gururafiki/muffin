@@ -385,3 +385,13 @@ Captured on the node, read-only. The bodies are fixtures for step 3. **No decisi
   - **The edge no longer calls openbb-api.** muffin-ingest imports openbb in-process and
     muffin-agent uses openbb-mcp, so whether the REST service still has a consumer is a question
     for Phase 8.
+- **Deployed 2026-11-25 11:33** (with #541's autovacuum thresholds). Proving queries:
+  - `20261125100000` is in `schema_migrations`;
+  - `to_regclass` is null for `pending_news`, `security_earnings_surprise` and
+    `earnings_history_cursor`, and `security.news_fetched_at` is gone;
+  - `earnings-calendar`, `earnings-history`, `security-news` and `macro-indicators` answer 410
+    naming their lanes;
+  - the three Dagster containers kept their 10:46 start, so the deploy touched no run.
+
+  The six backlogs that never had a `backlog_negative_cache` row have all left with their
+  resources. The four `pending_%` views that remain all have one.

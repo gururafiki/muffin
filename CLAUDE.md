@@ -6435,6 +6435,41 @@ muffin-ingest#199 (rolled 19:54 UTC), muffin-deployment#539 and #540.
   9.45 T won, its revenue, against a stored 1.02 T. That is GE Vernova's shape (recorded above) in a
   second regulator ([note](docs/deferred/2026-11-23-some-dart-splits-carry-a-wrong-reconciliation-target.md)).
 
+### Phase 6b's contract, and two more ways a cover misdates a report (2026-11-25)
+
+muffin-deployment#541 and #542 (deployed 11:33), muffin-ingest#200 (rolled 10:47) and #201,
+muffin-deployment#543.
+
+- **A FALLING ANSWER RATE THROUGH A ROTATION CAN BE THE POPULATION, NOT THE PROVIDER.** Over the
+  company rotation's first four days, the share of companies answered fell from 80% (11-22) to 27%
+  (11-25) for news, and from 68% to 13% for Yahoo earnings dates. That reads like throttling. But
+  the 11-24 and 11-25 slices walk the grid's tail (positions 9,026-13,125 of 14,348): 3-11% US, and
+  newly promoted. The stored answers for those companies show the same shares (news 21%, calendar
+  12-15%). A throttle would have shown as refusals, and there were 2-3 a day. **Compare an answer
+  rate with the same population's stored shares before calling it a decline.**
+- **A DATABASE COMPARISON BUILT FROM AN OLDER POINT STILL HAS THE TABLES YOU DROPPED.**
+  `compare_databases.py` compares the legacy build with the baseline build, both from before the
+  later migrations. So a table those migrations drop still exists on both sides, with its
+  clock-valued columns. Removing `earnings_history_cursor` from its `VOLATILE` list (because the
+  table was gone) failed #542's migrations job. The entry stays for as long as the frozen builds
+  hold the table.
+- **A STOCK CODE CAN RUN INTO THE YEAR ON A COVER.** `0020532010年年度报告` (stock code 002053,
+  year 2010) was read as 2053. #199's first rule took the first plausible year in the digit run.
+  #201 takes the last one, so 6007202010 is 2010 and 2000792011 is 2011. On production, 11 reports
+  were dated after their own publication. A report's year cannot follow its publication, which is
+  the re-queue's test (#543).
+- **A UNIT LINE CAN DROP ITS COLON.** Older reports print `单位（万元）`, and `_UNIT` required
+  `单位：`, so those tables were read in yuan. CNINFO pass 7, the first to walk the older search
+  pages, made 67 reports hold a placed revenue split under 10 m yuan, 42 of them FY2007-2011.
+  #200's check against stored revenue rescales such a split once the year is right, and #201
+  reads the unit as printed.
+- **A STALE VISIBILITY MAP MAKES AN INDEX-ONLY SCAN READ THE HEAP.** `muffin-coverage` passed its
+  300 s bound on two evenings. Its presence flags are index-only scans over update-heavy tables,
+  and `security_filing` made 610,736 heap fetches in 1.24 M rows: 122.8 s cold. After a hand
+  `VACUUM` (11 s) the same scan made 71 heap fetches and took 0.26 s. Autovacuum's default 20%
+  scale factor waits for 250,000 dead tuples on a table that size. #541 sets 2% on five tables.
+  Before rewriting a slow presence scan, read `Heap Fetches` in its plan.
+
 ## Running an OpenSandbox server locally
 
 - **`docker run -d -p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock opensandbox/server:latest`.**

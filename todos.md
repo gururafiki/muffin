@@ -1550,10 +1550,11 @@ Still open:
       right shape is ~6 concepts (cloud, advertising, smartphones, streaming, foundry, payments)
       mapped by fund weight. `segments.comparable_concepts` is the metric — it went 1 → 7 on the
       ordering fix alone.
-- [ ] **Six `pending_%` backlogs unclassified** in `backlog_negative_cache` (`pending_news`,
+- [x] **Six `pending_%` backlogs unclassified** in `backlog_negative_cache` (`pending_news`,
       `pending_insider`, `pending_filings`, `pending_management`, `pending_eps_history`,
-      `pending_fx_history`). Deliberately not guessed at — naming the wrong column asserts a
-      pairing that does not hold. A CI guard over `pg_class` would stop the list growing.
+      `pending_fx_history`). **Closed 2026-11-25:** all six left with their resources
+      (`pending_news` last, in muffin-deployment#542). The four `pending_%` views left all have a
+      row (measured). A CI guard over `pg_class` would still stop a new one arriving unclassified.
 - [ ] **`accession_number` → `source_document_id`.** DART's is `rcept_no`; only the NAME is
       SEC-specific, since `(source_code, accession_number)` is already correct. Its own change:
       it touches the parser, the reconciliation guard and `market-verify`, and this repo's lesson
@@ -4221,6 +4222,10 @@ Measured 2026-11-09: SEC segment runs fail 17% on `pending_segments` timeouts, a
             thresholds on `security_filing`, `security_metric` (1.34 M dead, 35% all-visible),
             `security_segment`, `security_statement`, `fiscal_period`. Then read `muffin-coverage`,
             `muffin-universe` (244 s) and `muffin-segment-spine` (242 s) for a few days.
+            **Merged as muffin-deployment#541, deployed 2026-11-25 11:33.** Autovacuum ran on
+            four of the five within minutes (`security_segment` 11:17, `security_filing` and
+            `security_statement` 11:19, `security_metric` 11:22; `fiscal_period` last on 11-24).
+            Read the 17:23 coverage run and the next two days' `cron.job_run_details`.
 - [ ] 6. NSE: grid from `security_nse_filer`; retire `in-filings`.
       Built: muffin-ingest#182 (rolled 2026-11-16 12:27) and muffin-deployment#519 (deployed
       11:35–11:47: `in-filings` 410; NSE's API moved to `www.nseindia.in`; the edge's 440
@@ -4351,7 +4356,7 @@ is handled is in the spec's *Notes inherited from earlier phases*.
 - Every phase: scheduled check-ins live only in the session that made them, so recreate them from
   the dated lines above when a new session starts.
 
-### Phase 6b — macro and events — PLANNED 2026-11-21
+### Phase 6b — macro and events — PLANNED 2026-11-21, DONE 2026-11-25 except the `jp-cpi` decision
 
 Spec: [docs/specs/2026-11-21-macro-and-events.md](docs/specs/2026-11-21-macro-and-events.md).
 
@@ -4433,7 +4438,7 @@ Decisions (the user):
 - [x] 6. market-verify `news is current` (muffin-deployment#534, deployed 11-22 11:29): links
       published in the last 3 days, floor 100. The dispatched run at 11:30 passed with 1,277.
       Grafana needs nothing: the Dagster row shows the new jobs and checks by itself.
-- [ ] 7. Delete the handlers after 3 clean days; contract with a drop date. **Readiness read
+- [x] 7. Delete the handlers after 3 clean days; contract with a drop date. **Readiness read
       2026-11-25: clean.** Every `yahoo_companies` (82), `nasdaq_earnings_window` (4) and
       `macro_daily` (3) run since 11-22 SUCCESS; news and earnings counters sum every day;
       `news_is_current` and `nasdaq_window_is_current` pass; market-verify's news count 905; no
@@ -4444,11 +4449,15 @@ Decisions (the user):
       **for the user, replace the series or disable it.** **muffin-deployment#542** deletes the
       four handlers and drops `pending_news`, `security_earnings_surprise`,
       `earnings_history_cursor`, `security.news_fetched_at` (replay clean, production dry run
-      rolled back). Deploy, then the proving queries.
-- [~] 8. Docs, skills, memory. Done 11-22: CLAUDE.md section; `market-refresh-routine`,
+      rolled back). **Deployed 2026-11-25 11:33** (with #541): `20261125100000` applied; the four
+      objects gone; `earnings-calendar`, `earnings-history`, `security-news` and
+      `macro-indicators` answer 410; the Dagster containers kept their 10:46 start.
+- [x] 8. Docs, skills, memory. Done 11-22: CLAUDE.md section; `market-refresh-routine`,
       `market-diagnose`, `market-health`, `muffin-dagster-operations` (muffin-deployment#535);
       `docs/data-ingestion.md` (header, providers, the retired table now 51), `docs/data-coverage.md`;
-      muffin-ingest README (#193). Left: the contract's columns and views, after step 7.
+      muffin-ingest README (#193). Done 11-25: `market-health` on `pending_news` (in #542), the
+      unclassified-backlogs paragraph of `docs/data-ingestion.md`, the spec's step 7, CLAUDE.md.
+      **Phase 6b is done** except one decision, `jp-cpi` (step 7).
 
 ### Phases 7-8 — derived and serving, then retirement — not started
 

@@ -524,11 +524,11 @@ flowchart TD
    `backlog_drain` tell a queue that drained by WORKING from one that drained by MARKING — the
    2026-08-13 signature, where a backlog reached zero while ~8,300 securities were negative-cached
    and the depth curve looked identical to health. A backlog with no row still gets a depth and a
-   slope and silently loses that discrimination. **Six are still unclassified** (`pending_news`,
+   slope and silently loses that discrimination. The six that never had a row (`pending_news`,
    `pending_insider`, `pending_filings`, `pending_management`, `pending_eps_history`,
-   `pending_fx_history`) — deliberately not guessed at, because naming the wrong column asserts a
-   pairing that does not hold, which is worse than the absence. Nothing enforces this yet; a CI
-   guard over `pg_class` would.
+   `pending_fx_history`) all left with their resources, the last on 2026-11-25. Measured that day:
+   the four `pending_%` views left (`pending_metrics`, `pending_segment_alias`, `pending_ttm`,
+   `pending_wikidata`) all have a row. Nothing enforces this; a CI guard over `pg_class` would.
 
 ---
 
