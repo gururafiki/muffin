@@ -17,7 +17,10 @@
 > - **the SEC family** (Phase 5, 2026-11-08): company facts, statements, filings and insider trades
 >   ([spec](specs/2026-10-24-sec-family.md)), with Yahoo's analyst actions and corporate actions;
 > - **segments and the regulators** (Phase 6, 2026-11-14 to 11-16): SEC, CNINFO, DART and NSE
->   segment parsing and their filing walkers ([spec](specs/2026-11-09-segments-and-regulators.md));
+>   segment parsing and their filing walkers ([spec](specs/2026-11-09-segments-and-regulators.md)).
+>   China's reader goes past the edge's: Shenzhen's `营业收入构成` (muffin-ingest#183), the older
+>   search pages back to 2003 and the FY2007-2014 table forms (#199, #203); what it still cannot
+>   read is in [data-coverage.md](data-coverage.md) § 3.3;
 > - **macro and events** (Phase 6b, 2026-11-21/22): company news from Yahoo's RSS feed, earnings
 >   from Nasdaq and Yahoo, and macro through openbb in-process
 >   ([spec](specs/2026-11-21-macro-and-events.md)).
