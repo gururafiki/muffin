@@ -1,7 +1,8 @@
 # Some DART splits carry a wrong reconciliation target
 
 Created 2026-11-23 · Found by re-running `check_segments_reconcile.py` against production while
-fixing its `security_filing` read (muffin-deployment#540) · Status: **open, not yet investigated**
+fixing its `security_filing` read (muffin-deployment#540) · Status: **cause found and fixed
+(muffin-deployment#546, merged 2026-11-26); closes once the re-read below is verified**
 
 ## Why
 
@@ -50,3 +51,37 @@ HL Mando's page shows the right shares if Yahoo's revenue is present. Anything r
 
 No placed DART revenue split's sum differs from its `reconciled_to` by more than the guard's
 tolerance, other than through a stated elimination.
+
+## Cause (2026-11-26)
+
+`ifrs-full:MajorCustomersAxis` was in `market.segment_axis` as a **qualifier** (legacy migration
+155 put it there so its facts would not be disqualified as unknown). A qualifier narrows a fact
+without changing what it measures, so a `Revenue` fact under `MajorCustomersAxis =
+GroupOfCustomersMember`, the revenue from one group of customers, was read as the company's total.
+HL Mando's 1,017,521,239,000 is that figure: its largest customer group. Not the inherited
+partition, which the note guessed.
+
+Re-parsing the held DART instances with the axis removed from the vocabulary, against today's:
+
+| Set | Reconciling splits |
+|---|---|
+| the 30 held filings among those whose split misses its target | 97 -> 125 (29 gained, 1 lost) |
+| 66 random held DART filings | 225 -> 237 (13 gained, 1 lost) |
+| 134 SEC IFRS filings | 320 -> 320 |
+
+The one loss each time is Cosmecca's 2024 Canada + Europe, which had matched the same kind of
+customer figure. Removing `TimingOfTransferOfGoodsOrServicesAxis` as well gained more and lost real
+splits (CJ Freshway's food distribution, 3.06 T won), so that axis stays a qualifier.
+
+**The fix:** muffin-deployment#546 deletes the axis from the vocabulary (an unknown axis
+disqualifies the fact as a member and as a total, which is right for a customer's revenue) and
+re-queues every DART filing holding a revenue row (882 in the dry run). Most were read by the edge,
+so stage 1 fetches their archives again.
+
+## Then
+
+1. Deploy #546 after the 08:05 UTC DART floor.
+2. Stage 1 alone over `grid:dart_filer` (`raw_dart_filings`, pool `dart`, priority -1), until
+   nothing is unasked; then `dart_segment`.
+3. Read HL Mando's served geography split against `reconciled_to`, and recount the DART splits whose
+   sum misses its target.

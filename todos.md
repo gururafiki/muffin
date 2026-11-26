@@ -4044,7 +4044,8 @@ Measured 2026-11-09: SEC segment runs fail 17% on `pending_segments` timeouts, a
             **decided 2026-11-14: keep every instance whole.** Before the first version bump,
             grow the data volume by ~25-30 GB (paid). **Grown 105 → 135 GB on 2026-11-21**
             (muffin-deployment#524, the user's decision of 11-20), at 88%.
-      - [ ] **[An agent-named instance is read as "no instance"](docs/deferred/2026-11-14-an-agent-named-instance-is-read-as-no-instance.md)**
+      - [x] **[An agent-named instance is read as "no instance"](docs/deferred/2026-11-14-an-agent-named-instance-is-read-as-no-instance.md)**
+            **Closed 2026-11-20** (muffin-ingest#176; the note records it, this line had not).
             (found on the first wave, 2026-11-14 12:52): the edge's name rule rejects
             `scco-20260930x10q_htm.xml`, `form10-q_htm.xml` and the like, so 10 of 29 filings read
             "absent"; 7 of 11 carry segments when read. History: 64.7% of agent-filed filings have
@@ -4181,6 +4182,21 @@ Measured 2026-11-09: SEC segment runs fail 17% on `pending_segments` timeouts, a
                   muffin-ingest#201 rolled (21:35) and muffin-deployment#543 re-queued 67 + 11
                   (21:44, as the dry run). The night under pass 7 matched one without it (prices
                   ended 02:28 against 02:30).
+                  **Read 2026-11-26 (check-in):** 87 runs SUCCESS (with `f9aed7d5`, the re-execution
+                  of the roll-killed `1e7a6aba`), done 10:06; the night under it was all SUCCESS and
+                  `nightly_prices` ended 02:25. Counters (per run, not per partition): 7,432 reports
+                  fetched (13.2 GB), 3,988 unasked by the byte budget, 90 transport, 11 too large;
+                  history pages 282 answered, 1,657 held. Stage 2: 7,132 read, **3,097 of them with no
+                  table** (the history walk's FY2000-2006 reports, which no reader reads), 46,313
+                  rows, 19 rescaled, 55 retracted, 0 failed. **Behind the parser: 4,056 full reports
+                  over 476 securities** (3,626 never read, 430 re-queued; the check's own predicate,
+                  full reports only. The 25,240 of 11-25 also counted summaries and English
+                  editions, so the two do not compare). Lag query: **11 -> 1**. Tiny-split query:
+                  **67 -> 142**, every one read by pass 8: 122 are FY2012 or earlier and 18 later,
+                  none with a stored revenue for #200's check. Cause measured on the gate set: older
+                  tables state `（万元）` in their header, and `unit_stated_last` matched one item at
+                  a time, missing a `单位：（人民币）万元` line drawn as four items (000735 FY2011).
+                  Both fixed on the older-forms branch (below); pass 9 waits for its roll.
             - [ ] **2026-11-23: [some CNINFO tables state yuan over figures in ten thousands](docs/deferred/2026-11-23-some-cninfo-tables-state-yuan-over-figures-in-ten-thousands.md).**
                   25 reports' splits are stored at 1/10,000: the filer's own unit line is wrong
                   (航天长峰 FY2025). Neither reader fixes them. **Decided 2026-11-23 (the user):
@@ -4216,7 +4232,10 @@ Measured 2026-11-09: SEC segment runs fail 17% on `pending_segments` timeouts, a
             drained.
       - [x] **Stage 2 `glylcvjp`** (2026-11-22, done 20:38): 109 of 109 SUCCESS, nothing to read.
             **DART is drained: all 14,081 filings read at the current version, 0 behind.**
-      - [ ] **2026-11-22: [a regulator floor visits its whole grid every day](docs/deferred/2026-11-22-a-regulator-floor-visits-its-whole-grid-every-day.md).**
+      - [x] **2026-11-22: [a regulator floor visits its whole grid every day](docs/deferred/2026-11-22-a-regulator-floor-visits-its-whole-grid-every-day.md).**
+            **Verified 2026-11-25:** the 11-24 and 11-25 ticks (25 and 28 runs, ~24 s each, all
+            SUCCESS) read every filer they visited as `list_fresh`, named 0 archives and fetched 0
+            bytes from DART. The visit still costs ~10 minutes of pool a day, which is cheap.
             `dart_filers_floor`'s dry run asks 24 runs a day, i.e. the whole grid, because stage 1
             has no age check. **Decided 2026-11-23 (option 1): stage 1 skips a list younger than
             29 days.** Built in muffin-ingest#197, which declares `dart_filers_floor` and
@@ -4229,6 +4248,13 @@ Measured 2026-11-09: SEC segment runs fail 17% on `pending_segments` timeouts, a
             Five FY2025 Korean splits exceed `reconciled_to` by up to 16× (HL Mando: 9.45 T won of
             regions against a stored 1.02 T). The splits read right; the target is wrong. Inside
             the guard's tripwire (0.98% of 817 served). Investigate on HL Mando's instance.
+            **Cause (2026-11-26):** `ifrs-full:MajorCustomersAxis` was a qualifier, so one customer
+            group's revenue read as the company's total (HL Mando's 1.02 T). Re-parsing held
+            instances without it: 97 -> 125 reconciling splits on the 30 held misses, 225 -> 237 on
+            66 random, SEC IFRS 320 -> 320. **muffin-deployment#546** (merged 00:0x, deployed
+            11:06-11:19 after the 08:05 floor) deletes the axis and re-queued **883** DART reports
+            with a revenue row. Stage 1 `pnenjxqk` launched 11:2x (`raw_dart_filings`, priority
+            −1); then `dart_segment`; then read HL Mando and recount the misses.
       - [x] **2026-11-23: market-verify failed at 13:26** on `security_filing: HTTP 500 57014`:
             the segment guard filtered 1.24 M filings by accession alone, no index leading on it.
             muffin-deployment#540 asks through the primary key (exit 0 in 15 s on production).
@@ -4250,6 +4276,10 @@ Measured 2026-11-09: SEC segment runs fail 17% on `pending_segments` timeouts, a
             300 s bound); 05:23 had taken 196 s, before the deploy. `muffin-cron-headroom` stopped
             firing at 19:xx, when the 11-24 failure left its 24 h window. The spine's slowest run
             in 24 h is 199 s of 300, just under the alert's two-thirds: watch it.
+            **Read 2026-11-26 (check-in):** coverage 05:23 took **91 s**; the spine's slowest in
+            24 h is 158 s (11-25 23:16); `cron_job_headroom()` shows nothing past two-thirds
+            (coverage 91, spine 158, universe 88, quality 40, facets 17 of 300 s). The only alert
+            in 12 h was `muffin-dagster-run-failed`, 23:00-04:00, for the roll-killed `1e7a6aba`.
 - [ ] 6. NSE: grid from `security_nse_filer`; retire `in-filings`.
       Built: muffin-ingest#182 (rolled 2026-11-16 12:27) and muffin-deployment#519 (deployed
       11:35–11:47: `in-filings` 410; NSE's API moved to `www.nseindia.in`; the edge's 440
@@ -4484,8 +4514,11 @@ Decisions (the user):
       BIS's `WS_LONG_CPI` is keyless and current to 2026-09, and equals OECD for DE, KR and US to six
       decimals. muffin-ingest#202 (rolled 22:38) and muffin-deployment#545 (deployed 22:52, `/bis/`
       location, the row moved). Live run `rbjovovf`: answered 1, 12 points, `macro_current` serves
-      2.097902% for 2026-09. **Read 11-26 07:40's `macro_daily`: `macro_series_fresh` should pass on
-      38 of 38.** The roll killed pass 8's `1e7a6aba`, re-executed as `f9aed7d5`.
+      2.097902% for 2026-09. The roll killed pass 8's `1e7a6aba`, re-executed as `f9aed7d5`.
+      **Read 2026-11-26:** the scheduled 07:40 `macro_daily` succeeded, `raw_macro_series` and
+      `macro_observation` materialised 38 of 38 series, and `macro_series_fresh` PASSED (it failed
+      on 11-25 07:40). jp-cpi asked BIS through `/bis/` (a cache HIT on last night's 1-day entry):
+      12 points to 2026-09, unchanged, so `fetched_at` stays 11-25 22:55.
 - [x] 8. Docs, skills, memory. Done 11-22: CLAUDE.md section; `market-refresh-routine`,
       `market-diagnose`, `market-health`, `muffin-dagster-operations` (muffin-deployment#535);
       `docs/data-ingestion.md` (header, providers, the retired table now 51), `docs/data-coverage.md`;
