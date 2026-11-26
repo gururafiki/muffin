@@ -6515,6 +6515,21 @@ muffin-deployment#546 (DART), and the CNINFO older-forms branch.
   from the gate, not by "everything the reader touches".
 - **A SCHEDULE'S RUNS ARE TAGGED `dagster/schedule_name`, A SENSOR'S `dagster/sensor_name`.** A
   query for a floor's runs by the wrong tag returns nothing and reads as "the floor did not run".
+- **CORRECTION: EUROPE'S ESEF AND JAPAN'S EDINET ARE VIABLE FOR SEGMENTS, THROUGH THE TEXT
+  BLOCK.** This file records both as failing because their segment notes carry no dimensions (the
+  2026-08-29 entries). True, and incomplete: a block-tagged note's value is the note's own HTML
+  table. Measured 2026-11-26: L'Oréal's block in filings.xbrl.org's xBRL-JSON sums four divisions
+  to its 44,052.0 €m group total, 18 of 24 large European companies sampled by LEI hold a revenue
+  table, and Toyota's EDINET note sums three segments exactly to 45,095,325 百万円. The same mistake
+  as China's "PDF": a statement about the transport, not the content. Options and measurements:
+  [docs/deferred/2026-11-26-where-the-missing-segments-can-come-from.md](docs/deferred/2026-11-26-where-the-missing-segments-can-come-from.md).
+- **A CIK IS NOT AN SEC REPORTER.** Of the 300 largest equities holding a CIK and no split, 171 file
+  no 10-K, 20-F or 40-F (SK hynix, CATL, Inditex, Air Liquide: ADR programmes and exempt
+  issuers), yet `security_disclosure` labels them `held: sec`. Their segments can only come from
+  the home regulator.
+- **`xbrl_concept` HOLDS LOCAL NAMES (`Revenue`), not prefixed ones.** A probe that added
+  `us-gaap:RevenuesNetOfInterestExpense` matched nothing and nearly concluded that banks' segments
+  are unreadable; with `RevenuesNetOfInterestExpense`, Goldman, Morgan Stanley and UBS place splits.
 - **`ssh host "a && b > /dev/null 2>&1 < /dev/null &"` WAITS FOR `b`.** The `&` backgrounds the
   whole list, whose stdout is the ssh session; the redirections apply to `b` alone. Use
   `"a; b > /dev/null 2>&1 < /dev/null &"`.

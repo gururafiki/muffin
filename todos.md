@@ -4408,6 +4408,12 @@ Measured 2026-11-09: SEC segment runs fail 17% on `pending_segments` timeouts, a
       stay until **2026-12-20** ([the retired-columns note](docs/deferred/2026-09-30-the-retired-families-leave-columns-behind.md)).
       Replayed twice on the node (117 of 117 tests) and dry-run on production. Deploys with #520.
 - [ ] 10. Docs, skills, memory.
+- [ ] **2026-11-26: [where the missing segments can come from](docs/deferred/2026-11-26-where-the-missing-segments-can-come-from.md)**
+      (the user asked). 2,979 large equities ($53.9 T) hold no split. Measured options: A SEC
+      vocabulary and size gate (~15, ~$1.8 T), B one company's split on all its listings (101,
+      $3.6 T), C Japan via EDINET's HTML note (466, $6.6 T), D Europe via ESEF blocks (~430,
+      ~$7.7 T), E China's segment note for financials and SOEs (88, $4.1 T), F Taiwan (unconfirmed),
+      G English PDFs (~$12 T, large), H paid vendor (no). **Waiting for the user's choice.**
 
 **Left for Phases 6 and 6b by Phases 4 and 5.** Read in Phase 6's planning on 2026-11-09; how each
 is handled is in the spec's *Notes inherited from earlier phases*.
