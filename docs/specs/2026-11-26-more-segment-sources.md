@@ -431,3 +431,58 @@ Any finding that changes a decision goes back to the user before it is built.
   - the stock page rendered for the companies named above.
 - **Yield:** the large-no-split count and its cap, re-measured after each step against 2,979 /
   $53.9 T.
+
+## As built
+
+### Steps 1a and 1b (2026-11-26)
+
+muffin-deployment#548, muffin-ingest#205 (rolled 2026-11-26).
+
+- **What shipped:**
+  - `market.segment_parser` is keyed by regulator, with an FK to `disclosure_source`. sec, cninfo,
+    dart and nse each start at 20; the rows are derived from `disclosure_source.enabled`.
+  - `singleton` stays until [the contract](../deferred/2026-11-26-drop-the-segment-parser-singleton.md).
+  - `market.segment_total_concept` is a control table that `ingest_rw` may read but not write.
+  - Each lane's queue reads its own regulator's version (`segments.unread_sql`), and so does
+    `vocabulary(conn, regulator)`, which raises when the row is missing.
+  - `check_segments_reconcile.py` judges staleness per regulator.
+- **`sec_instances_due` above its cap** still asks for chunks holding a filing filed in the last 14
+  days.
+- **WARN check `no_period_has_splits_from_two_regulators`** is on `security_classification`, not
+  `sec_segment`: it is a property of the whole table, and the classification follows every lane.
+  Baseline: 0 periods.
+- **Live:** an AAPL reread at parser version 20 wrote 82 rows and changed 0.
+- **Moved to later steps, from the plan above:**
+  - `security_filer.via` goes to step 3b, where it is first written;
+  - the floor helpers move to `lib/` in step 5, beside the first new lane that needs them.
+
+### Step 2, A (2026-11-26)
+
+muffin-ingest#206 (64 MB gate), #207 (fallback totals); muffin-deployment#549 (`held`, the
+`fallback` column), #550 (rows and re-queue).
+
+- **64 MB gate, no child process.** Measured in the production image, a 54.7 MB HSBC instance
+  parses within the 2.5 GB code location. 56 of the 60 filings refused as too large are now under
+  the gate; AEP's 128 MB stays refused.
+- **No `reask_too_large`.** `SecInstanceRun.reread` (filer key → accessions) already names
+  accessions to read again, so the 56 are one run with that config.
+- **The concepts are FALLBACKS (`segment_total_concept.fallback`)**, consulted only when the regular
+  vocabulary places no flat revenue split in a filing. As ordinary concepts they changed 24 filings
+  of 13 companies that already had a split (Equinor FY2023: 155.9 bn → 106.8 bn).
+- **`RevenueFromSaleOfGoods` is left out.** It is an IFRS component of revenue, and as a total it
+  demoted Dr Reddy's, Buenaventura and Toyota.
+- **Gate over all 10,309 held SEC annual filings (FY2023+) under the shipped rule:**
+  - 2,825 filings of split holders unchanged;
+  - 17 gain a revenue split. 15 are filings of companies with none (Goldman, Nomura, NextEra, DTE,
+    XP, Community Financial). 2 are filings of companies holding a split from another filing:
+    Spire, and Ferrovial, whose regions sum exactly to its 9,148 m total;
+  - none changed a placed split.
+- **`held` requires an annual accounts filing** from the filer's regulator (`filing_form`).
+  Measured on production, rolled back:
+  - 336 securities went from `held: sec` to `none`;
+  - 52 from `held: nse` to `resolvable`;
+  - 32 from `held: sec` to `resolvable: cninfo`;
+  - 6 to `resolvable: dart`.
+
+  The whole view reads in 152 ms.
+- **Re-queue:** 1,943 filings of 656 filers (rolled back on production; nothing else was due).

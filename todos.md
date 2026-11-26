@@ -4577,10 +4577,11 @@ Decisions (the user, 2026-11-26):
       - [curation of the new namespaces](docs/deferred/2026-11-26-the-new-segment-namespaces-need-curation.md);
       - [English PDFs, option G](docs/deferred/2026-11-26-english-annual-report-pdfs-are-the-last-segment-source.md);
       - [the parser singleton drop](docs/deferred/2026-11-26-drop-the-segment-parser-singleton.md).
-- [ ] 1a. deployment: per-regulator `segment_parser`, `security_filer.via`,
-      `segment_total_concept`; CI reads per regulator; guard test.
-- [ ] 1b. ingest: queues read their regulator's version; `sec_instances_due` above the cap; floor
-      helpers to `lib/filer_lanes.py`; WARN check `no_period_has_splits_from_two_regulators`.
+- [x] 1a. deployment: per-regulator `segment_parser`, `segment_total_concept`; CI reads per
+      regulator; guard test (#548, deployed 2026-11-26). `security_filer.via` moved to 3b.
+- [x] 1b. ingest: queues read their regulator's version; `sec_instances_due` above the cap; WARN
+      check `no_period_has_splits_from_two_regulators`, baseline 0 (#205, rolled 2026-11-26). The
+      floor helpers move to `lib/` in step 5.
 - [ ] 2. A, SEC:
       - 64 MB instance gate (child parse if measured) and `reask_too_large`;
       - scoped revenue concepts and a one-shot re-queue;

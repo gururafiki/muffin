@@ -6122,9 +6122,9 @@ muffin-ingest#180, muffin-deployment#517. Record: the Phase 6 spec's *Step 4*.
   `营业收入构成` (Shenzhen's format: one table, group rows, no cost column). Neither the edge nor
   this reader reads them; it is the largest coverage gap left
   ([note](docs/deferred/2026-11-16-a-fifth-of-china-s-reports-state-their-split-as-revenue-composition.md)).
-- **`segment_parser.version` IS SHARED BY EVERY REGULATOR**, so bumping it for one re-queues SEC's
-  whole history too. A one-regulator re-read is a one-shot re-queue of that regulator's filings, as
-  muffin-deployment#517's is.
+- **`segment_parser.version` WAS SHARED BY EVERY REGULATOR until 2026-11-26** (muffin-deployment#548
+  keys it by regulator). A bump still re-queues that regulator's whole history: for SEC that is
+  ~148,000 filings, most no longer in raw, so SEC fixes stay targeted one-shots.
 - **A MUTATION HARNESS AGES WITH THE CODE IT MUTATES.** Re-running an earlier harness after the code
   moved found its strings gone (`assert orig.count(a) == 1` failed). That is the harness working:
   write the mutations for the code as it is now, never trust a stale list.
