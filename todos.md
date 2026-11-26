@@ -4213,6 +4213,11 @@ Measured 2026-11-09: SEC segment runs fail 17% on `pending_segments` timeouts, a
                   3,150 after); the gate gained 2 of 150, so ~10,100 re-reads for ~130 gains — the
                   user's call. Then pass 9 over the grid (`history_pages: 3`), and re-run the tiny,
                   lag and statement-line-item queries (45 served before).
+                  **Merged 2026-11-26 12:06 as muffin-ingest#203 and muffin-deployment#547**; the
+                  third gate (after a header-depth rule: 002020's unit sits 15.6 pt under its label)
+                  gave fused 231 -> 18, reconciling 123 -> 154 among changed reports, 20 tables
+                  rescaled by exactly 10,000, tiny 31 -> 11. README (#204). Roll after the SEC wave,
+                  then deploy #547, then pass 9.
             - [ ] **2026-11-23: [some CNINFO tables state yuan over figures in ten thousands](docs/deferred/2026-11-23-some-cninfo-tables-state-yuan-over-figures-in-ten-thousands.md).**
                   25 reports' splits are stored at 1/10,000: the filer's own unit line is wrong
                   (航天长峰 FY2025). Neither reader fixes them. **Decided 2026-11-23 (the user):
@@ -4269,8 +4274,10 @@ Measured 2026-11-09: SEC segment runs fail 17% on `pending_segments` timeouts, a
             instances without it: 97 -> 125 reconciling splits on the 30 held misses, 225 -> 237 on
             66 random, SEC IFRS 320 -> 320. **muffin-deployment#546** (merged 00:0x, deployed
             11:06-11:19 after the 08:05 floor) deletes the axis and re-queued **883** DART reports
-            with a revenue row. Stage 1 `pnenjxqk` launched 11:2x (`raw_dart_filings`, priority
-            −1); then `dart_segment`; then read HL Mando and recount the misses.
+            with a revenue row. Stage 1 `pnenjxqk` (11:2x-12:1x): 109 of 109 SUCCESS; 883
+            archives named, 700 fetched (680 MB), 183 already held, 0 refused, transport or
+            unasked; all 1,086 lists fresh. Next: `dart_segment` after the 13:00 roll, then read
+            HL Mando and recount the misses.
       - [x] **2026-11-23: market-verify failed at 13:26** on `security_filing: HTTP 500 57014`:
             the segment guard filtered 1.24 M filings by accession alone, no index leading on it.
             muffin-deployment#540 asks through the primary key (exit 0 in 15 s on production).
