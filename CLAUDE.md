@@ -6479,6 +6479,46 @@ and #202 (22:38), muffin-deployment#543, #544 and #545.
   scale factor waits for 250,000 dead tuples on a table that size. #541 sets 2% on five tables.
   Before rewriting a slow presence scan, read `Heap Fetches` in its plan.
 
+### A customer's revenue read as a total, and units drawn in pieces (2026-11-26)
+
+muffin-deployment#546 (DART), and the CNINFO older-forms branch.
+
+- **A QUALIFIER AXIS MUST NARROW A FACT WITHOUT CHANGING WHAT IT MEASURES, AND
+  `MajorCustomersAxis` DOES NOT.** Legacy migration 155 made it a qualifier so its facts would not
+  be disqualified as unknown, so a `Revenue` fact under `MajorCustomersAxis =
+  GroupOfCustomersMember` was read as the company's total. HL Mando's correct 9.45 T won geography
+  split was stored against 1.02 T, its largest customer group. Removing the axis from the
+  vocabulary took reconciling splits from 97 to 125 on the 30 held misses and from 225 to 237 on 66
+  random DART filings, with SEC's IFRS filers unchanged (320). This is the
+  `SegmentConsolidationItemsAxis` lesson of 2026-09-05 met again: before adding an axis as a
+  qualifier, check that every member measures the same thing as the total.
+- **A RE-READ OF AN EDGE-READ FILING IS A RE-FETCH.** Raw holds only what a Dagster lane fetched,
+  so the 883 DART reports #546 re-queued mostly have no archive on disk, and stage 2 alone reads
+  nothing. Re-queue, then drain stage 1 alone on the provider's pool, then stage 2.
+- **A UNIT LINE CAN BE DRAWN AS SEVERAL ITEMS, AND NONE OF THEM NAMES A UNIT.** 000735 FY2011
+  draws `单位：（人民币）万元` as `单位：`, `（人民币）`, `万` and `元`. `unit_stated_last` matched
+  one item at a time, so the unit carried to the next page was lost and the table was stored in
+  yuan. It now reads lines (the ~3 pt buckets `parse_segment_page` reads). Older tables also state
+  their unit only in the column header (`营业收入（万元）`, a `（万元）（万元）` line), which no
+  `单位` pattern can match. **And the header is deeper than a fixed band:** 002020 sets four
+  header lines over 31 pt, its unit 15.6 pt under the revenue label, so the first version's 15-pt
+  window missed all five of its reports in the gate. The block is read from the labels down to
+  the first row instead.
+- **A COUNT'S PREDICATE IS PART OF THE NUMBER.** "Behind the parser" read 25,240 on 11-25 and 4,056
+  on 11-26, and only about 7,100 reports were read in between: the first counted summaries and
+  English editions, the second (the lane's own check) full reports only. Record the predicate
+  beside a queue size, or two readings cannot be compared.
+- **A RE-QUEUE'S YIELD IS MEASURABLE BEFORE IT IS SPENT.** The gate over held documents gives each
+  population's change rate: older reports read into no rows gained 2 of 150 from the older-forms
+  fix, against 15 of 250 changed among older reports with rows. Re-reading the ~10,100 no-row
+  reports would have cost ~30 GB of PDF fetches for ~130 gains. Size a re-queue by population
+  from the gate, not by "everything the reader touches".
+- **A SCHEDULE'S RUNS ARE TAGGED `dagster/schedule_name`, A SENSOR'S `dagster/sensor_name`.** A
+  query for a floor's runs by the wrong tag returns nothing and reads as "the floor did not run".
+- **`ssh host "a && b > /dev/null 2>&1 < /dev/null &"` WAITS FOR `b`.** The `&` backgrounds the
+  whole list, whose stdout is the ssh session; the redirections apply to `b` alone. Use
+  `"a; b > /dev/null 2>&1 < /dev/null &"`.
+
 ## Running an OpenSandbox server locally
 
 - **`docker run -d -p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock opensandbox/server:latest`.**

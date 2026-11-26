@@ -4197,6 +4197,22 @@ Measured 2026-11-09: SEC segment runs fail 17% on `pending_segments` timeouts, a
                   tables state `（万元）` in their header, and `unit_stated_last` matched one item at
                   a time, missing a `单位：（人民币）万元` line drawn as four items (000735 FY2011).
                   Both fixed on the older-forms branch (below); pass 9 waits for its roll.
+            - [ ] **2026-11-26: the older forms end where their tables end, and read their own
+                  unit** (muffin-ingest branch `cninfo-older-tables-end-where-they-end`): a table
+                  ends at the next numbered section and at accounting indicators in the name column;
+                  `构成情况` headings and a revenue label set glyph by glyph are read; a unit in the
+                  column header (`（万元）`, read from the labels down to the first row) scales the
+                  table; `unit_stated_last` reads lines, not items. Gated over 854 held reports
+                  (`gate_reader.sh`, new in `dagster-pipeline-local-test`): current forms 300 of 300
+                  unchanged, fused names 231 -> 18 (all also in the old read), reconciling splits
+                  99 -> 130, none stopped reconciling, 14 tables rescaled by exactly 10,000, tiny
+                  splits in the set 31 -> 17 before the header-depth rule (third gate pending).
+                  **Re-queue:** muffin-deployment branch `china-s-older-tables-are-read-again`,
+                  dry run on production: 4,899 older reports with rows + 20 tiny + 10 fused; 7
+                  mutations caught. **Not re-queued: reports read into no rows** (6,955 before 2016,
+                  3,150 after); the gate gained 2 of 150, so ~10,100 re-reads for ~130 gains — the
+                  user's call. Then pass 9 over the grid (`history_pages: 3`), and re-run the tiny,
+                  lag and statement-line-item queries (45 served before).
             - [ ] **2026-11-23: [some CNINFO tables state yuan over figures in ten thousands](docs/deferred/2026-11-23-some-cninfo-tables-state-yuan-over-figures-in-ten-thousands.md).**
                   25 reports' splits are stored at 1/10,000: the filer's own unit line is wrong
                   (航天长峰 FY2025). Neither reader fixes them. **Decided 2026-11-23 (the user):

@@ -1,7 +1,7 @@
 # CNINFO reports filed under the wrong year
 
 Created 2026-11-23 · Found while gating the older-forms reader (muffin-ingest, branch
-`cninfo-older-forms-and-history`) · Status: **the fix is built; the repair waits for the roll**
+`cninfo-older-forms-and-history`) · Status: **closed 2026-11-26** (one residual, below)
 
 ## Why
 
@@ -70,3 +70,25 @@ for zero), taking the earliest match in the text. That is the same branch as the
 
 No CNINFO report's stored period lags its filing year by two or more, unless the report was filed
 late.
+
+## Closed (2026-11-26)
+
+muffin-ingest#199 and #201 rolled, muffin-deployment#539 and #543 repaired and re-queued, and CNINFO
+passes 7 and 8 re-read. The measuring query, by distinct (security, report, lag) on 2026-11-26:
+
+| Lag (filing year − period year) | Reports |
+|---|---|
+| 0 | 1 |
+| 1 | 24,339 |
+| 2 | 182 |
+| 3-7 | 95 |
+| 21-22 | 3 |
+
+The lag-2+ reports were classified on 11-25 as reports CNINFO published again years later, which
+the rule cannot tell from a late filing and should not try to.
+
+**The residual is the filer's cover.** Hongbaoli (002165) prints `二○一二年年度报告` on the cover of
+its FY2011 report (filed 2012-04-25), while page 2 and its contents read `2011年年度报告`, so the
+report's rows sit at 2012-12-31. Fixing it would mean passing the publication date into the reader
+("a report's year cannot follow its publication", then take the next year stated). One report of
+~24,900 does not justify that now; the lag query names it whenever it is re-run.
