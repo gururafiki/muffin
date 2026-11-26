@@ -1,7 +1,10 @@
 # Where the missing segments can come from
 
 Created 2026-11-26 · Asked by the user ("figure out where to get missing segments") · Status:
-**options measured; waiting for the user's choice**
+**chosen 2026-11-26.** The user chose A, B, C, E and D in that order, F as one more probe, G
+deferred and H rejected. Plan:
+[docs/specs/2026-11-26-more-segment-sources.md](../specs/2026-11-26-more-segment-sources.md)
+(Phase 6c).
 
 ## Why
 
@@ -82,4 +85,5 @@ Every finding below was measured on 2026-11-26, from raw already held or from th
 
 ## Done when
 
-The user has chosen; each chosen option becomes its own step with a gate over held documents.
+The user has chosen (done 2026-11-26); each chosen option becomes its own step with a gate over held
+documents. Steps are tracked in `todos.md` § Phase 6c.

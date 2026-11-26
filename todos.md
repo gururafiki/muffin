@@ -4408,12 +4408,13 @@ Measured 2026-11-09: SEC segment runs fail 17% on `pending_segments` timeouts, a
       stay until **2026-12-20** ([the retired-columns note](docs/deferred/2026-09-30-the-retired-families-leave-columns-behind.md)).
       Replayed twice on the node (117 of 117 tests) and dry-run on production. Deploys with #520.
 - [ ] 10. Docs, skills, memory.
-- [ ] **2026-11-26: [where the missing segments can come from](docs/deferred/2026-11-26-where-the-missing-segments-can-come-from.md)**
+- [x] **2026-11-26: [where the missing segments can come from](docs/deferred/2026-11-26-where-the-missing-segments-can-come-from.md)**
       (the user asked). 2,979 large equities ($53.9 T) hold no split. Measured options: A SEC
       vocabulary and size gate (~15, ~$1.8 T), B one company's split on all its listings (101,
       $3.6 T), C Japan via EDINET's HTML note (466, $6.6 T), D Europe via ESEF blocks (~430,
       ~$7.7 T), E China's segment note for financials and SOEs (88, $4.1 T), F Taiwan (unconfirmed),
-      G English PDFs (~$12 T, large), H paid vendor (no). **Waiting for the user's choice.**
+      G English PDFs (~$12 T, large), H paid vendor (no). **Chosen 2026-11-26:** A, B, C, E, D in
+      that order, F probed, G deferred, H rejected — planned as **Phase 6c** below.
 
 **Left for Phases 6 and 6b by Phases 4 and 5.** Read in Phase 6's planning on 2026-11-09; how each
 is handled is in the spec's *Notes inherited from earlier phases*.
@@ -4557,6 +4558,50 @@ Decisions (the user):
       muffin-ingest README (#193). Done 11-25: `market-health` on `pending_news` (in #542), the
       unclassified-backlogs paragraph of `docs/data-ingestion.md`, the spec's step 7, CLAUDE.md.
       **Phase 6b is done.** `jp-cpi` resolved the same day (below).
+
+### Phase 6c — more segment sources — PLANNED 2026-11-26
+
+Spec: [docs/specs/2026-11-26-more-segment-sources.md](docs/specs/2026-11-26-more-segment-sources.md).
+
+Baseline (2026-11-26): 2,979 large equities ($53.9 T) hold no placed revenue split for FY2023+.
+
+Decisions (the user, 2026-11-26):
+- **Company key:** the regulator filer, mapped onto every listing (CNINFO's HK list,
+  shared LEI issuers, the N-PORT issuer fix).
+- **One regulator per security:** the home lane skips companies the SEC covers, with a WARN check.
+- **Raw:** EDINET archives and ESEF reports are kept whole for good; the volume grows as needed.
+- **Parser version:** one per regulator.
+- **China's PDFs:** kept from now on (pruning stops).
+
+- [x] 0. Spec, this section, rework table row 6c, deferred notes:
+      - [curation of the new namespaces](docs/deferred/2026-11-26-the-new-segment-namespaces-need-curation.md);
+      - [English PDFs, option G](docs/deferred/2026-11-26-english-annual-report-pdfs-are-the-last-segment-source.md);
+      - [the parser singleton drop](docs/deferred/2026-11-26-drop-the-segment-parser-singleton.md).
+- [ ] 1a. deployment: per-regulator `segment_parser`, `security_filer.via`,
+      `segment_total_concept`; CI reads per regulator; guard test.
+- [ ] 1b. ingest: queues read their regulator's version; `sec_instances_due` above the cap; floor
+      helpers to `lib/filer_lanes.py`; WARN check `no_period_has_splits_from_two_regulators`.
+- [ ] 2. A, SEC:
+      - 64 MB instance gate (child parse if measured) and `reask_too_large`;
+      - scoped revenue concepts and a one-shot re-queue;
+      - `held` requires an accounts filing.
+- [ ] 3. B, one split on every listing:
+      - N-PORT issuer fill;
+      - CNINFO HK list and the `FILERS` fix;
+      - sibling extension, plus a copy of the filer's history;
+      - SEC fan-out through `security_filer`.
+- [ ] 4. Grow `/mnt/data`; `cninfo_retention` stopped; the cap check becomes a gauge.
+- [ ] 5. C, EDINET:
+      - cache locations with key redaction;
+      - control rows;
+      - `memberLabel` passthrough (muffin-ui);
+      - provider, `segment_note`, `defs/edinet`;
+      - reader gate, parity against Japanese 20-F filers, kind audit;
+      - live, then enable.
+- [ ] 6. E: the China note stage for banks and state firms; re-fetch for the 88.
+- [ ] 7. D: ESEF via filings.xbrl.org; enable with coverage rows.
+- [ ] 8. F: probe Taiwan MOPS's segment note; result back to the user.
+- [ ] 9. Docs, skills, memory.
 
 ### Phases 7-8 — derived and serving, then retirement — not started
 
