@@ -678,3 +678,49 @@ What this changes in the plan:
   composition reader under a new heading, without the note stage. Decide that when building.
 - **No report is near the size gate**: 9.3-9.5 MB against `MAX_PDF_BYTES` 12 MB.
 
+**5d, live on a tiny subset (2026-11-27, 14:16-14:45 UTC).**
+- **Roll:** #210 rolled at 14:17. All three services moved to `a4a25b88`, gRPC was SERVING and the
+  location LOADED. No run was in flight, and pass 10 had finished.
+- **Registry** (`e9645183`, 47 s): 3,811 codes; of 2,483 Japanese equities, 2,349 mapped, 8 left
+  to the SEC, 126 unmapped. `filed` 0, because the catalogue was still empty.
+- **Days 2026-06-24..26** (`klaugxhi`, one run, 30 s):
+  - 3 lists answered (4.5 MB fetched, 500 KB on disk);
+  - 4,776 documents, 1,182 catalogued (1,006 annual reports);
+  - 6 withdrawals named, 1,074 filers touched;
+  - **527 annual reports filed for 527 mapped securities**, all due.
+- **Filers** Advantest (E01950, IFRS), Nintendo (E02367) and Tokio Marine (E03847, an insurer)
+  (`vhhqudhy`, one run, 44 s): 3 archives (3.85 MB) answered and read; 53 rows, all placed;
+  3 marked.
+- **Served** (`security_segment_current`, read per security):
+
+  | Company | Split | Total |
+  |---|---|---|
+  | Nintendo | ゲーム専用機 96.8% / IP関連収入等 3.2%; four regions | ¥2,313,051 m |
+  | Advantest | テストシステム 90.3% / サービス他 9.7%; four regions | ¥1,128,610 m |
+  | Tokio Marine | revenue 損害保険 84.8% / 生命保険 15.2% | ¥7,693,560 m |
+
+**Two defects the first live read found, fixed before the history drain.**
+1. **Tokio Marine's profit split held a total.** Its table heads the consolidated column
+   `連結合計`, and the total label knew only `連結` and `合計`. As a member, the column pushed the
+   sum to ¥1,081,201 m, which `_close` (0.05%) matched to `jpigp_cor:SubtotalOpeCFIFRS`, an
+   operating cash-flow subtotal of ¥1,080,955 m.
+   - Fix: `連結合計`/`連結計` become total labels (muffin-deployment, with EDINET's parser
+     version raised to 2).
+   - Fix: a match's slack becomes the table's own rounding, one unit per member plus one and
+     never over 0.05% (muffin-ingest#211).
+   - The gate over 41 held reports changed 3, each a correction. S100YGOV lost a comparative
+     split matched to the wrong concept 24 units off. S100YIA0's segment assets, matched to cost
+     of sales, moved to their own year.
+2. **Advantest also serves its 2014 SEC split** (`us-gaap:StatementBusinessSegmentsAxis`, from its
+   last 20-F) beside the 2026 EDINET one. `security_segment_current` takes each axis's latest
+   period however old, so a company that left one regulator keeps showing its last split from it.
+   This predates EDINET and is recorded for a decision.
+
+**The history drain, measured:**
+- **Day lists:** ~3,650 days in ~122 runs of 30, ~2.5 hours, a few hundred MB.
+- **Archives:** ~2,349 filers × up to 10 reports ≈ 23,000 archives at ~1 MB, so ~23 GB against
+  81 GB free, and ~39 hours at ~6 s each.
+- **The pool trap:** a run holds every pool its steps declare, so archive runs that also write
+  stage 2 would hold `sql` for up to 15 minutes each. The drain therefore runs stage 1 alone on
+  `edinet` and stage 2 as a separate, request-free backfill, as DART's did.
+
