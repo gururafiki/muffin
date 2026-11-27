@@ -729,3 +729,11 @@ re-read (`ovsmyfpc`) asked EDINET nothing, because the three archives were held.
 at version 2: 64 rows, 16 changed, the `連結合計` member retracted, and 8 profit rows left
 honestly unplaced.
 
+**Decisions (the user, 2026-11-27).**
+- **The full ten years now.** Days go oldest-first, because the API's window drops a day each day.
+  Then every archive on the `edinet` pool alone, then the request-free read. After that the
+  schedules and the due sensor go on, and `edinet` is enabled.
+- **Each company serves only its newest regulator.** `security_segment_current` serves only the
+  source whose newest period is the company's newest, so Advantest's 2014 SEC split stops showing
+  beside its 2026 EDINET one. Older regulators' rows stay stored.
+

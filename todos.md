@@ -4672,8 +4672,20 @@ Decisions (the user, 2026-11-26):
           `ovsmyfpc`: no request (3 held), 3 read at v2, 64 rows, 16 changed, the `連結合計` row
           retracted, Tokio Marine's profit split left unplaced. Its four business lines now sit
           on the revenue split's axis with depreciation only (two member sets on one axis).
-    - [ ] Decide: a company that left a regulator keeps serving that regulator's last split
-          (Advantest's 2014 SEC split beside its 2026 EDINET one).
+    - [x] **Decided (the user, 2026-11-27): load the full ten years now.** Days oldest-first
+          (the API's window drops a day each day), then every archive on the `edinet` pool alone,
+          then the request-free read on `sql`, all at priority -1; then turn on `edinet_daily`,
+          `edinet_code_list` and `edinet_reports_due` and enable `edinet`. Day backfill `okspcmdd`
+          launched 14:54 (3,651 days, ~122 runs).
+    - [ ] Archives: add every mapped filer to the grid, backfill `raw_edinet_filings` alone, then
+          `edinet_segment`; read the counters and disk.
+    - [ ] Schedules and the due sensor RUNNING in code (ingest PR), `edinet` enabled with its
+          coverage rows (deployment PR), parity against Sony/MUFG/Honda's 20-F splits, kind audit.
+    - [ ] **Decided (the user, 2026-11-27): each company serves only its NEWEST regulator.** A
+          company that left a regulator kept serving that regulator's last split as another axis
+          (Advantest's 2014 SEC split beside its 2026 EDINET one). `security_segment_current`
+          serves only the source whose newest period is the company's newest; the rest stays
+          stored. Schema change with its guard, then re-measure anon latency.
 - [ ] 6. E: the China note stage for banks and state firms; re-fetch for the 88.
   - [ ] Found 2026-11-27: a footnote line (`注：…`) is joined as a suffix onto the last row's
         name (`cninfo:其他地区注：2025`, `cninfo:商品及其他注：2、2015年度…`). 6 served rows over
