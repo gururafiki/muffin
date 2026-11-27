@@ -4240,6 +4240,9 @@ Measured 2026-11-09: SEC segment runs fail 17% on `pending_segments` timeouts, a
                   223 not held, 1 unreadable, 0 failed; 12,855 rows (10,340 changed), 88
                   retracted. Behind the parser now: **223** full reports, all never read, 0 behind
                   a version (2,136 before). **Pass 11 `uzlleyrc` launched 15:16**, same shape.
+                  **Read 2026-11-27 20:00:** 88 of 88 SUCCESS. 223 named; 179 fetched (211 MB)
+                  and read, 42 unasked (budgets), 2 refused; 507 rows (459 placed). **44** full
+                  reports left, all never read: left to the floor, no pass 12.
                   **Retention pruned 6,245 reports (7.5 GB) during pass 9**, 14:03-18:01 on 11-26:
                   decision 5 was taken but `cninfo_retention` stayed RUNNING in stored state until
                   the 11-27 09:09 roll and `schedule-reset`. Each was read before it was pruned; a
@@ -4692,8 +4695,13 @@ Decisions (the user, 2026-11-26):
           then the request-free read on `sql`, all at priority -1; then turn on `edinet_daily`,
           `edinet_code_list` and `edinet_reports_due` and enable `edinet`. Day backfill `okspcmdd`
           launched 14:54 (3,651 days, ~122 runs).
-    - [ ] Archives: add every mapped filer to the grid, backfill `raw_edinet_filings` alone, then
-          `edinet_segment`; read the counters and disk.
+    - [x] Days `okspcmdd`: 122 of 122 SUCCESS (14:54-19:50, ~86 s each). **21,348 annual reports
+          filed for 2,339 securities**, 2016-11-28..2026-11-26 (~2,000-2,300 a year), 21,345 unread;
+          82,494 documents catalogued; raw 95 MB.
+    - [ ] Archives: every mapped filer added to the grid by hand at 15:20 (2,349 keys; the
+          sensor's 14:17 tick ran before the registry). **`ntiipgwg` launched 20:00**:
+          `raw_edinet_filings` alone over the grid, priority -1, ~235 runs; expected ~28 GB and
+          ~33 h. Then `edinet_segment` over the grid (no request); read the counters and disk.
     - [ ] Schedules and the due sensor RUNNING in code (ingest PR), `edinet` enabled with its
           coverage rows (deployment PR), parity against Sony/MUFG/Honda's 20-F splits, kind audit.
     - [ ] **Decided (the user, 2026-11-27): each company serves only its NEWEST regulator.** A
