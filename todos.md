@@ -4641,7 +4641,7 @@ Decisions (the user, 2026-11-26):
         `edinet_document`, `file_edinet_filings()`, control rows (parser 1, three axes, 24 region
         members), `/edinet/` and `/edinet-dl/`. Both locations answer through the cache, the key
         is redacted in the log, anon latency is under budget.
-  - [x] 5b. muffin-ui #145 (merged 11:00): printed names (`cninfo:`, `edinet:`, `esef:`) pass
+  - [x] 5b. muffin-ui #145 (merged 10:53): printed names (`cninfo:`, `edinet:`, `esef:`) pass
         through `memberLabel`; 142 of 25,521 CNINFO members had rendered split ("1.5 MW",
         "3 C数码").
   - [ ] 5c. ingest #210: provider, `segment_note`, `facets/edinet`, `defs/edinet` (everything
