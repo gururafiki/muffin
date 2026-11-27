@@ -844,3 +844,19 @@ gained (PetroChina 2008 among them), 0 changed or lost. The re-run on the final 
 **The re-queue.** The one-shot sets FY2023+ CNINFO full reports read into no rows back to version
 0. Measured: 806 reports across 414 securities, out of 7,202 read; ~6 GB to fetch again, with
 `/mnt/data` at 80 GB free. It drains by a paced `cninfo_segments` backfill.
+
+**Each company is served only its newest year (the user, 2026-11-27; muffin-deployment#559).**
+Rendering SF Holding after the note went live showed its page leading with FY 2016 product and
+region splits from its main tables, above its 2025 operating segments: `security_segment_current`
+served every axis at that axis's own newest period. Measured on the spine, 288 securities were
+served a `srt:` axis over a year older than their newest split, 209 a CNINFO one, 138 a `us-gaap:`
+one and 90 an `ifrs-full:` one. Within the regulator a company is served from, only axes at the
+company's newest annual period are served now. It is one predicate on the filter applied last
+(`p.period_ending = p.source_newest`). `security_segment_detail` serves a cross-tab only at a
+period `current` serves, and the reconcile guard's "served" follows.
+- **Rolled back on production:** 49,969 -> 46,223 rows. The 3,746 removed are spread over 877
+  securities, nothing is added, and no security is left empty. SF Holding loses three 2016 axes,
+  TSM one 2015 axis, and Toyota four axes older than its FY2026. AAPL, MSFT, Samsung, SAP, Bank
+  of China and Advantest are unchanged.
+- **Accepted cost:** a filer that drops a split in its newest year loses it from the page until it
+  reports one again (Toyota's 2025 geography).

@@ -4736,11 +4736,16 @@ Decisions (the user, 2026-11-26):
   - [ ] Drain `fnwempps` (whole grid, priority -1, launched 21:39): runs beside the EDINET archive
         queue (a pool-blocked run does not block the queue). Read `read_note`, `too_large`,
         bytes, and the large-no-split count when it ends.
-  - [ ] Found rendering SF Holding: a company is served every axis's newest period, so SF's 2016
-        main-table splits lead its page above the 2025 note split. Measured on the spine: an axis
+  - [x] Found rendering SF Holding: a company was served every axis's newest period, so SF's 2016
+        main-table splits led its page above the 2025 note split. Measured on the spine: an axis
         over a year older than the company's newest split for 288 (srt), 209 (cninfo), 138
-        (us-gaap) and 90 (ifrs-full) securities. Predates step 6. A serving decision (asked
-        2026-11-27).
+        (us-gaap) and 90 (ifrs-full) securities. **Decided 2026-11-27 (the user): newest year
+        only** — within its regulator, a company is served only axes at its newest annual period.
+        muffin-deployment#559: rolled back on production 49,969 -> 46,223 rows (3,746 over 877
+        securities removed, nothing added, nobody left empty); per-security reads no slower;
+        three mutations caught. The guard's "served" follows.
+      - [ ] Deploy; read SF Holding as anon; `check_anon_read_latency.py` once the backup ends;
+            re-render SF Holding.
   - [ ] 2026-11-27: what the reader cannot read yet (geographic bank segments, revenue only as
         components, traditional characters, no digits, ABC and BoCom uninvestigated, 18 main
         tables that do not reconcile):
