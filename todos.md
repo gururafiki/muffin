@@ -4744,8 +4744,9 @@ Decisions (the user, 2026-11-26):
         muffin-deployment#559: rolled back on production 49,969 -> 46,223 rows (3,746 over 877
         securities removed, nothing added, nobody left empty); per-security reads no slower;
         three mutations caught. The guard's "served" follows.
-      - [ ] Deploy; read SF Holding as anon; `check_anon_read_latency.py` once the backup ends;
-            re-render SF Holding.
+      - [x] Deployed 2026-11-27 22:18. SF Holding now serves its 2025 segments alone;
+            `check_anon_read_latency.py` all ok (business lines 356 ms); the reconcile guard passes
+            (766 served splits, 2 over target, 0.26% against 2.5%).
   - [ ] 2026-11-27: what the reader cannot read yet (geographic bank segments, revenue only as
         components, traditional characters, no digits, ABC and BoCom uninvestigated, 18 main
         tables that do not reconcile):
