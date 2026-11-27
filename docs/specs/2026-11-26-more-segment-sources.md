@@ -650,3 +650,31 @@ The harness's interception missed a data-modifying CTE (`with released as (delet
 read-only connection refused it. `readonly.SafeCursor` now intercepts that shape, and the runner
 forwards `EDINET_API_KEY`.
 
+### Step 6, E: China's segment note, validation (2026-11-27)
+
+The three 2026 reports the plan names, fetched through the lane's own `cninfo.report` (the
+http-cache held two of them) and kept on the node at `/tmp/claude-cnnote/` for fixtures.
+Raw no longer holds their bodies: they were pruned on 2026-11-23, before decision 5 kept them.
+
+| Report | Size | Pages | Outline | Note | Shape |
+|---|---|---|---|---|---|
+| ICBC 2025 | 9.3 MB | 408 | none | p.316 `五、分部信息`; summary p.44 `经营分部信息概要` | summary: rows `营业收入` 838,270 then 公司金融 410,676 / 个人金融 327,739 / 资金 93,990 / 其他 5,865, amount and share columns per year, like the `营业收入构成` table |
+| Ping An 2025 | 9.5 MB | 370 | 41 entries, none for segments | p.245-252 `七、分部报告` | segments as columns (寿险及健康险, 财产保险, 银行, 资产管理, 金融赋能, `其他业务及合并抵销`, 合计); `营业收入合计` 502,171 + 353,272 + 131,442 + 51,346 + 49,358 + (37,083) = 1,050,506 |
+| PetroChina 2025 | 9.4 MB | 273 | none | p.177 `60 分部报告 (1) 经营分部` | segments as columns (油气和新能源 … 总部及其他, 合计); `对外交易收入` sums to 2,864,469 = 合计; `分部收入` and `减：分部间交易收入` rows above it |
+
+What this changes in the plan:
+- **The outline cannot find the note.** Two of three reports carry no outline, and the third's
+  outline has no segment entry. The note is found by a text scan for its heading (`分部报告`,
+  `分部信息`, `经营分部`); the scan already finds every candidate page in under a second.
+- **The tables are EDINET's shapes, drawn in PDF positions.**
+  - Segments are columns, and metric rows include a total.
+  - An eliminations column (`其他业务及合并抵销`) is part of the sum, as `消去` is in Japan.
+  - Column headers wrap over two lines (`油气和` / `新能源`, `寿险及` / `健康险`).
+  - Negatives are in parentheses, the unit is 人民币百万元, and `–` is an empty cell.
+  - So the note stage builds a grid from `cn_pdf`'s positions and hands it to
+    `facets.segment_note`, anchored on the note's own 合计 column, as planned.
+- **The bank summary is the composition shape.** ICBC's page 44 is a heading plus a total row
+  with members below it, with amount and share columns. It may be read by the existing
+  composition reader under a new heading, without the note stage. Decide that when building.
+- **No report is near the size gate**: 9.3-9.5 MB against `MAX_PDF_BYTES` 12 MB.
+
