@@ -4724,11 +4724,23 @@ Decisions (the user, 2026-11-26):
         16 reader mutations caught. muffin-ingest#212, muffin-deployment#558 (vocabulary, the
         `member` rule kind, the axis, a one-shot re-queue of 806 reports / 414 securities, 11 of
         11 mutations caught on the node). Record: spec "Step 6 as built".
-  - [ ] Gate over held reports, re-run on the final code (every fourth report, 1,626): must show
-        only gains. On the first reader: 1,234 same, 389 empty, 3 gained, 0 changed.
-  - [ ] Merge #212, roll; merge #558, deploy (after the roll); read the one-shot's notice.
-  - [ ] Drain: paced `cninfo_segments` backfill over the grid at priority -1; read
-        `read_note`, `too_large` and the bytes; render ICBC's and Bank of China's stock pages.
+  - [x] Gate over held reports on the final code (every fourth report, 1,626): 1,234 same, 387
+        empty, **5 gained, 0 changed, 0 lost**; each gain adds up exactly (PetroChina 2008 among
+        them).
+  - [x] 2026-11-27: #212 rolled 21:17 (one EDINET archive run killed, re-executed as `8469b1b2`);
+        #558 deployed 21:38 (one-shot: 806 re-queued; 14 rules; axis present; Dagster untouched).
+  - [x] Live subset (`btxxsvzr`, 4 runs, all SUCCESS): ICBC 3 of 3 reports read from the note,
+        Bank of China 3 of 5, CMB 1 of 3, SF Holding 2 (1 report over 48 MB). Served on A and H
+        listings alike; rendered against production: ICBC, Bank of China and CMB show their
+        segments (CMB with the "filing totals these lines to" caption).
+  - [ ] Drain `fnwempps` (whole grid, priority -1, launched 21:39): runs beside the EDINET archive
+        queue (a pool-blocked run does not block the queue). Read `read_note`, `too_large`,
+        bytes, and the large-no-split count when it ends.
+  - [ ] Found rendering SF Holding: a company is served every axis's newest period, so SF's 2016
+        main-table splits lead its page above the 2025 note split. Measured on the spine: an axis
+        over a year older than the company's newest split for 288 (srt), 209 (cninfo), 138
+        (us-gaap) and 90 (ifrs-full) securities. Predates step 6. A serving decision (asked
+        2026-11-27).
   - [ ] 2026-11-27: what the reader cannot read yet (geographic bank segments, revenue only as
         components, traditional characters, no digits, ABC and BoCom uninvestigated, 18 main
         tables that do not reconcile):
