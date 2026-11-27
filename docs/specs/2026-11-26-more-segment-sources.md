@@ -678,7 +678,7 @@ What this changes in the plan:
   composition reader under a new heading, without the note stage. Decide that when building.
 - **No report is near the size gate**: 9.3-9.5 MB against `MAX_PDF_BYTES` 12 MB.
 
-**5d, live on a tiny subset (2026-11-27, 14:16-14:45 UTC).**
+**5d, live on a tiny subset (2026-11-27, 14:16-14:25 UTC).**
 - **Roll:** #210 rolled at 14:17. All three services moved to `a4a25b88`, gRPC was SERVING and the
   location LOADED. No run was in flight, and pass 10 had finished.
 - **Registry** (`e9645183`, 47 s): 3,811 codes; of 2,483 Japanese equities, 2,349 mapped, 8 left
@@ -723,4 +723,9 @@ What this changes in the plan:
 - **The pool trap:** a run holds every pool its steps declare, so archive runs that also write
   stage 2 would hold `sql` for up to 15 minutes each. The drain therefore runs stage 1 alone on
   `edinet` and stage 2 as a separate, request-free backfill, as DART's did.
+
+**Fixes live (14:38 roll of muffin-ingest#211, 14:45 deploy of muffin-deployment#555).** The
+re-read (`ovsmyfpc`) asked EDINET nothing, because the three archives were held. It read all three
+at version 2: 64 rows, 16 changed, the `連結合計` member retracted, and 8 profit rows left
+honestly unplaced.
 

@@ -4665,10 +4665,13 @@ Decisions (the user, 2026-11-26):
         sensor declared RUNNING, the ten-year day backfill (oldest first: the window moves) and
         the filer backfill, `edinet` enabled; parity against Sony, MUFG and Honda's 20-F splits
         and a kind audit.
-    - [x] 2026-11-27 14:16-14:45: #210 rolled; registry 2,349 mapped / 8 the SEC's; days
+    - [x] 2026-11-27 14:16-14:25: #210 rolled; registry 2,349 mapped / 8 the SEC's; days
           06-24..26 filed 527 reports; Advantest, Nintendo, Tokio Marine read, 53 rows placed.
-    - [ ] Fix before the drain: `連結合計` as a total and a match bounded by the table's rounding
-          (ingest #211; deployment PR with parser version 2). Then re-read the three.
+    - [x] Fix before the drain: `連結合計` as a total and a match bounded by the table's rounding
+          (ingest #211, rolled 14:38; deployment #555, deployed 14:45, parser version 2). Re-read
+          `ovsmyfpc`: no request (3 held), 3 read at v2, 64 rows, 16 changed, the `連結合計` row
+          retracted, Tokio Marine's profit split left unplaced. Its four business lines now sit
+          on the revenue split's axis with depreciation only (two member sets on one axis).
     - [ ] Decide: a company that left a regulator keeps serving that regulator's last split
           (Advantest's 2014 SEC split beside its 2026 EDINET one).
 - [ ] 6. E: the China note stage for banks and state firms; re-fetch for the 88.
