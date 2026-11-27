@@ -4089,8 +4089,14 @@ Measured 2026-11-09: SEC segment runs fail 17% on `pending_segments` timeouts, a
             Southern Copper's 12 10-Qs since 2023 now hold 1,139 rows across 11 of them.
       - **First wave, 2026-11-14 12:52 UTC:** 24 runs, all SUCCESS, max 30 s; 29 filings named,
         19 answered, 10 absent; 311 new rows; 0 retracted, 0 failed, 0 currency unknown; 29 marks.
-      - [ ] **2026-11-27:** the daily-index run for Thanksgiving (11-26) ends SUCCESS, claiming
-            nothing, with no "A Dagster run failed" alert (muffin-ingest#172).
+      - [x] **2026-11-27:** the daily-index run for Thanksgiving (11-26) ends SUCCESS, claiming
+            nothing, with no "A Dagster run failed" alert (muffin-ingest#172). Verified 14:20 UTC:
+            run `cdeb9c10` (11:00, 9 s) SUCCESS; an observation on 2026-11-26 with
+            `published: false` after 1 call; `raw_sec_form4`, `sec_form4_trade` and both checks
+            SKIPPED; no materialisation of 2026-11-26; Grafana sent no `muffin-dagster-run-failed`
+            since 10:55. The only alert that fired, `muffin-cron-headroom`, ran from 11-26 11:50 to
+            11-27 11:30, exactly while one 209 s `muffin-segment-spine` run (11-26 11:16, in the SEC
+            wave) sat in its 24-hour window. The spine's runs since are 127-129 s.
 - [ ] 4. CNINFO: registry, grid, PDF child process, retention; retire `security-cn-segments` and
       `cn-filings`; the backlog backfill, with its deferred note.
       **Decided 2026-11-15: fix the reader now**, and re-read every report the edge read. Built:
