@@ -4630,6 +4630,13 @@ Decisions (the user, 2026-11-26):
         serves segment and regional splits for 2023-2025 that reconcile exactly (68.27 bn USD for
         2025). **Santander** reads 3 20-Fs at v20 and writes no segment row: its segment facts
         use concepts the SEC vocabulary does not name. Open yield gap of step 2.
+        **Measured 2026-11-27 (FY2025 instance, 30.9 MB):** not a vocabulary gap. A bank's
+        business split is its TOTAL INCOME, tagged `ifrs-full:GrossProfit` (69 facts on
+        `SegmentsAxis` contexts; consolidated €58.67 bn), and no revenue concept sits on a segment
+        context. The revenue we serve for it is a different line (€66.09 bn, SEC), so such a split
+        never reconciles against revenue, and storing it as revenue would mislabel it. The same
+        question as MUFG's 粗利益 and China's banks (ICBC states the line as 营业收入): **a user
+        decision** whether a bank's total income is a segment metric of its own.
 - [x] 3. B, one split on every listing (deployment #551, ingest #208): N-PORT issuer fill; CNINFO
       HK list and the `FILERS` fix; sibling extension plus a copy of the filer's history; SEC
       fan-out through `security_filer`.
