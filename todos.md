@@ -4582,10 +4582,13 @@ Decisions (the user, 2026-11-26):
 - [x] 1b. ingest: queues read their regulator's version; `sec_instances_due` above the cap; WARN
       check `no_period_has_splits_from_two_regulators`, baseline 0 (#205, rolled 2026-11-26). The
       floor helpers move to `lib/` in step 5.
-- [ ] 2. A, SEC:
-      - 64 MB instance gate (child parse if measured) and `reask_too_large`;
-      - scoped revenue concepts and a one-shot re-queue;
-      - `held` requires an accounts filing.
+- [x] 2. A, SEC (#206, #207; deployment #549, #550; live 2026-11-26): 64 MB gate; three
+      fallback revenue totals; 1,943 filings re-read, 13 companies gained a split (9 large,
+      $0.91 tn); `held` requires an accounts filing.
+  - [ ] 2026-11-27: read backfill `sskwxxck` (the 56 filings over 32 MB: HSBC, Santander).
+- [ ] 3. B, in flight: deployment #551 deployed 2026-11-27, ingest #208 open; roll at ~05:00 UTC,
+      then `cninfo_registry`, the N-PORT replay (newest filing per fund) and `filer_siblings` by
+      hand.
 - [ ] 3. B, one split on every listing:
       - N-PORT issuer fill;
       - CNINFO HK list and the `FILERS` fix;

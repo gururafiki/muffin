@@ -486,3 +486,51 @@ muffin-ingest#206 (64 MB gate), #207 (fallback totals); muffin-deployment#549 (`
 
   The whole view reads in 152 ms.
 - **Re-queue:** 1,943 filings of 656 filers (rolled back on production; nothing else was due).
+- **Live, 2026-11-26 20:03–20:08:** the sensor drained all 1,943 filings in 74 runs, each
+  succeeding:
+  - stage 1: 400 instances fetched, 1,543 already held;
+  - stage 2: 1,929 read, 14 too large.
+
+  13 of the 656 companies gained a placed revenue split, 9 of them over $2 bn ($0.91 tn): Morgan
+  Stanley, Goldman Sachs, NextEra, UBS, Rocket, DTE, Nomura, XP, Community Financial.
+  - Every new split reconciles to within 0.4% of its target.
+  - Morgan Stanley's business axis (one member, 46%) and NextEra's (NEER only, 32%; FPL is a
+    co-registrant outside the segment axis) are partial disclosures, served with the remainder
+    named. Both companies' regional splits are complete.
+  - Novartis and Sanofi stay without splits because `RevenueFromSaleOfGoods` was left out.
+- **The 56 filings over 32 MB** go through one backfill with `raw_sec_instance.reread`
+  (`sskwxxck`, priority -1, launched 2026-11-27 00:40).
+
+### Step 3, B (2026-11-27)
+
+muffin-deployment#551 (deployed 2026-11-27), muffin-ingest#208.
+
+- **`security_filer.via`** (`registry` | `issuer_sibling`). A registry always wins:
+  - the SEC trigger, `apply_nse_symbol_map` and the CNINFO and DART assets claim their rows;
+  - the SEC trigger no longer deletes a sibling row on a write naming a null CIK.
+- **The rule is SQL:** `issuer_sibling_links()` and `extend_filers_to_issuer_siblings()`.
+  - Sources are registry rows with an annual accounts filing; holes only; equities only.
+  - An issuer holding two registry filers is refused.
+  - A link the rule stops wanting is retracted, with the filings and segments it brought.
+- **Deviation: the copy is general.** `filer_holders_to_copy()` names any holder with none of its
+  filer's history beside a holder with some, so an H-share line CNINFO's HK list maps is copied
+  too. On production it named exactly the 143 new links, so it changes nothing that already
+  exists.
+- **Deviation: no `security.cik` for same-country siblings.** Every sibling row carries segments
+  only, US duplicates included (Honeywell, U-Haul and Greif rows with no listing). One rule, and no
+  second copy of any company's statements.
+- **Measured on production, rolled back:**
+  - 143 links: cninfo 83, sec 43, dart 13, nse 4;
+  - 4 issuers refused, each filing with SEC and its home regulator: Sinopec Shanghai, Dr Reddy's,
+    Wipro, China Southern;
+  - extend took 3.9 s;
+  - Petrobras's lines: 4,496 filings and 379 segment rows each; Samsung preferred: 12 and 58;
+  - ICBC's H-share: 61 filings, 0 segments (Chinese banks print no mandated table; step 6).
+- **CNINFO's HK list** (`hke_stock.json`, 2,798 rows) maps 68 held H-share lines onto their
+  A-share filer: 36 the issuer route reaches anyway, and 32 it does not, 29 of them large (Zhongji
+  Innolight $78 bn, Hengrui, Hua Hong, SF Holding, Sany).
+- **`FILERS` in CNINFO** took holders by joining each one's own six-digit listing, which silently
+  dropped any holder without one. It now takes every holder, and the search code from any of them.
+- **SEC fan-out:** the segment queries key on `security_filer('sec')`. The filer lane writes the
+  filing list for every holder, and statements, profile, calendar and SIC for the CIK holders.
+- **N-PORT issuer fill:** a held security gains the issuer its holding names, only where empty.
