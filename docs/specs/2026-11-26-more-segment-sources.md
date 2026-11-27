@@ -566,3 +566,19 @@ The probe ran from the node, with the key passed by name.
     subtotal column, and nested rows using colspans. Its 営業純益 is the operating line.
 - The archives are kept on the node at `/tmp/claude-edinet/` as fixtures until they are
   captured into the repo.
+- **The anchors are not a fixed concept list.** Toyota tags its consolidated revenue
+  (50,684,952 百万円) only under filer extensions: `jpcrp030000-asr_E02144-000:TotalNetRevenuesIFRS`,
+  `SalesRevenuesIFRS`, `OperatingRevenueFromExternalCustomersIFRS` and
+  `OperatingRevenuesIFRSKeyFinancialData`. No `jpigp_cor` concept carries it. Nintendo uses the
+  standard `jppfs_cor:NetSales`. So the interpreter reverses the plan's lookup:
+  - **A row's member sum is a total** when the filing holds a consolidated, non-dimensional
+    duration fact of exactly that value, under any concept. The fact is consolidated when its
+    context does not end in `_NonConsolidatedMember` (`CurrentYearDuration`, `Prior1YearDuration`).
+  - **Which metric it is** comes from the matching concepts' local names and the row's label
+    (外部顧客への売上高, 営業収益, 営業利益), kept as control rows. The value match is what makes
+    the rule language- and taxonomy-independent; the name only chooses the metric.
+  - The period comes from the matched fact's context (`CurrentYearDuration` 2025-04-01..2026-03-31),
+    which also replaces parsing the heading's 前連結会計年度 / 当連結会計年度 text.
+  - `segment_total_concept` rows for `edinet` remain only as a FALLBACK where no fact matches.
+- **Old archives download while their list is inside the window**: Toyota 2017-06-23 (`S100AKEX`,
+  0.69 MB) and 2021-06-24 (`S100LO6W`, 1.04 MB) both answered 200.
