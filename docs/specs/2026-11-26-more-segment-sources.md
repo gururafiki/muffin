@@ -534,3 +534,35 @@ muffin-deployment#551 (deployed 2026-11-27), muffin-ingest#208.
 - **SEC fan-out:** the segment queries key on `security_filer('sec')`. The filer lane writes the
   filing list for every holder, and statements, profile, calendar and SIC for the CIK holders.
 - **N-PORT issuer fill:** a held security gains the issuer its holding names, only where empty.
+
+### Step 5, C: EDINET validation (2026-11-27, against the real API)
+
+The probe ran from the node, with the key passed by name.
+- **The daily list keeps a rolling ten years.** `documents.json?date=…&type=2` answers 200 for
+  every day, and its `metadata.status` is 404 (no results) for a day older than about ten years.
+  Bisected 2026-11-27: the horizon lies between 2016-11-24 and 2016-11-28. A day falls off the API
+  as time passes, so the history backfill runs oldest-first, and kept raw is the only copy of
+  anything past the window. One list is 0.7 MB in ~1–2.5 s (2026-06-18: 720 documents, 154 annual
+  reports; June 2017–2021: 2,096–2,801 documents a day).
+- **An annual report** is `docTypeCode 120`, `ordinanceCode 010`, `formCode 030000`.
+  `secCode` is five digits, the four-character local code plus a check digit (`72030`). Toyota
+  (E02144) filed FY2026 on 2026-06-10, MUFG (E03606) on 06-24, Nintendo (E02367) on 06-25.
+- **An archive** (`documents/{docID}?type=1`) is 0.6–2.6 MB and arrives in 3.6–8 s. Its instance
+  is `XBRL/PublicDoc/jpcrp030000-asr-…xbrl`, 3.8–13.2 MB.
+- **The segment note is one text block**:
+  `jpigp_cor:NotesSegmentInformationConsolidatedFinancialStatementsIFRSTextBlock` (IFRS: Toyota,
+  97 KB) or `jpcrp_cor:NotesSegmentInformationEtcConsolidatedFinancialStatementsTextBlock`
+  (JGAAP: Nintendo 34 KB, MUFG 281 KB). MUFG also carries four narrower sub-blocks.
+- **Shapes the reader must handle:**
+  - **Toyota:** segments as columns (自動車, 金融, その他, 消去又は全社, 連結). The
+    外部顧客への営業収益 row sums exactly to its 連結 column, 48,036,704 百万円, which is also the
+    tagged consolidated figure; △ marks a negative. One table per year. A geography table follows,
+    with the years as columns.
+  - **Nintendo** reports one segment, so its split is the product table under 関連情報
+    (ゲーム専用機 1,083,534 + IP関連収入等 81,388 = 1,164,922). Its geography table nests
+    「うち、米国」 inside 米大陸, a subset; the four regions alone sum to its total (1,164,921 against
+    1,164,922, rounding).
+  - **MUFG**, a bank, states 粗利益 (gross operating profit, never revenue), a 顧客部門小計
+    subtotal column, and nested rows using colspans. Its 営業純益 is the operating line.
+- The archives are kept on the node at `/tmp/claude-edinet/` as fixtures until they are
+  captured into the repo.
