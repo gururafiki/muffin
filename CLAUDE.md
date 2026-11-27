@@ -6570,6 +6570,41 @@ muffin-ingest#210 and #211, muffin-deployment#554-#556. Record: the Phase 6c spe
 - **muffin-ingest#172 held on its first holiday.** Thanksgiving's run on 11-27 ended SUCCESS with
   an observation, no materialisation for 11-26 and no failed-run alert.
 
+### China's segment note (2026-11-27)
+
+muffin-ingest#212 and muffin-deployment#558. Record: the Phase 6c spec, "Step 6 as built".
+
+- **A GATE THAT COUNTS "IT READ SOMETHING" CANNOT TELL A READ FROM LUCK.** The first note reader
+  read 10 of the 88 large companies, and 4 of the 10 were wrong:
+  - Qilu's split was a geographic table taken as business;
+  - SF Holding's was 0.47% short;
+  - Bank of China's 2024 was a subset.
+
+  Only the gate's reconciliation column (each split's sum against its own total) showed it. Print
+  the sum and the target for every split, not the count of reads.
+- **XBRL'S 0.5% TOLERANCE LETS A SUBSET PASS IN A TABLE STATED TO THE UNIT.** Bank of China's 2024
+  members without 投资银行业务 came within 0.42% of its gross total. A note must add up within its
+  own rounding (one unit per member plus one), which is `read_grid(to_rounding=True)`. A gross row
+  beside an elimination column is matched to its total less the eliminations: both figures are
+  offered as anchors, and the members' sum chooses.
+- **A HEADING IS LOCAL TO ITS PAGE AND THE NEXT; A UNIT IS STATED ONCE FOR THE WHOLE NOTES.**
+  Resetting both across a gap in the pages read lost SF Holding and Qilu, whose unit is printed 60
+  pages before the segment note. Resetting neither carries `23 分部报告` from the accounting
+  policies onto a table 100 pages on.
+- **A TABLE OF PLACES IS GEOGRAPHY WHATEVER ITS HEADING SAYS.** Chinese banks print regional
+  operating segments (境内 / 中国香港澳门台湾, 长三角地区, 济南地区) under the same `分部报告`
+  heading as business ones. `segment_note_rule` gained a `member` rule kind for this: a table whose
+  members mostly match a place pattern is geography.
+- **A REFUSAL FOR SIZE IS A STATEMENT ABOUT THE GATE, NOT THE DOCUMENT.** A held `too_large` answer
+  counted as held for ever, so raising the gate would have reached no report already refused. Stage
+  1 now asks one again when its filing is due again. The 12 MB gate had refused 26 of the 88 large
+  companies; 11 of those read at once from their main tables.
+- **A GATE'S CHILD PROCESS IMPORTS THE IMAGE'S LIBRARY UNLESS `PYTHONPATH` REACHES IT.** The parent
+  ran `python -I` with the branch on `sys.path`. `cn_child` starts `python -P -m …`, which honours
+  `PYTHONPATH` and nothing else, so without `-e PYTHONPATH=/libsrc` on the container the child ran
+  production's reader. It failed loudly only because production's result lacked a field the
+  branch's had. A gate whose child runs other code than the parent passes for the wrong reason.
+
 ## Running an OpenSandbox server locally
 
 - **`docker run -d -p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock opensandbox/server:latest`.**

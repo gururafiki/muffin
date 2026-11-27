@@ -768,3 +768,79 @@ honestly unplaced.
   - a whole read 46 s.
 - **Guard:** six mutations caught.
 
+
+### Step 6, E: China's segment note, as built (2026-11-27)
+
+muffin-ingest#212 (the reader, the 48 MB gate) and muffin-deployment#558 (the vocabulary, the axis,
+the re-queue).
+
+**What it is.** `facets/cn_note.py` builds the note's grid from `cn_pdf`'s text positions and reads
+it with `facets/segment_note.read_grid`, the interpreter EDINET's notes use. Each metric row is
+anchored on its own `合计` cell. The stage runs only when no main-business table was read, so every
+report read before reads as before. It is on only while `segment_note_rule` holds the `cninfo`
+rows, which let the image roll ahead of the deploy.
+
+**The gate over the 88 large companies (FY2025, on the node, 768 MB child).** Four runs, each fixing
+what the last one showed:
+
+| Run | Revenue split (note + main) | Change |
+|---|---|---|
+| first reader | 10 + 11 | finds the note only on pages naming it; 4 of the 10 by luck (below) |
+| + labels, pages, members, 未分配, years | 12 + 11 | China Life, CITIC; Qilu correctly dropped |
+| + unit carry, captions, three-line headers | 12 + 11 | Qingdao Rural restored, SF Holding exact |
+| + date-and-year caption, bare unit, gross rows, own rounding | **14 + 11** | China Merchants Bank, Bank of China |
+
+All 25 splits reconcile exactly, and 3 more place operating income only. The causes for the other
+60 are in `docs/deferred/2026-11-27-what-china-s-segment-note-reader-cannot-read-yet.md`.
+
+**Rules the reports needed** (each with a test, 16 of 16 mutations caught):
+- **A row label's numbering is not the label.** Bank of China and China Life write `一、营业收入`.
+- **The pages after the note's heading are read, though they do not name it.** Industrial Bank and
+  Bank of Communications print the tables on later pages with no running header naming the note.
+- **Across a gap, the heading resets and the unit carries on.** A heading carried from the
+  accounting policies (`23 分部报告`) would claim a table 100 pages on. The unit, though, is stated
+  once for all the notes: SF Holding states it 60 pages before its segment note. The first version
+  reset both, and lost SF Holding and Qilu.
+- **A caption above a header reaches back to the row labels.** China Merchants Bank's
+  `(a) 分部业绩、资产及负债` was being merged into the header. A header can also wrap below its
+  total line: Qingdao Rural's `公司银行业` / `务`.
+- **A year under each segment splits its column.** China Merchants Bank prints 2025 and 2024 side by
+  side. The newest year is chosen by value; the fixture puts 2024 first. A date line under the years
+  makes the table a balance sheet.
+- **A table of places is geography, whatever its heading says.** This is the new `member` rule
+  kind. Bank of China prints 境内 / 中银香港集团 / 其他国家和地区 under `分部报告`, and Qilu
+  prints 济南地区 / 济南以外地区 under `2. 业务分部`. Qilu's had been read as business before this
+  rule.
+- **A gross row beside an elimination column reconciles to the total less the eliminations.** Bank
+  of China's segments total ¥663,127 m, its 抵销 column removes ¥4,817 m, and the printed total is
+  ¥658,310 m. Both figures are offered as anchors, and the members' own sum chooses.
+- **A note's split must add up within its own rounding,** one unit per member and one more, not
+  XBRL's 0.5%. Under the old tolerance, Bank of China's 2024 members without 投资银行业务 passed as
+  the whole split, 0.42% off. This is a `to_rounding` flag on `read_grid`, which EDINET does not
+  set.
+- **`未分配` is a member.** SF Holding's carries ¥1,458 m of external revenue, and without it the
+  split is 0.47% short.
+- **Units.** Two more phrasings state a unit: `货币单位均以人民币百万元列示` and a bare
+  `（人民币百万元）` caption.
+
+**Four of the first reader's ten were luck, and the gate showed it.** Qilu's read was a geographic
+table taken as business. SF Holding was placed 0.47% short, because the 0.5% tolerance admitted the
+split without 未分配. Bank of China's 2024 was a subset. Only the reconciliation column of the gate
+showed these: "it read something" said nothing about whether it read the right thing.
+
+**The size gate: 12 MB to 48 MB.**
+- **Reach:** 26 of the 88 file over 12 MB, and banks file 20-36 MB. 11 of those 26 then read from
+  their main tables, which the gate alone had been refusing.
+- **Cost:** the largest (36.1 MB, 454 pages) reads in 5.1 s, none takes more than 9.4 s, and none is
+  unreadable at 768 MB.
+- **Re-asking:** a report refused for its size is fetched again once it is due again. Before this, a
+  held `too_large` answer counted as held for ever.
+
+**The gate over held reports.** Every fourth report raw holds (1,626) was read by the running
+image's reader and by the branch's. On the first reader: 1,234 unchanged, 389 empty in both, 3
+gained (PetroChina 2008 among them), 0 changed or lost. The re-run on the final code is recorded in
+`todos.md`.
+
+**The re-queue.** The one-shot sets FY2023+ CNINFO full reports read into no rows back to version
+0. Measured: 806 reports across 414 securities, out of 7,202 read; ~6 GB to fetch again, with
+`/mnt/data` at 80 GB free. It drains by a paced `cninfo_segments` backfill.

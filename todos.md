@@ -4715,10 +4715,24 @@ Decisions (the user, 2026-11-26):
             the whole of `security_segment_latest`, out of /dev/shm). Rolled back on production:
             49,894 -> 49,872 rows, the 22 removed exactly 338.HK, 600688.SS and 6857.T; AAPL 6.5
             vs 6.4 ms; a whole read 46 s. Six mutations caught.
-      - [ ] Deploy; read the three securities as anon; `check_anon_read_latency.py` once the
-            backup is done; run the reconcile guard (it now reads `source_code`, so it fails
-            against production until the deploy).
+      - [x] Deployed with #556 and #557 (the guard reads each security's regulator alone).
 - [ ] 6. E: the China note stage for banks and state firms; re-fetch for the 88.
+  - [x] 2026-11-27: built and gated over the 88 large companies' FY2025 reports. 25 place a revenue
+        split, all exact (14 from the note: ICBC, Bank of China, CMB, CITIC, Minsheng, Everbright,
+        China Life, Ping An, PetroChina, SF Holding…; 11 because the size gate refused them), and 3
+        place operating income only. PDF gate 12 → 48 MB (largest 36.1 MB, 5.1 s at 768 MB). 16 of
+        16 reader mutations caught. muffin-ingest#212, muffin-deployment#558 (vocabulary, the
+        `member` rule kind, the axis, a one-shot re-queue of 806 reports / 414 securities, 11 of
+        11 mutations caught on the node). Record: spec "Step 6 as built".
+  - [ ] Gate over held reports, re-run on the final code (every fourth report, 1,626): must show
+        only gains. On the first reader: 1,234 same, 389 empty, 3 gained, 0 changed.
+  - [ ] Merge #212, roll; merge #558, deploy (after the roll); read the one-shot's notice.
+  - [ ] Drain: paced `cninfo_segments` backfill over the grid at priority -1; read
+        `read_note`, `too_large` and the bytes; render ICBC's and Bank of China's stock pages.
+  - [ ] 2026-11-27: what the reader cannot read yet (geographic bank segments, revenue only as
+        components, traditional characters, no digits, ABC and BoCom uninvestigated, 18 main
+        tables that do not reconcile):
+        `docs/deferred/2026-11-27-what-china-s-segment-note-reader-cannot-read-yet.md`.
   - [ ] Found 2026-11-27: a footnote line (`注：…`) is joined as a suffix onto the last row's
         name (`cninfo:其他地区注：2025`, `cninfo:商品及其他注：2、2015年度…`). 6 served rows over
         6 securities; about 117 reports hold prose-shaped members, mostly 2006-2016. A suffix
