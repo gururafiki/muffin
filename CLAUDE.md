@@ -6534,6 +6534,42 @@ muffin-deployment#546 (DART), and the CNINFO older-forms branch.
   whole list, whose stdout is the ssh session; the redirections apply to `b` alone. Use
   `"a; b > /dev/null 2>&1 < /dev/null &"`.
 
+### EDINET goes live, and one regulator per company (2026-11-27)
+
+muffin-ingest#210 and #211, muffin-deployment#554-#556. Record: the Phase 6c spec's step 5.
+
+- **A NOTE'S CONSOLIDATED COLUMN HAS SEVERAL NAMES, AND THE FIRST LIVE READ FOUND ONE.** The total
+  pattern held `連結` and `合計`; Tokio Marine heads its consolidated column `連結合計`, so it was
+  read as a member and the split could not reconcile. `連結計` is the same column. Only a live
+  read of a real company found it; the fixtures had the tidy spelling.
+- **A MATCH TOLERANCE MUST FOLLOW THE TABLE'S ROUNDING, AND A TOLERANCE IN UNITS ALONE ADMITS NEAR
+  MISSES.** A note printed in 百万円 rounds every cell, so its members miss the tagged total by up
+  to one unit per member. The slack is `scale × (members + 1)`, bounded by 0.05% of the total. A
+  slack in units alone made a line that matches no tagged fact read as a split, which an existing
+  unit test caught.
+- **`could not resize shared memory segment … No space left on device` IS `/dev/shm`, NOT THE
+  DISK.** The database container's `/dev/shm` is 256 MB, and a parallel hash join keeps its table
+  there. A whole read of a view holding three concurrent parallel hashes of `security_filing`
+  failed with it; the disk was not involved.
+- **A VIEW JOINED INTO A CTE CAN COLLAPSE THE ROW ESTIMATE AND FLIP THE JOIN, SO FILTER AFTER THE
+  WINDOWS.** Choosing each company's regulator through a shared view joined into
+  `security_segment_current`'s `newest` made the planner estimate `newest` at 1 row and put the
+  whole of `security_segment_latest` on the inner side of a nested loop. The plan was found by an
+  EXPLAIN of the whole read, which is the spine's refresh. A window over the pivoted rows with the
+  filter applied last kept the old plan's shape (cost 757k against 752k) and the per-security
+  pushdown (6.4 ms). **EXPLAIN the whole read of a serving view as well as the app's
+  per-security one**: they are different plans, and only the first breaks the spine.
+- **THE READ-ONLY BRANCH HARNESS LET A DATA-MODIFYING CTE THROUGH.** `readonly.SafePostgres`
+  matched statements starting with a write verb, and `with x as (delete …) …` starts with `with`.
+  The read-only connection refused it, so nothing was written, but the harness's own guard was
+  blind. It now matches a write inside a CTE.
+- **NEVER MOUNT OVER `/lib` IN A THROWAWAY CONTAINER.** Mounting a library checkout at `/lib`
+  replaced the dynamic loader's directory, and the container failed with
+  `exec …/python: no such file or directory`. Mount it at `/libsrc` and add it to `sys.path`,
+  since `python -I` ignores `PYTHONPATH`.
+- **muffin-ingest#172 held on its first holiday.** Thanksgiving's run on 11-27 ended SUCCESS with
+  an observation, no materialisation for 11-26 and no failed-run alert.
+
 ## Running an OpenSandbox server locally
 
 - **`docker run -d -p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock opensandbox/server:latest`.**

@@ -4686,6 +4686,15 @@ Decisions (the user, 2026-11-26):
           (Advantest's 2014 SEC split beside its 2026 EDINET one). `security_segment_current`
           serves only the source whose newest period is the company's newest; the rest stays
           stored. Schema change with its guard, then re-measure anon latency.
+      - [x] 2026-11-27: muffin-deployment#556. A window over the pivoted rows, filtered last;
+            `source_code` appended; detail and the reconcile guard read it. A shared view joined
+            into `newest` was rejected on production's plan (row estimate 1, a nested loop over
+            the whole of `security_segment_latest`, out of /dev/shm). Rolled back on production:
+            49,894 -> 49,872 rows, the 22 removed exactly 338.HK, 600688.SS and 6857.T; AAPL 6.5
+            vs 6.4 ms; a whole read 46 s. Six mutations caught.
+      - [ ] Deploy; read the three securities as anon; `check_anon_read_latency.py` once the
+            backup is done; run the reconcile guard (it now reads `source_code`, so it fails
+            against production until the deploy).
 - [ ] 6. E: the China note stage for banks and state firms; re-fetch for the 88.
   - [ ] Found 2026-11-27: a footnote line (`注：…`) is joined as a suffix onto the last row's
         name (`cninfo:其他地区注：2025`, `cninfo:商品及其他注：2、2015年度…`). 6 served rows over

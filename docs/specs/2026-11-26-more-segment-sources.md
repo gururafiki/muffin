@@ -737,3 +737,25 @@ honestly unplaced.
   source whose newest period is the company's newest, so Advantest's 2014 SEC split stops showing
   beside its 2026 EDINET one. Older regulators' rows stay stored.
 
+**Newest regulator only, as built (muffin-deployment#556).**
+- **Affected today:** three securities: 6857.T, and 338.HK with 600688.SS (Sinopec Shanghai
+  Petrochemical: SEC FY2022 beside CNINFO FY2015). Every Japanese company that once filed a 20-F
+  joins them as the EDINET drain fills.
+- **Where the choice is made:** in `security_segment_current`. Everything below `pivoted` is keyed
+  by regulator, because SEC 20-F filers and DART share IFRS axis strings. A window then ranks the
+  regulators per company: newest annual period, then `data_source.priority`. The result is filtered
+  last. The instant laterals are bounded to the chosen regulator.
+- **Who reads it:** `source_code` is appended to `current`. `security_segment_detail` and
+  `check_segments_reconcile.py` read the choice from there rather than deriving it again.
+- **Rejected first: a shared view joined into `newest`.** On production's plan the join collapsed
+  the row estimate to 1. The planner then put the whole of `security_segment_latest` on the inner
+  side of a nested loop, and a third parallel hash ran out of the database container's 256 MB
+  `/dev/shm`. The whole read is the spine's refresh, so that plan would have broken it. A filter
+  applied after the windows cannot change how anything beneath it is joined.
+- **Rolled back on production:**
+  - 49,894 -> 49,872 rows; the 22 removed are exactly the three securities, and nothing is added;
+  - 19 other securities identical in both views;
+  - AAPL 6.5 ms old vs 6.4 ms new;
+  - a whole read 46 s.
+- **Guard:** six mutations caught.
+
