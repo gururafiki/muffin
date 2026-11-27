@@ -4586,14 +4586,12 @@ Decisions (the user, 2026-11-26):
       fallback revenue totals; 1,943 filings re-read, 13 companies gained a split (9 large,
       $0.91 tn); `held` requires an accounts filing.
   - [ ] 2026-11-27: read backfill `sskwxxck` (the 56 filings over 32 MB: HSBC, Santander).
-- [ ] 3. B, in flight: deployment #551 deployed 2026-11-27, ingest #208 open; roll at ~05:00 UTC,
-      then `cninfo_registry`, the N-PORT replay (newest filing per fund) and `filer_siblings` by
-      hand.
-- [ ] 3. B, one split on every listing:
-      - N-PORT issuer fill;
-      - CNINFO HK list and the `FILERS` fix;
-      - sibling extension, plus a copy of the filer's history;
-      - SEC fan-out through `security_filer`.
+- [ ] 3. B, one split on every listing (deployment #551, ingest #208): N-PORT issuer fill; CNINFO
+      HK list and the `FILERS` fix; sibling extension plus a copy of the filer's history; SEC
+      fan-out through `security_filer`.
+  - [ ] 2026-11-27 ~05:00 UTC: roll #208, then by hand `cninfo_registry`, the N-PORT replay
+        (newest filing per fund) and `filer_siblings`; read every counter; render 6031.HK,
+        005935.KS and PETR4.SA.
 - [ ] 4. Grow `/mnt/data`; `cninfo_retention` stopped; the cap check becomes a gauge.
 - [ ] 5. C, EDINET:
       - cache locations with key redaction;
