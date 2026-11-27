@@ -599,3 +599,54 @@ The probe ran from the node, with the key passed by name.
   - `segment_total_concept` rows for `edinet` remain only as a FALLBACK where no fact matches.
 - **Old archives download while their list is inside the window**: Toyota 2017-06-23 (`S100AKEX`,
   0.69 MB) and 2021-06-24 (`S100LO6W`, 1.04 MB) both answered 200.
+
+### Step 5, C: EDINET as built (2026-11-27)
+
+**5a (muffin-deployment#554, deployed 10:44 UTC).**
+- `market.segment_note_rule(regulator, rule, pattern, role, priority)` holds the note reader's
+  vocabulary: block concepts (consolidated or not), heading kinds (business, product, geography,
+  skip), label roles and concept roles. `ingest_rw` reads it and cannot write it.
+- `market.edinet_document` is the catalogue: every annual report (120) and amendment (130) a day's
+  list names, one row per document.
+- `market.file_edinet_filings(p_edinet_codes)` files a mapped company's annual reports (ordinance
+  010, form 030000, not withdrawn) into `security_filing`, and removes a withdrawn report's EDINET
+  filing and segments, never a CNINFO row under the same accession. This is the user's choice of a
+  document table over a replay job: a company mapped later gets its history by one call, with no
+  request.
+- The registry and the day lane both call it, scoped to the filers they touched.
+
+**5b (muffin-ui#145).** `memberLabel` passes printed names through whole. Splitting at a case
+change had damaged 142 of 25,521 CNINFO members.
+
+**5c (muffin-ingest#210).** `defs/edinet/`, three lanes:
+- The code list maps each Japanese equity by its four-character local code, from a JP listing or a
+  `.T` symbol. A company holding a placed SEC revenue split in its last ~two fiscal years is left
+  to the SEC and released.
+- The day lane is one partition per day in Tokyo:
+  - a held list is never replaced by a 404;
+  - a list fetched ten days after its day is settled;
+  - a run that did not hear every day claims none;
+  - a withdrawal is only ever set.
+- The filer lane fetches due archives newest first, in rounds across filers, and reads each report
+  against its own figures.
+- Everything ships STOPPED except `new_edinet_filers`.
+
+**Read-only against production, before the PR.** The branch ran in a throwaway container with real
+EDINET through http-cache and every write intercepted.
+- **Registry:** 2,349 of 2,483 Japanese equities mapped. Eight are left to the SEC: Toyota, Sony,
+  Honda, MUFG, Mizuho, Nomura, ORIX and Takeda. 126 are unmapped, mostly 2024-25 IPOs and J-REITs.
+- **Days 2026-06-25 and 06-26:** 3,148 documents, 728 catalogued (604 annual reports of every
+  ordinance), 4 withdrawals, filing scoped to the 657 filers touched.
+- **Filer lane:** three reports read into 114 rows, all placed. Each FY2026 split reconciles to the
+  report's own total:
+
+  | Company | Split | Total |
+  |---|---|---|
+  | Nintendo | ゲーム専用機, IP関連収入等 | ¥2,313,051 m |
+  | Makita | five regions, which are its reportable segments | ¥777,600 m |
+  | Yellow Hat | カー用品, 賃貸不動産, その他 | ¥171,280 m |
+
+The harness's interception missed a data-modifying CTE (`with released as (delete …)`), and the
+read-only connection refused it. `readonly.SafeCursor` now intercepts that shape, and the runner
+forwards `EDINET_API_KEY`.
+

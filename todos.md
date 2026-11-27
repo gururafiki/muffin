@@ -4637,13 +4637,26 @@ Decisions (the user, 2026-11-26):
       free); `cninfo_retention` STOPPED in code (ingest #209, rolled 09:09) and its stored state
       reset (`schedule-reset`, 09:10); the cap check is a gauge.
 - [ ] 5. C, EDINET:
-      - cache locations with key redaction;
-      - control rows;
-      - `memberLabel` passthrough (muffin-ui);
-      - provider, `segment_note`, `defs/edinet`;
-      - reader gate, parity against Japanese 20-F filers, kind audit;
-      - live, then enable.
+  - [x] 5a. deployment #554, deployed 2026-11-27 10:44: `segment_note_rule` (22 rules),
+        `edinet_document`, `file_edinet_filings()`, control rows (parser 1, three axes, 24 region
+        members), `/edinet/` and `/edinet-dl/`. Both locations answer through the cache, the key
+        is redacted in the log, anon latency is under budget.
+  - [x] 5b. muffin-ui #145 (merged 11:00): printed names (`cninfo:`, `edinet:`, `esef:`) pass
+        through `memberLabel`; 142 of 25,521 CNINFO members had rendered split ("1.5 MW",
+        "3 C数码").
+  - [ ] 5c. ingest #210: provider, `segment_note`, `facets/edinet`, `defs/edinet` (everything
+        STOPPED but `new_edinet_filers`). Read-only against production: 2,349 equities mapped,
+        8 left to the SEC, 2026-06-25/26 catalogued 604 annual reports, Nintendo/Makita/Yellow Hat
+        read into 114 placed rows that reconcile. Merge, then roll outside the 11:00-12:30 SEC wave.
+  - [ ] 5d. Live: registry run, a tiny subset of days and filers, then the schedules and the due
+        sensor declared RUNNING, the ten-year day backfill (oldest first: the window moves) and
+        the filer backfill, `edinet` enabled; parity against Sony, MUFG and Honda's 20-F splits
+        and a kind audit.
 - [ ] 6. E: the China note stage for banks and state firms; re-fetch for the 88.
+  - [ ] Found 2026-11-27: a footnote line (`注：…`) is joined as a suffix onto the last row's
+        name (`cninfo:其他地区注：2025`, `cninfo:商品及其他注：2、2015年度…`). 6 served rows over
+        6 securities; about 117 reports hold prose-shaped members, mostly 2006-2016. A suffix
+        rule in `cn_pdf` that refuses a line starting `注`, gated over the held reports.
 - [ ] 7. D: ESEF via filings.xbrl.org; enable with coverage rows.
 - [ ] 8. F: probe Taiwan MOPS's segment note; result back to the user.
 - [ ] 9. Docs, skills, memory.
