@@ -4235,6 +4235,11 @@ Measured 2026-11-09: SEC segment runs fail 17% on `pending_segments` timeouts, a
                   splits **172** (142 before; 157 are FY2011 or earlier, 15 written by pass 9),
                   dated after publication **1** (unchanged, Hongbaoli), line items **45** (unchanged).
                   **Pass 10 `tvagpcaf` launched 09:17** over the grid, same shape (priority −1).
+                  **Read 2026-11-27 15:10:** 87 of 87 SUCCESS. Stage 1: 2,136 named; 1,931 fetched
+                  (1.89 GB), 202 unasked (budgets), 2 refused, 1 transport. Stage 2: 1,930 read,
+                  223 not held, 1 unreadable, 0 failed; 12,855 rows (10,340 changed), 88
+                  retracted. Behind the parser now: **223** full reports, all never read, 0 behind
+                  a version (2,136 before). **Pass 11 `uzlleyrc` launched 15:16**, same shape.
                   **Retention pruned 6,245 reports (7.5 GB) during pass 9**, 14:03-18:01 on 11-26:
                   decision 5 was taken but `cninfo_retention` stayed RUNNING in stored state until
                   the 11-27 09:09 roll and `schedule-reset`. Each was read before it was pruned; a
@@ -4637,6 +4642,16 @@ Decisions (the user, 2026-11-26):
         never reconciles against revenue, and storing it as revenue would mislabel it. The same
         question as MUFG's 粗利益 and China's banks (ICBC states the line as 营业收入): **a user
         decision** whether a bank's total income is a segment metric of its own.
+        **Decided (the user, 2026-11-27): its own metric, `total_income`.** Reconciled against
+        the filing's own total-income figure; the stock page labels the split "Total income" and
+        takes shares of it; classification reads it like revenue. Nothing that is not revenue is
+        stored as revenue.
+        **Scope decided (the user, 2026-11-27): follow the filing.** `total_income` only where the
+        filing itself does not call the line revenue: Santander's `GrossProfit` (its "total
+        income"; a bank's GrossProfit only, by industry, since an industrial's is gross profit)
+        and MUFG's 業務粗利益. The 146 banks already serving a split their filing calls revenue
+        (JPM, BAC, HSBC, HDFC Bank, SBI…) stay revenue, and China's banks are read as revenue
+        from 营业收入 (ICBC ¥838,270 m). Cross-GAAP bank comparison stays a curation question.
 - [x] 3. B, one split on every listing (deployment #551, ingest #208): N-PORT issuer fill; CNINFO
       HK list and the `FILERS` fix; sibling extension plus a copy of the filer's history; SEC
       fan-out through `security_filer`.

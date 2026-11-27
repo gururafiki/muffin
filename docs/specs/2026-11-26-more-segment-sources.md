@@ -737,6 +737,15 @@ honestly unplaced.
   source whose newest period is the company's newest, so Advantest's 2014 SEC split stops showing
   beside its 2026 EDINET one. Older regulators' rows stay stored.
 
+- **A bank's business split is its own metric, `total_income`.** Santander tags it
+  `ifrs-full:GrossProfit`, MUFG's note says 業務粗利益, and ICBC's summary calls it 营业收入. It is
+  reconciled against the filing's own total-income figure and labelled "Total income" on the page,
+  and classification reads it like revenue. It is never stored as revenue.
+  - **Scope: follow the filing.** Only where the filing itself does not call the line revenue:
+    Santander's `GrossProfit` (a bank's only, by industry) and MUFG's 業務粗利益. The 146 banks
+    already serving a split their filing calls revenue stay revenue, and China's banks are read as
+    revenue from 营业收入, so step 6 needs no new metric.
+
 **Newest regulator only, as built (muffin-deployment#556).**
 - **Affected today:** three securities: 6857.T, and 338.HK with 600688.SS (Sinopec Shanghai
   Petrochemical: SEC FY2022 beside CNINFO FY2015). Every Japanese company that once filed a 20-F
