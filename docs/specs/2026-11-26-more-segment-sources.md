@@ -534,6 +534,23 @@ muffin-deployment#551 (deployed 2026-11-27), muffin-ingest#208.
 - **SEC fan-out:** the segment queries key on `security_filer('sec')`. The filer lane writes the
   filing list for every holder, and statements, profile, calendar and SIC for the CIK holders.
 - **N-PORT issuer fill:** a held security gains the issuer its holding names, only where empty.
+- **Live, 2026-11-27** (rolled 09:09, `98ec00e8`; nothing in flight):
+  - `cninfo_registry` by hand: 2,173 equities mapped, 0 unmapped; **68 H-share lines** onto their
+    A-share filer (215 listed, 469 held H-share securities).
+  - The N-PORT replay over the newest filing per fund (`guifrrkl`, 74 filings, 7 runs, priority
+    −1): **525 issuers filled** (528 measured), 29 disagreeing and 16 conflicting left alone.
+  - `filer_siblings` by hand: **132 links** (cninfo 68, sec 46, dart 14, nse 4), 0 retracted,
+    **9 refused**; 198 holders copied, **69,712 filings and 45,895 segment rows**. The rolled-back
+    measurement said 143 and 4: the HK registry now maps some lines the issuer route did, and the
+    issuer fill joins more companies whose two filers both file accounts (21 issuers hold two
+    registry filers, mostly an A-share filer plus an SEC CIK).
+  - Rendered against live data: 005935.KS serves Samsung's FY2025 segments (DX ₩187.97T of the
+    ₩363.72T the filing totals); 6031.HK serves Sany's FY2024 products (挖掘机械 CN¥30.37B,
+    40.1%); PETR4.SA serves exactly what PBR does. Petrobras's split mixes country members with
+    its segments and is shown as filed figures without shares, the same on PBR: a pre-existing
+    SEC parse, not the copy.
+  - `cninfo_retention` stayed RUNNING in stored state until `schedule-reset` (09:10): it pruned
+    6,245 reports (7.5 GB) on 11-26 14:03-18:01 while pass 9 fetched, each read first.
 
 ### Step 5, C: EDINET validation (2026-11-27, against the real API)
 

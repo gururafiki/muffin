@@ -4221,6 +4221,23 @@ Measured 2026-11-09: SEC segment runs fail 17% on `pending_segments` timeouts, a
                   the one-shot recorded exactly the dry run (4,899 + 20 + 10); **pass 9 `tzuookbb`
                   launched 12:56** (same shape, priority −1). Read it and re-run the tiny, lag and
                   line-item queries at the 11-27 08:07 UTC check-in.
+                  **Read 2026-11-27 09:15:** 87 of 87 SUCCESS, 13:38-18:17. Stage 1: 8,985 named;
+                  4,858 fetched (10.1 GB), 1,983 held, 8 too large, 1 refused, **2,135 unasked**
+                  (budgets). Stage 2: 6,841 read, 960 no table, 2,136 not held, 0 failed; 65,312
+                  rows (14,265 changed), 1,653 retracted. Behind the parser now: **2,136** full
+                  reports (1,861 never read, 275 behind), against 8,985 before. Queries: tiny
+                  splits **172** (142 before; 157 are FY2011 or earlier, 15 written by pass 9),
+                  dated after publication **1** (unchanged, Hongbaoli), line items **45** (unchanged).
+                  **Pass 10 `tvagpcaf` launched 09:17** over the grid, same shape (priority −1).
+                  **Retention pruned 6,245 reports (7.5 GB) during pass 9**, 14:03-18:01 on 11-26:
+                  decision 5 was taken but `cninfo_retention` stayed RUNNING in stored state until
+                  the 11-27 09:09 roll and `schedule-reset`. Each was read before it was pruned; a
+                  later re-read of those reports fetches them again.
+                  **New finding:** a lag the other way. 304 reports' rows are dated two or more
+                  years before their filing year. Judged against stored revenue: 39 match their
+                  stated year (re-issued editions, correct), **11 match the year after (misdated
+                  by a year)**, 35 neither, 218 unjudged (no revenue metric that far back). To
+                  investigate before any re-queue.
             - [ ] **2026-11-23: [some CNINFO tables state yuan over figures in ten thousands](docs/deferred/2026-11-23-some-cninfo-tables-state-yuan-over-figures-in-ten-thousands.md).**
                   25 reports' splits are stored at 1/10,000: the filer's own unit line is wrong
                   (航天长峰 FY2025). Neither reader fixes them. **Decided 2026-11-23 (the user):
@@ -4281,6 +4298,14 @@ Measured 2026-11-09: SEC segment runs fail 17% on `pending_segments` timeouts, a
             archives named, 700 fetched (680 MB), 183 already held, 0 refused, transport or
             unasked; all 1,086 lists fresh. Stage 2 `lfvrzxnh` launched 12:45 after the roll
             (`dart_segment`, priority −1). Read HL Mando and recount the misses at the 11-27 check-in.
+            **Read 2026-11-27:** `lfvrzxnh` 109 of 109 SUCCESS (12:44-13:37): 883 read, 0 failed,
+            28,976 rows (4,174 changed), 66 retracted, 975 kept by newer. **HL Mando fixed:**
+            FY2025 regions 11.04 T won against 11.02 T (1.0016), products 1.0021. **Not closed:**
+            on the served view, FY2025 DART revenue splits missing `reconciled_to` by >0.5%:
+            **17 over** (214320.KS 552×, 456040.KS 55×, KEPCO 1.49×: segment totals before
+            eliminations, 067310.KQ 1.70×, …) and 11 under (partial disclosures, served on
+            purpose) of 919. (A recount over the raw table reads 3× for HL Mando's FY2024
+            products: three reports state FY2024. Count on `security_segment_latest`.)
       - [x] **2026-11-23: market-verify failed at 13:26** on `security_filing: HTTP 500 57014`:
             the segment guard filtered 1.24 M filings by accession alone, no index leading on it.
             muffin-deployment#540 asks through the primary key (exit 0 in 15 s on production).
@@ -4306,6 +4331,15 @@ Measured 2026-11-09: SEC segment runs fail 17% on `pending_segments` timeouts, a
             24 h is 158 s (11-25 23:16); `cron_job_headroom()` shows nothing past two-thirds
             (coverage 91, spine 158, universe 88, quality 40, facets 17 of 300 s). The only alert
             in 12 h was `muffin-dagster-run-failed`, 23:00-04:00, for the roll-killed `1e7a6aba`.
+            **Read 2026-11-27 09:10 (check-in):** `muffin-cron-headroom` has fired every
+            evaluation since 11-26 13:xx, on ONE spine run: 209 s at 11-26 11:16, inside the SEC
+            wave with two segment backfills writing; the other 23 took 54-129 s. Coverage 92,
+            universe 53, quality 30, facets 25 of 300 s, all succeeded. It clears after 11:16 today
+            unless today's wave repeats it. The spine grows with every segment re-read
+            (~100 s typical, against 11 s through October): the next candidate for its bound.
+            Last night clean: every scheduled run SUCCESS, `nightly_prices` ended 02:25 (as
+            11-26). market-verify 11-26 (12:58) passed; the segment guard sampled 80 securities of
+            each of four regulators.
 - [ ] 6. NSE: grid from `security_nse_filer`; retire `in-filings`.
       Built: muffin-ingest#182 (rolled 2026-11-16 12:27) and muffin-deployment#519 (deployed
       11:35–11:47: `in-filings` 410; NSE's API moved to `www.nseindia.in`; the edge's 440
@@ -4585,14 +4619,23 @@ Decisions (the user, 2026-11-26):
 - [x] 2. A, SEC (#206, #207; deployment #549, #550; live 2026-11-26): 64 MB gate; three
       fallback revenue totals; 1,943 filings re-read, 13 companies gained a split (9 large,
       $0.91 tn); `held` requires an accounts filing.
-  - [ ] 2026-11-27: read backfill `sskwxxck` (the 56 filings over 32 MB: HSBC, Santander).
-- [ ] 3. B, one split on every listing (deployment #551, ingest #208): N-PORT issuer fill; CNINFO
+  - [x] 2026-11-27: backfill `sskwxxck` (the 56 filings over 32 MB): 26 of 26 SUCCESS,
+        56 instances fetched (2.4 GB) and read, 0 too large, 0 failed, 2,153 rows. **HSBC**
+        serves segment and regional splits for 2023-2025 that reconcile exactly (68.27 bn USD for
+        2025). **Santander** reads 3 20-Fs at v20 and writes no segment row: its segment facts
+        use concepts the SEC vocabulary does not name. Open yield gap of step 2.
+- [x] 3. B, one split on every listing (deployment #551, ingest #208): N-PORT issuer fill; CNINFO
       HK list and the `FILERS` fix; sibling extension plus a copy of the filer's history; SEC
       fan-out through `security_filer`.
-  - [ ] 2026-11-27 ~05:00 UTC: roll #208, then by hand `cninfo_registry`, the N-PORT replay
-        (newest filing per fund) and `filer_siblings`; read every counter; render 6031.HK,
-        005935.KS and PETR4.SA.
-- [ ] 4. Grow `/mnt/data`; `cninfo_retention` stopped; the cap check becomes a gauge.
+  - [x] 2026-11-27 09:09-09:25 (rolled late: the check-in waited on the EDINET work): 68 H-share
+        lines mapped; 525 issuers filled (`guifrrkl`); 132 sibling links, 9 refused, 69,712
+        filings and 45,895 segment rows copied; 005935.KS, 6031.HK and PETR4.SA render their
+        splits. Detail in the spec's step 3.
+  - [ ] Petrobras (PBR and its local lines): the served split mixes country members with
+        segments and over-covers revenue (pre-existing SEC parse). Look at the 20-F's axes.
+- [x] 4. Grow `/mnt/data` to 185 GB (deployment #552, 2026-11-27 01:19: 182 GB filesystem, 82 GB
+      free); `cninfo_retention` STOPPED in code (ingest #209, rolled 09:09) and its stored state
+      reset (`schedule-reset`, 09:10); the cap check is a gauge.
 - [ ] 5. C, EDINET:
       - cache locations with key redaction;
       - control rows;
