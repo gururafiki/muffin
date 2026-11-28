@@ -4733,9 +4733,13 @@ Decisions (the user, 2026-11-26):
         Bank of China 3 of 5, CMB 1 of 3, SF Holding 2 (1 report over 48 MB). Served on A and H
         listings alike; rendered against production: ICBC, Bank of China and CMB show their
         segments (CMB with the "filing totals these lines to" caption).
-  - [ ] Drain `fnwempps` (whole grid, priority -1, launched 21:39): runs beside the EDINET archive
-        queue (a pool-blocked run does not block the queue). Read `read_note`, `too_large`,
-        bytes, and the large-no-split count when it ends.
+  - [x] Drain `fnwempps` (whole grid, priority -1, 21:39 to ~23:00): 88 of 88 runs SUCCESS;
+        672 filings, 610 read (**47 from the note**), 304 still no table, 12 too large (over
+        48 MB), 5.37 GB fetched; 2 refused by CNINFO, so 21 reports stay due for the next visit.
+        Large equities with no FY2023+ split: **2,884 / $49.4 T before the drain -> 2,846 /
+        $46.0 T** (baseline 2026-11-26: 2,979 / $53.9 T). Heartbeats 22:07-01:07 all SUCCESS.
+        EDINET archives `ntiipgwg`: 36 runs done, 198 queued (~9 min a run, ~30 h left); the
+        re-executed `8469b1b2` waits at the back of that queue.
   - [x] Found rendering SF Holding: a company was served every axis's newest period, so SF's 2016
         main-table splits led its page above the 2025 note split. Measured on the spine: an axis
         over a year older than the company's newest split for 288 (srt), 209 (cninfo), 138
