@@ -6630,9 +6630,10 @@ muffin-ingest#213, muffin-deployment#560. Record: the Phase 6c spec, "Step 7 as 
 - **THE FIRST TABLE TO STATE A SPLIT KEEPS IT.** LVMH's quarterly table restates the year gross of
   intra-group sales, and read last it replaced the annual split with a larger, non-reconciling one.
 - **A CHANGE SCOPED TO ONE REGULATOR MUST BE SCOPED IN EVERY HELPER IT PASSES THROUGH.** The
-  European rules sit behind `NoteVocabulary.spaced`; one filter inside `_member_kind` was not, and
-  it changed Japanese member kinds until the EDINET gate showed it. Gate the other regulators'
-  held documents whenever a shared reader changes.
+  European rules sit behind `NoteVocabulary.spaced`, and that includes the column naming inside
+  `_member_kind`, not only the top-level read: the member kind is computed from header names, so
+  an unscoped helper would change Japanese and Chinese kinds silently. Gate the other regulators'
+  held documents whenever the shared reader changes.
 - **A READ-ONLY DRIVE CANNOT SEE ITS OWN STAGE 1**, because the writes it would read were
   intercepted, so stage 2 read nothing and looked like a lane with nothing due. Supply the due
   list (monkeypatch the facet's `filings`) rather than reading the empty result as a verdict.
