@@ -907,3 +907,45 @@ What this changes in the plan:
   3 (perhaps ~6 GB as compressed Parquet), against 73 GB free.
 - **Nothing for ESEF is seeded yet**: no `xbrl-org` data source, no `esef:` axes, no rules and no
   parser row. Step 7 therefore has a schema half, as step 5 did.
+
+### Step 7 as built (2026-11-28): muffin-ingest#213, muffin-deployment#560
+
+**The reader.** `facets/esef` loads a report's facts, takes every non-dimensional monetary fact as
+an anchor, and reads the note blocks in order with `segment_note.read_note(detect_numbers=True,
+infer_scale=True)`, stopping at the first block that places a split. The gate over nine captured
+reports found eight European table shapes the Japanese interpreter could not read. Each is now a
+rule for European tables only (`NoteVocabulary.spaced`), mutation-proven; Japanese and Chinese
+tables take none of these paths:
+
+| Rule | Found on |
+|---|---|
+| A row whose every figure is a year, beside a name or with two of them, is a header | Atlas Copco (`2025` above the names), Inditex, ASML |
+| A column's name is its own header cells joined; a cell spanning neighbours is a group header, and a year is never part of a name | Schneider (`Gestion de` over `l'énergie`), Enel, Inditex |
+| A label-only row opening in lower case continues the label above | Enel (`Revenue and other income` / `from third parties`) |
+| Segments stated before eliminations reconcile to the total less them, offered only when the members add up to it | Inditex (40,107 against a tagged 39,864 €m), Iberdrola (before discontinued operations) |
+| A kind named in prose is local to its table; a table with none is business unless its members are places | Iberdrola (its business table followed a "by geographic location" sentence) |
+| In a sentence, the kind nearest the table wins | Inditex (the customers' location, then the geographic table) |
+| The first table to state a split keeps it | LVMH (a quarterly table restating the year gross of intra-group sales) |
+| A cross-reference is stripped from a name | Iberdrola (`México (Nota 18)`) |
+
+Two further rules, joining a heading broken mid-word and blanking `sin dato` cells, were removed
+because no report read differently without them.
+
+**The lane** (`defs/esef/`), DART's shape:
+- `security_esef_filer` maps each equity in the ten covered countries whose N-PORT issuer holds an
+  LEI, and releases the SEC's split holders (decision 2). It asks the index nothing.
+- `raw_esef_filings` (pool `xbrl_org`, 8 s pacing, 15-minute budget, reports kept whole): a filer's
+  list, then its annual reports not yet read. Annual reports are told from interims by the fiscal
+  year end (±10 days; 31 December without a calendar). Of a period filed twice (Inditex's `-0` and
+  `-1`), the one the index added last is read.
+- `esef_segment` files the annual reports into `security_filing` (`report_type` `AFR`, source
+  `xbrl-org`) and reads each due report, one transaction per report.
+- `every_esef_filing_was_read` (WARN). `new_esef_filers` runs; `esef_registry` (Mondays 07:55 UTC)
+  and `esef_filers_floor` (daily 09:15 UTC) ship STOPPED.
+
+**Validated read-only on the node** (three filers, the real index, production rows): 3 lists, 17
+annual reports of 22 listed, 69 MB, no refusal at 8 s, 2 min 55 s; stage 2 read all 17, placing
+1,022 rows with none unplaced or failed. L'Oréal's FY2022-FY2025 reports each place three axes
+reconciling to the tagged revenue; FY2020-FY2021 reports (108-185 KB) carry no note block, since
+ESEF required block tagging from FY2022. Misses:
+`docs/deferred/2026-11-28-what-europe-s-segment-note-reader-cannot-read-yet.md`.

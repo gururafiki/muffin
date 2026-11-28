@@ -4760,6 +4760,25 @@ Decisions (the user, 2026-11-26):
         6 securities; about 117 reports hold prose-shaped members, mostly 2006-2016. A suffix
         rule in `cn_pdf` that refuses a line starting `注`, gated over the held reports.
 - [ ] 7. D: ESEF via filings.xbrl.org; enable with coverage rows.
+  - [x] 2026-11-28: validated against the API (nine filers; spec "Step 7, D: … validation").
+  - [x] 2026-11-28: reader, provider, lane and tests (muffin-ingest#213), control rows and the
+        `/xbrl-org/` location (muffin-deployment#560). Gate over nine reports: eight place a split,
+        each adding up to its tagged revenue; Airbus has no table. Read-only drive on the node
+        (L'Oréal, Inditex, Schneider): 17 annual reports of 22 listed, 69 MB, no 429 at 8 s, all
+        17 read, 1,022 rows placed, 0 failed. Misses recorded in
+        `docs/deferred/2026-11-28-what-europe-s-segment-note-reader-cannot-read-yet.md`.
+  - [x] 2026-11-28: merged both, rolled (one EDINET run killed and re-executed), deployed. Live
+        tiny subset: registry 903 securities / 858 LEIs; three filers read (Inditex 6/6 reports,
+        50 rows; Schneider 6/6, 12; L'Oréal 5 filings on 4 listings). OR.PA's stock page rendered
+        from the rebuilt app against live data: products 6 lines, segments 4 with margins,
+        geography 5 zones, all in the filing's own words.
+  - [ ] Stage-1 drain `qnwqorcl` over all 858 filers (priority -1): at 10:40 UTC 575 listed,
+        2,456 reports, 2 over 64 MB, 0 refused, 9.1 GB of JSON held as 579 MB. Then a stage-2
+        backfill of `esef_segment`, reading `no_note` / `no_anchor` by country.
+  - [ ] Enable `esef` (the guard test asserts it is disabled, so the PR changes it), declare
+        `esef_registry` and `esef_filers_floor` RUNNING, roll.
+  - [ ] Parity against SEC 20-F filers (Shell, Novo, Sanofi, TotalEnergies), read in a gate (the
+        registry skips them by decision 2); per-language skip audit over the first drain.
 - [ ] 8. F: probe Taiwan MOPS's segment note; result back to the user.
 - [ ] 9. Docs, skills, memory.
 
