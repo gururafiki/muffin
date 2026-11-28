@@ -860,3 +860,50 @@ period `current` serves, and the reconcile guard's "served" follows.
   of China and Advantest are unchanged.
 - **Accepted cost:** a filer that drops a split in its newest year loses it from the page until it
   reports one again (Toyota's 2025 geography).
+
+### Step 7, D: ESEF via filings.xbrl.org, validation (2026-11-28, against the real API)
+
+Nine filers by LEI, from this machine at 8 s pacing (no 429 met). Each filing list arrived whole in
+one response, with no `next` link (Novo Nordisk's 24 filings in one page). The newest annual
+xBRL-JSON report and its segment text block were read for each.
+
+| Filer | Language | Numbers | Unit line | Block | Tagged anchor |
+|---|---|---|---|---|---|
+| L'Oréal FY2025 | FR | `5 163,0` | `En millions d'euros` | 7 tables, divisions as rows; four divisions sum to 44 052,0 | `Revenue` 44,052.0 m |
+| LVMH FY2024 | FR | `40 990` | `(en millions d'euros)` | 6 tables | `Revenue` 84,683 m |
+| Schneider FY2025 | FR | `33 130` | `(en millions d'euros)` | 4 tables, segments as columns; two blocks | `RevenueFromContractsWithCustomers` 40,152 m |
+| Iberdrola FY2025 | ES | `16.845` | in prose only (`expresado en millones de euros`) | 8 tables, business and geographic | `Revenue` 44,076 m |
+| Inditex FY2025 (Jan) | ES | `28.249` | none found | 3 tables | `Revenue` 39,864 m |
+| Atlas Copco FY2025 | SV | `76 513`, minus as `–88` | none found | 8 tables, columns, `Elimineringar`, `Gruppen` | `Revenue` SEK 168,343 m |
+| Enel FY2024 | EN | `10,355` | footnotes only | 9 tables; text broken by spaces (`P erformance`) | `Revenue` 73,914 m |
+| ASML FY2025 | EN | `21,622.4` | `(€, in millions)` | 4 tables (one segment; product and geography) | `RevenueFromContractsWithCustomers` 32,667.3 m |
+| Airbus FY2025 | EN | `52,577` | `(In € million)` | **no `<table>`**: positioned divs | `Revenue` 73,420 m |
+| Novo Nordisk | EN | — | — | the newest filing is a Q3 interim with no segment block | — |
+
+What this changes in the plan:
+- **Each table has its own number convention, and the interpreter knows only one.**
+  `segment_note.number` reads `,` as thousands and `.` as the decimal point, so L'Oréal's `5 163,0`
+  would read as 51,630. Each table's convention is decided from its own cells:
+  - space, NBSP and thin space are always thousands separators;
+  - a separator followed by one, two or four or more digits at a cell's end is the decimal mark,
+    and where both `.` and `,` appear, the later one is;
+  - a lone `.` followed by exactly three digits is a thousands separator (Iberdrola).
+
+  EDINET is unaffected: its tables already follow the default, which is `,` for thousands.
+- **The unit is inferred from the anchor, not from a unit line.** Iberdrola, Inditex and Atlas
+  Copco state their unit only in prose or not at all, and the phrases differ by language
+  (`millions`, `millones`, `MSEK`; French `billion` means 10¹²). Every placed split must already
+  reconcile to a tagged consolidated figure, so the table's scale is the one of 1, 10³, 10⁶, 10⁹
+  under which one of its lines meets an anchor. A wrong scale cannot reconcile to a figure tagged
+  to the unit.
+- **Annual reports are told apart from interims by the company's fiscal year end.** The list carries
+  no report type, and some filers (Novo) file every quarter. `market.fiscal_calendar` covers 935 of
+  the 985 European equities holding an LEI. A filing is annual when its period end falls within ten
+  days of that year end; without a calendar, December 31.
+- **Durations end exclusive** in xBRL-JSON (`2025-01-01T00:00:00/2026-01-01T00:00:00`), so the
+  anchor's end is the day before.
+- **Divs are not read.** Airbus's block holds no `<table>`. It is counted and skipped, as planned.
+- **Size:** reports run 2-27 MB, so ~985 filers × ~5 years is ~35 GB of JSON, kept whole by decision
+  3 (perhaps ~6 GB as compressed Parquet), against 73 GB free.
+- **Nothing for ESEF is seeded yet**: no `xbrl-org` data source, no `esef:` axes, no rules and no
+  parser row. Step 7 therefore has a schema half, as step 5 did.
