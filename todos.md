@@ -4772,6 +4772,12 @@ Decisions (the user, 2026-11-26):
         50 rows; Schneider 6/6, 12; L'Oréal 5 filings on 4 listings). OR.PA's stock page rendered
         from the rebuilt app against live data: products 6 lines, segments 4 with margins,
         geography 5 zones, all in the filing's own words.
+  - [ ] 2026-11-28: reader version 2 (muffin-ingest#214, muffin-deployment#561). The drain's
+        first stage-2 reads placed a split for 44 of 207 FY2022+ reports in a 59-filer sample, so
+        the v1 stage-2 backfill `uyqdjoku` was cancelled. Gate over all 2,593 held reports: 492 ->
+        806 of 2,146 FY2022+ reports place a split, 942 gained, broken-looking splits 16.2% ->
+        10.9%, 6 lost (none a right split). Roll #214 after the SEC wave, then deploy #561, then
+        the stage-2 backfill.
   - [ ] Stage-1 drain `qnwqorcl` over all 858 filers (priority -1): at 10:40 UTC 575 listed,
         2,456 reports, 2 over 64 MB, 0 refused, 9.1 GB of JSON held as 579 MB. Then a stage-2
         backfill of `esef_segment`, reading `no_note` / `no_anchor` by country.

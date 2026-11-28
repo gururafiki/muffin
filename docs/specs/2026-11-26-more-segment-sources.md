@@ -949,3 +949,30 @@ annual reports of 22 listed, 69 MB, no refusal at 8 s, 2 min 55 s; stage 2 read 
 reconciling to the tagged revenue; FY2020-FY2021 reports (108-185 KB) carry no note block, since
 ESEF required block tagging from FY2022. Misses:
 `docs/deferred/2026-11-28-what-europe-s-segment-note-reader-cannot-read-yet.md`.
+
+### Reader version 2 (2026-11-28): muffin-ingest#214, muffin-deployment#561
+
+The drain's first stage-2 reads placed a split for 44 of 207 FY2022+ reports in a 59-filer sample,
+against eight of nine in the gate: the nine reports had not shown the common shapes. The largest
+cause was the transport, not the table: pages converted from PDF split words with empty spans, and
+joining cell text with spaces letter-spaced every name (`Cle an A ir`, `To t a l`), so no pattern
+matched. Version 2's rules, all European-only:
+
+| Rule | Found on |
+|---|---|
+| Inline text joins as written; only a block, or a letter meeting a digit or capital, ends a word | pdf2htmlEX pages, Matas |
+| A dotted date is text and casts no convention vote | KONE (`31.12.2025` read as a figure) |
+| The last and largest member equal to the rest is the total | Signify, MFE; not EQT's income statement |
+| A name opening with a total word closes its line | SCA (`Summa koncernen`), Rolls-Royce |
+| Units, periods and note-number columns name no member | Moonpig, Matas |
+| Two columns of one name under two groups are two members; a caption over one is no group | Bakkafrost, Pharming |
+| Colspans come from the parser; a uniform row is a caption | Schroders, `€ million` rows |
+| A table of places is geography after a customer sentence | Sartorius Stedim |
+| A cross-tab's total column is the split along the other axis | VBG |
+| A skip in a sentence about another table is ignored | Schroders |
+
+**Gate over every report production held (2,593), no provider request:** FY2022+ reports placing a
+split 492 -> 806 of 2,146, 942 splits gained, splits flagged as broken-looking 16.2% -> 10.9%. Six
+were lost against version 1 and each was read: none was a right split. Fixing the joining exposed
+two reads version 1 got right by accident (Schroders, VBG), so each loss was read with every rule
+toggled off in turn before it was called a regression. Remaining misses are in the deferred note.
