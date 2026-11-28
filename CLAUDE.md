@@ -6605,6 +6605,43 @@ muffin-ingest#212 and muffin-deployment#558. Record: the Phase 6c spec, "Step 6 
   production's reader. It failed loudly only because production's result lacked a field the
   branch's had. A gate whose child runs other code than the parent passes for the wrong reason.
 
+### Europe's segment note (2026-11-28)
+
+muffin-ingest#213, muffin-deployment#560. Record: the Phase 6c spec, "Step 7 as built".
+
+- **A RULE NO DOCUMENT READS DIFFERENTLY WITHOUT IS DECORATIVE, AND THE GATE IS HOW YOU KNOW.** Ten
+  rules came out of the nine-report gate; two (joining a heading broken mid-word, blanking `sin
+  dato` cells) changed no report when removed, so they were deleted rather than kept "in case".
+  Remove each rule in turn and re-run the gate: a rule nothing depends on is untested forever.
+- **AN EMPTY OLDER REPORT CAN BE THE MANDATE'S DATE, NOT A READER MISS.** ESEF required block
+  tagging of the notes from FY2022, so L'Oréal's FY2020-21 reports (108-185 KB) carry no note
+  block at all. Before treating `no_note` as a reader gap, split it by fiscal year.
+- **A KIND NAMED IN PROSE IS LOCAL TO ITS TABLE.** Carrying it to the next table, as the Japanese
+  reader does across a heading, made Iberdrola's business table geography because a sentence
+  before it said "by geographic location". In a sentence naming two kinds, the one nearest the
+  table wins (Inditex names its customers' location, then its geographic table).
+- **A YEAR IN A HEADER ROW IS A FIGURE TO A READER THAT DETECTS NUMBERS.** Atlas Copco prints
+  `2025` above its segment names; read as a value it became a one-member split. A row whose every
+  figure is a year is a header.
+- **SEGMENTS STATED BEFORE ELIMINATIONS GET A DERIVED TOTAL, OFFERED, NEVER CHOSEN** (Inditex
+  40,107 against a tagged 39,864 €m). The rule SEC's derived target follows: a candidate is
+  accepted only when the members already sum to it, so it can rescue a split, never pick a wrong
+  one.
+- **THE FIRST TABLE TO STATE A SPLIT KEEPS IT.** LVMH's quarterly table restates the year gross of
+  intra-group sales, and read last it replaced the annual split with a larger, non-reconciling one.
+- **A CHANGE SCOPED TO ONE REGULATOR MUST BE SCOPED IN EVERY HELPER IT PASSES THROUGH.** The
+  European rules sit behind `NoteVocabulary.spaced`; one filter inside `_member_kind` was not, and
+  it changed Japanese member kinds until the EDINET gate showed it. Gate the other regulators'
+  held documents whenever a shared reader changes.
+- **A READ-ONLY DRIVE CANNOT SEE ITS OWN STAGE 1**, because the writes it would read were
+  intercepted, so stage 2 read nothing and looked like a lane with nothing due. Supply the due
+  list (monkeypatch the facet's `filings`) rather than reading the empty result as a verdict.
+- **NEVER PIPE A LAUNCH THROUGH `tail`.** The registry was launched twice because `tail` cut the
+  run id off the first launch's output. Harmless here (the upsert is idempotent), and the same
+  trap as 2026-10-26: count runs before retrying.
+- **filings.xbrl.org at 8 s a request held for the whole drain**: 575 lists and 2,456 reports with
+  no 429. Its xBRL-JSON compresses ~16× as zstd Parquet (9.1 GB held as 579 MB).
+
 ## Running an OpenSandbox server locally
 
 - **`docker run -d -p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock opensandbox/server:latest`.**
